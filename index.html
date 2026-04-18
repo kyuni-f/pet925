@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pet925 | Premium Pet Nutrition</title>
+    <style>
+        :root { --main-gold: #c5a059; --bg-dark: #1a1a1a; }
+        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fdfdfd; color: #333; margin: 0; }
+        
+        header { padding: 50px 20px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
+        h1 { font-size: 2.8rem; letter-spacing: 12px; margin: 0; font-weight: 200; color: #000; text-transform: uppercase; }
+        .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--main-gold); margin-top: 10px; }
+
+        .container { width: 92%; max-width: 1000px; margin: 0 auto; }
+
+        /* 日本語表記を追加したフィルターセクション */
+        .filter-nav { padding: 20px 0; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid #f0f0f0; }
+        .filter-group { margin-bottom: 15px; }
+        .group-label { font-size: 0.65rem; font-weight: 700; color: #aaa; margin-bottom: 8px; display: block; letter-spacing: 1px; text-transform: uppercase; }
+        .scroll-box { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .scroll-box::-webkit-scrollbar { display: none; }
+        
+        .filter-btn { background: #fff; border: 1px solid #eee; padding: 10px 22px; border-radius: 0; font-size: 0.75rem; cursor: pointer; transition: 0.3s; white-space: nowrap; color: #666; }
+        /* 複数選択中のスタイル */
+        .filter-btn.active { background: #000; color: #fff; border-color: #000; font-weight: bold; }
+
+        /* 商品カード */
+        #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; margin-top: 30px; }
+        .product-card { border: none; display: flex; flex-direction: column; background: #fff; }
+        .img-container { width: 100%; height: 350px; overflow: hidden; background: #f5f5f5; position: relative; }
+        .product-card img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
+        
+        .brand-name { font-size: 0.65rem; color: var(--main-gold); font-weight: 700; margin-top: 20px; letter-spacing: 2px; }
+        .product-name { font-size: 1.1rem; font-weight: 500; margin: 8px 0 15px 0; color: #222; }
+        
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+        .tag { font-size: 0.6rem; color: #888; border: 1px solid #eee; padding: 3px 8px; }
+
+        .shop-links { display: flex; flex-direction: column; gap: 10px; }
+        .btn-shop { text-decoration: none; padding: 14px; font-size: 0.7rem; letter-spacing: 2px; text-align: center; border: 1px solid #000; transition: 0.3s; font-weight: 700; }
+        .btn-amazon { background: #000; color: #fff; }
+        .btn-rakuten { background: transparent; color: #000; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>pet925</h1>
+    <div class="sub-copy">Scientific Nutrition x High Style</div>
+</header>
+
+<div class="container">
+    <div class="filter-nav">
+        <!-- 複数選択可能な日本語フィルター -->
+        <div class="filter-group">
+            <span class="group-label">Animal / 種類</span>
+            <div class="scroll-box">
+                <button class="filter-btn active" data-cat="animal" data-val="all" onclick="toggleFilter(this)">すべて</button>
+                <button class="filter-btn" data-cat="animal" data-val="dog" onclick="toggleFilter(this)">犬 (DOG)</button>
+                <button class="filter-btn" data-cat="animal" data-val="cat" onclick="toggleFilter(this)">猫 (CAT)</button>
+            </div>
+        </div>
+        <div class="filter-group">
+            <span class="group-label">Condition / お悩み</span>
+            <div class="scroll-box">
+                <button class="filter-btn active" data-cat="cond" data-val="all" onclick="toggleFilter(this)">すべて</button>
+                <button class="filter-btn" data-cat="cond" data-val="gf" onclick="toggleFilter(this)">穀物不使用 (GF)</button>
+                <button class="filter-btn" data-cat="cond" data-val="diet" onclick="toggleFilter(this)">体重管理 (WEIGHT)</button>
+                <button class="filter-btn" data-cat="cond" data-val="kidney" onclick="toggleFilter(this)">腎臓ケア (KIDNEY)</button>
+                <button class="filter-btn" data-cat="cond" data-val="skin" onclick="toggleFilter(this)">皮膚・被毛 (SKIN)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="product-list"></div>
+</div>
+
+<script>
+// フィルターの状態管理
+let activeFilters = { animal: "all", cond: "all" };
+
+const productData = [
+    { name: "シュプレモ 湖畔のレシピ ラム", brand: "Supremo", tags: ["dog", "adult", "gf", "lamb"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ロイヤルカナン ダーマコンフォート", brand: "Royal Canin", tags: ["dog", "skin", "adult"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "シーバ デュオ まぐろ味セレクション", brand: "Sheba", tags: ["cat", "adult", "appetite"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ロイヤルカナン ユリナリー ケア", brand: "Royal Canin", tags: ["cat", "kidney", "adult"], img: "https://unsplash.com", amz: "#", rak: "#" }
+];
+
+function toggleFilter(btn) {
+    const category = btn.getAttribute('data-cat');
+    const value = btn.getAttribute('data-val');
+
+    // 同じグループのボタンの選択を解除
+    const groupBtns = btn.parentElement.querySelectorAll('.filter-btn');
+    groupBtns.forEach(b => b.classList.remove('active'));
+    
+    // クリックしたボタンをアクティブに
+    btn.classList.add('active');
+    activeFilters[category] = value;
+
+    render();
+}
+
+function render() {
+    const list = document.getElementById('product-list');
+    list.innerHTML = "";
+    
+    productData.forEach(item => {
+        const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
+        const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
+
+        if (matchAnimal && matchCond) {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <div class="img-container"><img src="${item.img}" alt="${item.name}"></div>
+                <span class="brand-name">${item.brand}</span>
+                <div class="product-name">${item.name}</div>
+                <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                <div class="shop-links">
+                    <a href="${item.amz}" class="btn-shop btn-amazon">AMAZONで最安値を確認</a>
+                    <a href="${item.rak}" class="btn-shop btn-rakuten">楽天市場で最安値を確認</a>
+                </div>
+            `;
+            list.appendChild(card);
+        }
+    });
+}
+
+// 初期表示
+render();
+</script>
+</body>
+</html>
