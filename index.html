@@ -124,17 +124,23 @@ function render() {
         if (matchAnimal && matchCond && matchSearch) {
             const card = document.createElement('div');
             card.className = 'product-card';
+            
+            // ★ここを修正：画像がない場合に備えて、予備の画像を表示する設定を追加
+            const imageSource = item.img && item.img !== "#" ? item.img : "https://unsplash.com";
+
             card.innerHTML = `
-                <div class="img-container"><img src="${item.img}" alt="${item.name}"></div>
+                <div class="img-container">
+                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='https://unsplash.com'">
+                </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
                     <div class="product-name">${item.name}</div>
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
                     <div class="shop-links">
-                        <a href="${item.amz}" class="btn-shop btn-amz">Amazonで最安値を確認</a>
-                        <a href="${item.rak}" class="btn-shop btn-rak">楽天市場で最安値を確認</a>
-                        <a href="${item.yah}" class="btn-shop btn-yah">Yahoo!ショッピングで確認</a>
+                        <a href="${item.amz || '#'}" class="btn-shop btn-amz">Amazonで最安値を確認</a>
+                        <a href="${item.rak || '#'}" class="btn-shop btn-rak">楽天市場で最安値を確認</a>
+                        <a href="${item.yah || '#'}" class="btn-shop btn-yah">Yahoo!ショッピングで確認</a>
                     </div>
                 </div>
             `;
