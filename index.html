@@ -3,39 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pet925 | Smart Search</title>
+    <title>pet925 | Premium Pet Nutrition</title>
+    <!-- データの読み込み -->
     <script src="data.js" defer></script>
-
     <style>
-        :root { --main-gold: #c5a059; }
-        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fdfdfd; margin: 0; }
-        header { padding: 40px 20px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
-        h1 { font-size: 2.5rem; letter-spacing: 10px; margin: 0; font-weight: 200; text-transform: none; }
-        .sub-copy { font-size: 0.6rem; letter-spacing: 3px; color: var(--main-gold); margin-top: 10px; }
-        .container { width: 92%; max-width: 1000px; margin: 0 auto; }
+        :root { --gold: #c5a059; --dark: #1a1a1a; --gray: #f4f4f4; }
+        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fff; color: var(--dark); margin: 0; padding-bottom: 60px; line-height: 1.6; }
+        
+        /* ヘッダー：スタイリッシュな小文字デザイン */
+        header { padding: 60px 20px; text-align: center; border-bottom: 1px solid #eee; }
+        h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; }
+        .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--gold); margin-top: 10px; text-transform: uppercase; }
 
-        /* 検索窓 */
-        .search-box { margin: 20px 0; }
-        #search-input { width: 100%; padding: 15px; border: 1px solid #eee; outline: none; font-size: 0.9rem; box-sizing: border-box; }
+        .container { width: 92%; max-width: 1100px; margin: 0 auto; }
 
-        /* 絞り込みナビ */
-        .filter-nav { padding-bottom: 20px; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid #f0f0f0; }
+        /* 検索バー：ミニマルデザイン */
+        .search-container { margin: 30px 0; }
+        #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
+        #search-input:focus { border-color: var(--dark); background: var(--gray); }
+
+        /* 複数絞り込みナビ：日本語併記・横スクロール */
+        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
         .filter-group { margin-bottom: 10px; }
-        .group-label { font-size: 0.6rem; font-weight: 700; color: #aaa; margin-bottom: 5px; display: block; letter-spacing: 1px; }
+        .group-label { font-size: 0.6rem; font-weight: 700; color: #bbb; margin-bottom: 5px; display: block; letter-spacing: 1px; }
         .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .scroll-box::-webkit-scrollbar { display: none; }
         .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; transition: 0.3s; }
-        .filter-btn.active { background: #000; color: #fff; border-color: #000; }
+        .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
 
-        /* 商品一覧 */
-        #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; margin-top: 30px; }
-        .product-card { background: #fff; display: flex; flex-direction: column; }
-        .img-container { width: 100%; height: 350px; overflow: hidden; background: #f5f5f5; }
-        .product-card img { width: 100%; height: 100%; object-fit: cover; }
-        .brand-name { font-size: 0.65rem; color: var(--main-gold); font-weight: 700; margin-top: 15px; letter-spacing: 1px; }
-        .product-name { font-size: 1.1rem; font-weight: 500; margin: 5px 0 10px 0; }
-        .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 15px; }
-        .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 2px 6px; }
-        .btn-shop { text-decoration: none; padding: 12px; font-size: 0.75rem; text-align: center; border: 1px solid #000; font-weight: 700; background: #000; color: #fff; }
+        /* 商品カード：カタログのような美しさ */
+        #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 50px; margin-top: 40px; }
+        .product-card { display: flex; flex-direction: column; }
+        .img-container { width: 100%; height: 380px; overflow: hidden; background: var(--gray); position: relative; }
+        .img-container img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
+        .product-card:hover img { transform: scale(1.05); }
+        
+        .card-content { padding: 20px 0; flex-grow: 1; }
+        .brand-badge { font-size: 0.65rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+        .product-name { font-size: 1.15rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; }
+        .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 3em; }
+        
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+        .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 3px 8px; text-transform: uppercase; }
+
+        /* モール別ボタン */
+        .shop-links { display: flex; flex-direction: column; gap: 8px; }
+        .btn-shop { text-decoration: none; padding: 12px; font-size: 0.75rem; font-weight: 700; text-align: center; border-radius: 4px; transition: 0.3s; letter-spacing: 1px; }
+        .btn-amz { background: #232f3e; color: #fff; }
+        .btn-rak { background: #bf0000; color: #fff; }
+        .btn-yah { background: #ff0033; color: #fff; }
+        .btn-shop:hover { opacity: 0.8; transform: translateY(-2px); }
     </style>
 </head>
 <body>
@@ -46,8 +63,8 @@
 </header>
 
 <div class="container">
-    <div class="search-box">
-        <input type="text" id="search-input" placeholder="キーワードで絞り込む（例：ラム, 柴犬）" oninput="render()">
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="キーワードを入力（例：歯, シニア, 涙やけ）" oninput="render()">
     </div>
 
     <div class="filter-nav">
@@ -63,10 +80,11 @@
             <span class="group-label">Condition / お悩み</span>
             <div class="scroll-box">
                 <button class="filter-btn active" data-cat="cond" data-val="all" onclick="toggleFilter(this)">すべて</button>
-                <button class="filter-btn" data-cat="cond" data-val="tear" onclick="toggleFilter(this)">涙やけケア (TEAR)</button>
+                <button class="filter-btn" data-cat="cond" data-val="tear" onclick="toggleFilter(this)">涙やけ (TEAR)</button>
                 <button class="filter-btn" data-cat="cond" data-val="gf" onclick="toggleFilter(this)">穀物不使用 (GF)</button>
                 <button class="filter-btn" data-cat="cond" data-val="diet" onclick="toggleFilter(this)">体重管理 (WEIGHT)</button>
-                <button class="filter-btn" data-cat="cond" data-val="kidney" onclick="toggleFilter(this)">腎臓ケア (KIDNEY)</button>
+                <button class="filter-btn" data-cat="cond" data-val="kidney" onclick="toggleFilter(this)">腎臓・尿路 (KIDNEY)</button>
+                <button class="filter-btn" data-cat="cond" data-val="senior" onclick="toggleFilter(this)">シニア (SENIOR)</button>
             </div>
         </div>
     </div>
@@ -76,7 +94,6 @@
 
 <script>
 let activeFilters = { animal: "all", cond: "all" };
-
 
 function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
@@ -89,10 +106,9 @@ function toggleFilter(btn) {
 
 function render() {
     if (typeof productData === 'undefined') return;
-
     const list = document.getElementById('product-list');
-    const searchInput = document.getElementById('search-input').value.toLowerCase().replace(/　/g, ' ').trim();
-    const searchWords = searchInput.split(' ');
+    const searchVal = document.getElementById('search-input').value.toLowerCase().replace(/　/g, ' ').trim();
+    const searchWords = searchVal.split(' ');
     
     list.innerHTML = "";
     
@@ -109,17 +125,24 @@ function render() {
             const card = document.createElement('div');
             card.className = 'product-card';
             card.innerHTML = `
-                <span class="brand-badge">${item.brand}</span>
-                <div class="product-name">${item.name}</div>
-                <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
-                <a href="${item.amz}" class="btn-shop">AMAZONで確認</a>
+                <div class="img-container"><img src="${item.img}" alt="${item.name}"></div>
+                <div class="card-content">
+                    <span class="brand-badge">${item.brand}</span>
+                    <div class="product-name">${item.name}</div>
+                    <p class="description">${item.desc || ""}</p>
+                    <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                    <div class="shop-links">
+                        <a href="${item.amz}" class="btn-shop btn-amz">Amazonで最安値を確認</a>
+                        <a href="${item.rak}" class="btn-shop btn-rak">楽天市場で最安値を確認</a>
+                        <a href="${item.yah}" class="btn-shop btn-yah">Yahoo!ショッピングで確認</a>
+                    </div>
+                </div>
             `;
             list.appendChild(card);
         }
     });
 }
 
-// データの読み込み完了を待って起動
 const init = setInterval(() => {
     if (typeof productData !== 'undefined') {
         render();
