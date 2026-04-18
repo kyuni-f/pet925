@@ -76,9 +76,33 @@
 let activeFilters = { animal: "all", cond: "all" };
 
 const productData = [
-    { name: "シュプレモ 小型犬用 成犬用", brand: "Supremo", tags: ["dog", "adult", "tear"], img: "https://unsplash.com", amz: "#" },
-    { name: "ワイルドレシピ 鹿肉 グレインフリー", brand: "Nutro", tags: ["dog", "gf", "tear"], img: "https://unsplash.com", amz: "#" },
-    { name: "ロイヤルカナン ユリナリー ケア", brand: "Royal Canin", tags: ["cat", "kidney"], img: "https://unsplash.com", amz: "#" }
+    // --- ニュートロ 犬用 ---
+    { name: "ナチュラル チョイス 成犬用 ラム＆玄米", brand: "Nutro", tags: ["dog", "adult", "skin", "lamb"], img: "https://unsplash.com", amz: "#" },
+    { name: "ナチュラル チョイス 減量用 チキン＆玄米", brand: "Nutro", tags: ["dog", "adult", "diet"], img: "https://unsplash.com", amz: "#" },
+    { name: "ワイルド レシピ 鹿肉 (超小型犬〜小型犬)", brand: "Nutro", tags: ["dog", "adult", "gf", "tear", "venison"], img: "https://unsplash.com", amz: "#" },
+    { name: "ワイルド レシピ ターキー (成犬用)", brand: "Nutro", tags: ["dog", "adult", "gf", "turkey"], img: "https://unsplash.com", amz: "#" },
+
+    // --- シュプレモ 犬用 ---
+    { name: "シュプレモ 成犬用 (全犬種用)", brand: "Supremo", tags: ["dog", "adult", "tear"], img: "https://unsplash.com", amz: "#" },
+    { name: "シュプレモ 体重管理用", brand: "Supremo", tags: ["dog", "adult", "diet"], img: "https://unsplash.com", amz: "#" },
+    { name: "シュプレモ 湖畔のレシピ (ラム/穀物不使用)", brand: "Supremo", tags: ["dog", "adult", "gf", "lamb", "tear"], img: "https://unsplash.com", amz: "#" },
+    { name: "シュプレモ エイジングケア (シニア犬用)", brand: "Supremo", tags: ["dog", "senior", "joint"], img: "https://unsplash.com", amz: "#" },
+
+    // --- ロイヤルカナン 犬用 ---
+    { name: "CCN ステアライズド (避妊・去勢犬用)", brand: "Royal Canin", tags: ["dog", "adult", "diet"], img: "https://unsplash.com", amz: "#" },
+    { name: "CCN ダーマコンフォート (皮膚ケア)", brand: "Royal Canin", tags: ["dog", "adult", "skin", "tear"], img: "https://unsplash.com", amz: "#" },
+    { name: "CCN ジョイントケア (関節サポート)", brand: "Royal Canin", tags: ["dog", "adult", "joint"], img: "https://unsplash.com", amz: "#" },
+    { name: "CCN ユリナリー ケア (尿路健康維持)", brand: "Royal Canin", tags: ["dog", "adult", "kidney"], img: "https://unsplash.com", amz: "#" },
+
+    // --- 猫用 (キャットフード) ---
+    { name: "ロイヤルカナン ユリナリー ケア (尿路健康)", brand: "Royal Canin", tags: ["cat", "adult", "kidney"], img: "https://unsplash.com", amz: "#" },
+    { name: "ロイヤルカナン インドア (室内猫用)", brand: "Royal Canin", tags: ["cat", "adult", "diet"], img: "https://unsplash.com", amz: "#" },
+    { name: "銀のスプーン 贅沢うまみ仕立て 尿路ケア", brand: "銀のスプーン", tags: ["cat", "adult", "kidney"], img: "https://unsplash.com", amz: "#" },
+    { name: "シーバ デュオ まぐろ味セレクション", brand: "Sheba", tags: ["cat", "adult", "appetite"], img: "https://unsplash.com", amz: "#" },
+    { name: "ナチュラル チョイス 室内猫用 アダルト チキン", brand: "Nutro", tags: ["cat", "adult", "diet", "chicken"], img: "https://unsplash.com", amz: "#" },
+    { name: "シュプレモ 白身魚＆サーモン (猫用)", brand: "Supremo", tags: ["cat", "adult", "gf", "appetite", "fish"], img: "https://unsplash.com", amz: "#" },
+
+    // ※ここに「涙やけケア(tear)」もいくつか含めました
 ];
 
 function toggleFilter(btn) {
