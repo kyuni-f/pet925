@@ -1,3 +1,4 @@
+  const productData = [
     // --- ニュートロ 犬用：ナチュラル チョイス（サイズ・年齢・悩み別） ---
     { name: "ナチュラル チョイス 子犬用 超小型犬〜中型犬 チキン＆玄米", brand: "Nutro", tags: ["dog", "puppy", "growth", "chicken"], img: "https://unsplash.com", amz: "#", rak: "#" },
     { name: "ナチュラル チョイス 成犬用 超小型犬用 チキン＆玄米", brand: "Nutro", tags: ["dog", "adult", "small", "chicken"], img: "https://unsplash.com", amz: "#", rak: "#" },
@@ -88,3 +89,4 @@
     { name: "オーラル ケア (歯垢・歯石が気になる猫用)", brand: "Royal Canin", tags: ["cat", "adult", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" }
 
     // ※ここに「涙やけケア(tear)」もいくつか含めました
+]; 
