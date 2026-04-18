@@ -7,36 +7,28 @@
     <style>
         :root { --main-gold: #c5a059; --bg-dark: #1a1a1a; }
         body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fdfdfd; color: #333; margin: 0; }
-        
         header { padding: 50px 20px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
-        h1 { font-size: 2.8rem; letter-spacing: 12px; margin: 0; font-weight: 200; color: #000; text-transform: uppercase; }
+        
+        /* ロゴを小文字のまま表示する設定 */
+        h1 { font-size: 2.8rem; letter-spacing: 12px; margin: 0; font-weight: 200; color: #000; text-transform: none; }
+        
         .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--main-gold); margin-top: 10px; }
-
         .container { width: 92%; max-width: 1000px; margin: 0 auto; }
-
-        /* 日本語表記を追加したフィルターセクション */
         .filter-nav { padding: 20px 0; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid #f0f0f0; }
         .filter-group { margin-bottom: 15px; }
         .group-label { font-size: 0.65rem; font-weight: 700; color: #aaa; margin-bottom: 8px; display: block; letter-spacing: 1px; text-transform: uppercase; }
         .scroll-box { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .scroll-box::-webkit-scrollbar { display: none; }
-        
         .filter-btn { background: #fff; border: 1px solid #eee; padding: 10px 22px; border-radius: 0; font-size: 0.75rem; cursor: pointer; transition: 0.3s; white-space: nowrap; color: #666; }
-        /* 複数選択中のスタイル */
         .filter-btn.active { background: #000; color: #fff; border-color: #000; font-weight: bold; }
-
-        /* 商品カード */
         #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; margin-top: 30px; }
         .product-card { border: none; display: flex; flex-direction: column; background: #fff; }
         .img-container { width: 100%; height: 350px; overflow: hidden; background: #f5f5f5; position: relative; }
         .product-card img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
-        
         .brand-name { font-size: 0.65rem; color: var(--main-gold); font-weight: 700; margin-top: 20px; letter-spacing: 2px; }
         .product-name { font-size: 1.1rem; font-weight: 500; margin: 8px 0 15px 0; color: #222; }
-        
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
         .tag { font-size: 0.6rem; color: #888; border: 1px solid #eee; padding: 3px 8px; }
-
         .shop-links { display: flex; flex-direction: column; gap: 10px; }
         .btn-shop { text-decoration: none; padding: 14px; font-size: 0.7rem; letter-spacing: 2px; text-align: center; border: 1px solid #000; transition: 0.3s; font-weight: 700; }
         .btn-amazon { background: #000; color: #fff; }
@@ -52,7 +44,6 @@
 
 <div class="container">
     <div class="filter-nav">
-        <!-- 複数選択可能な日本語フィルター -->
         <div class="filter-group">
             <span class="group-label">Animal / 種類</span>
             <div class="scroll-box">
@@ -72,12 +63,10 @@
             </div>
         </div>
     </div>
-
     <div id="product-list"></div>
 </div>
 
 <script>
-// フィルターの状態管理
 let activeFilters = { animal: "all", cond: "all" };
 
 const productData = [
@@ -90,26 +79,19 @@ const productData = [
 function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
     const value = btn.getAttribute('data-val');
-
-    // 同じグループのボタンの選択を解除
     const groupBtns = btn.parentElement.querySelectorAll('.filter-btn');
     groupBtns.forEach(b => b.classList.remove('active'));
-    
-    // クリックしたボタンをアクティブに
     btn.classList.add('active');
     activeFilters[category] = value;
-
     render();
 }
 
 function render() {
     const list = document.getElementById('product-list');
     list.innerHTML = "";
-    
     productData.forEach(item => {
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
         const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
-
         if (matchAnimal && matchCond) {
             const card = document.createElement('div');
             card.className = 'product-card';
@@ -127,8 +109,6 @@ function render() {
         }
     });
 }
-
-// 初期表示
 render();
 </script>
 </body>
