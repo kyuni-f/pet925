@@ -88,31 +88,28 @@ function toggleFilter(btn) {
 }
 
 function render() {
-    const list = document.getElementById('product-list');
-    let searchVal = document.getElementById('search-input').value.toLowerCase();
-    
-    // 【追加】「歯」と打たれたら「tooth」や「デンタル」も検索対象にする
-    if (searchVal === "歯") searchVal = "tooth";
-    if (searchVal === "お腹" || searchVal === "おなか") searchVal = "stomach";
+    if (typeof productData === 'undefined') return;
 
+    const list = document.getElementById('product-list');
+    const searchInput = document.getElementById('search-input').value.toLowerCase().replace(/　/g, ' ').trim();
+    const searchWords = searchInput.split(' ');
+    
     list.innerHTML = "";
     
     productData.forEach(item => {
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
         const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
-        
-        // 名前、ブランド、またはタグのどれかにキーワードが含まれるか
-        const matchSearch = item.name.toLowerCase().includes(searchVal) || 
-                            item.brand.toLowerCase().includes(searchVal) ||
-                            item.tags.some(t => t.includes(searchVal));
+        const matchSearch = searchWords.every(word => 
+            item.name.toLowerCase().includes(word) || 
+            item.brand.toLowerCase().includes(word) || 
+            item.tags.some(t => t.toLowerCase().includes(word))
+        );
 
         if (matchAnimal && matchCond && matchSearch) {
-            // （以下、カードを表示するコード...）
-fu if       const card = document.createElement('div');
+            const card = document.createElement('div');
             card.className = 'product-card';
             card.innerHTML = `
-                <div class="img-container"><img src="${item.img}"></div>
-                <span class="brand-name">${item.brand}</span>
+                <span class="brand-badge">${item.brand}</span>
                 <div class="product-name">${item.name}</div>
                 <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
                 <a href="${item.amz}" class="btn-shop">AMAZONで確認</a>
@@ -121,7 +118,14 @@ fu if       const card = document.createElement('div');
         }
     });
 }
-render();
+
+// データの読み込み完了を待って起動
+const init = setInterval(() => {
+    if (typeof productData !== 'undefined') {
+        render();
+        clearInterval(init);
+    }
+}, 100);
 </script>
 </body>
 </html>
