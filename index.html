@@ -3,45 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pet925 | Search & Filter</title>
+    <title>pet925 | Smart Search</title>
     <style>
-        :root { --main-gold: #c5a059; --bg-dark: #1a1a1a; }
-        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fdfdfd; color: #333; margin: 0; }
+        :root { --main-gold: #c5a059; }
+        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fdfdfd; margin: 0; }
         header { padding: 40px 20px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
-        h1 { font-size: 2.5rem; letter-spacing: 10px; margin: 0; font-weight: 200; color: #000; text-transform: none; }
+        h1 { font-size: 2.5rem; letter-spacing: 10px; margin: 0; font-weight: 200; text-transform: none; }
         .sub-copy { font-size: 0.6rem; letter-spacing: 3px; color: var(--main-gold); margin-top: 10px; }
-
         .container { width: 92%; max-width: 1000px; margin: 0 auto; }
 
-        /* 検索バーのデザイン */
-        .search-container { margin: 20px 0; }
-        #search-input {
-            width: 100%; padding: 15px; border: 1px solid #eee; 
-            font-size: 0.9rem; outline: none; border-radius: 0; 
-            box-sizing: border-box; transition: 0.3s;
-        }
-        #search-input:focus { border-color: #000; background: #f9f9f9; }
+        /* 検索窓 */
+        .search-box { margin: 20px 0; }
+        #search-input { width: 100%; padding: 15px; border: 1px solid #eee; outline: none; font-size: 0.9rem; box-sizing: border-box; }
 
-        /* フィルターセクション */
-        .filter-nav { padding-bottom: 20px; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; }
+        /* 絞り込みナビ */
+        .filter-nav { padding-bottom: 20px; position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid #f0f0f0; }
         .filter-group { margin-bottom: 10px; }
         .group-label { font-size: 0.6rem; font-weight: 700; color: #aaa; margin-bottom: 5px; display: block; letter-spacing: 1px; }
         .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-        .scroll-box::-webkit-scrollbar { display: none; }
-        .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; color: #666; }
+        .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; transition: 0.3s; }
         .filter-btn.active { background: #000; color: #fff; border-color: #000; }
 
-        /* 商品カード */
-        #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; margin-top: 20px; }
-        .product-card { display: flex; flex-direction: column; background: #fff; }
+        /* 商品一覧 */
+        #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; margin-top: 30px; }
+        .product-card { background: #fff; display: flex; flex-direction: column; }
         .img-container { width: 100%; height: 350px; overflow: hidden; background: #f5f5f5; }
         .product-card img { width: 100%; height: 100%; object-fit: cover; }
         .brand-name { font-size: 0.65rem; color: var(--main-gold); font-weight: 700; margin-top: 15px; letter-spacing: 1px; }
-        .product-name { font-size: 1.1rem; font-weight: 500; margin: 5px 0 10px 0; color: #222; }
+        .product-name { font-size: 1.1rem; font-weight: 500; margin: 5px 0 10px 0; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 15px; }
         .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 2px 6px; }
-        .btn-shop { text-decoration: none; padding: 12px; font-size: 0.7rem; letter-spacing: 1px; text-align: center; border: 1px solid #000; margin-top: 5px; font-weight: 700; }
-        .btn-amazon { background: #000; color: #fff; }
+        .btn-shop { text-decoration: none; padding: 12px; font-size: 0.75rem; text-align: center; border: 1px solid #000; font-weight: 700; background: #000; color: #fff; }
     </style>
 </head>
 <body>
@@ -52,12 +44,10 @@
 </header>
 
 <div class="container">
-    <!-- 検索バー -->
-    <div class="search-container">
-        <input type="text" id="search-input" placeholder="キーワードを入力（例：柴犬, チキン, 腎臓）" oninput="render()">
+    <div class="search-box">
+        <input type="text" id="search-input" placeholder="キーワードで絞り込む（例：ラム, 柴犬）" oninput="render()">
     </div>
 
-    <!-- フィルター -->
     <div class="filter-nav">
         <div class="filter-group">
             <span class="group-label">Animal / 種類</span>
@@ -67,18 +57,28 @@
                 <button class="filter-btn" data-cat="animal" data-val="cat" onclick="toggleFilter(this)">猫 (CAT)</button>
             </div>
         </div>
+        <div class="filter-group">
+            <span class="group-label">Condition / お悩み</span>
+            <div class="scroll-box">
+                <button class="filter-btn active" data-cat="cond" data-val="all" onclick="toggleFilter(this)">すべて</button>
+                <button class="filter-btn" data-cat="cond" data-val="tear" onclick="toggleFilter(this)">涙やけケア (TEAR)</button>
+                <button class="filter-btn" data-cat="cond" data-val="gf" onclick="toggleFilter(this)">穀物不使用 (GF)</button>
+                <button class="filter-btn" data-cat="cond" data-val="diet" onclick="toggleFilter(this)">体重管理 (WEIGHT)</button>
+                <button class="filter-btn" data-cat="cond" data-val="kidney" onclick="toggleFilter(this)">腎臓ケア (KIDNEY)</button>
+            </div>
+        </div>
     </div>
 
     <div id="product-list"></div>
 </div>
 
 <script>
-let activeFilters = { animal: "all" };
+let activeFilters = { animal: "all", cond: "all" };
 
 const productData = [
-    { name: "シュプレモ 湖畔のレシピ ラム", brand: "Supremo", tags: ["dog", "lamb", "gf"], img: "https://unsplash.com", amz: "#" },
-    { name: "ロイヤルカナン ダーマコンフォート", brand: "Royal Canin", tags: ["dog", "skin"], img: "https://unsplash.com", amz: "#" },
-    { name: "シーバ デュオ まぐろ味", brand: "Sheba", tags: ["cat", "appetite"], img: "https://unsplash.com", amz: "#" }
+    { name: "シュプレモ 小型犬用 成犬用", brand: "Supremo", tags: ["dog", "adult", "tear"], img: "https://unsplash.com", amz: "#" },
+    { name: "ワイルドレシピ 鹿肉 グレインフリー", brand: "Nutro", tags: ["dog", "gf", "tear"], img: "https://unsplash.com", amz: "#" },
+    { name: "ロイヤルカナン ユリナリー ケア", brand: "Royal Canin", tags: ["cat", "kidney"], img: "https://unsplash.com", amz: "#" }
 ];
 
 function toggleFilter(btn) {
@@ -96,13 +96,11 @@ function render() {
     list.innerHTML = "";
     
     productData.forEach(item => {
-        // フィルター条件
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
-        // 検索ワード条件 (名前かタグにキーワードが含まれているか)
-        const matchSearch = item.name.toLowerCase().includes(searchVal) || 
-                            item.tags.some(t => t.toLowerCase().includes(searchVal));
+        const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
+        const matchSearch = item.name.toLowerCase().includes(searchVal) || item.tags.some(t => t.includes(searchVal));
 
-        if (matchAnimal && matchSearch) {
+        if (matchAnimal && matchCond && matchSearch) {
             const card = document.createElement('div');
             card.className = 'product-card';
             card.innerHTML = `
@@ -110,7 +108,7 @@ function render() {
                 <span class="brand-name">${item.brand}</span>
                 <div class="product-name">${item.name}</div>
                 <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
-                <a href="${item.amz}" class="btn-shop btn-amazon">AMAZONで最安値を確認</a>
+                <a href="${item.amz}" class="btn-shop">AMAZONで確認</a>
             `;
             list.appendChild(card);
         }
