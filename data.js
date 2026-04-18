@@ -68,11 +68,10 @@
     { name: "ミニ インドア アダルト (室内で生活する小型犬用)", brand: "Royal Canin", tags: ["dog", "adult", "diet", "small"], img: "https://unsplash.com", amz: "#", rak: "#" },
 
     // --- ロイヤルカナン 犬用：お悩み別 (CCN) ---
-    { name: "ミニ デンタル ケア (小型犬用・歯垢・歯石・歯の健康維持)", brand: "Royal Canin", tags: ["dog", "adult", "small", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" },
-    { name: "ステアライズド (避妊・去勢犬用・体重管理・太り気味・肥満ケア)", brand: "Royal Canin", tags: ["dog", "adult", "diet"], img: "https://unsplash.com", amz: "#", rak: "#" },
-    { name: "ダーマコンフォート (皮膚が敏感な犬用・被毛・涙やけ・アレルギー)", brand: "Royal Canin", tags: ["dog", "adult", "skin", "tear"], img: "https://unsplash.com", amz: "#", rak: "#" },
-    { name: "ダイジェスティブ ケア (胃腸が弱い犬用・お腹・おなかの健康・消化)", brand: "Royal Canin", tags: ["dog", "adult", "stomach"], img: "https://unsplash.com", amz: "#", rak: "#" },
-    { name: "ジョイント ケア (関節が気になる犬用・足腰・高齢犬・シニア)", brand: "Royal Canin", tags: ["dog", "adult", "joint", "senior"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ステアライズド (避妊・去勢犬用)", brand: "Royal Canin", tags: ["dog", "adult", "diet", "small"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ダーマコンフォート (皮膚が敏感な犬用)", brand: "Royal Canin", tags: ["dog", "adult", "skin", "tear", "small"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ダイジェスティブ ケア (胃腸が弱い犬用)", brand: "Royal Canin", tags: ["dog", "adult", "stomach", "small"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "ジョイント ケア (関節が気になる犬用)", brand: "Royal Canin", tags: ["dog", "adult", "joint", "senior"], img: "https://unsplash.com", amz: "#", rak: "#" },
     { name: "ユリナリー ケア (健康な尿を維持したい犬用)", brand: "Royal Canin", tags: ["dog", "adult", "kidney", "small"], img: "https://unsplash.com", amz: "#", rak: "#" },
 
     // --- ロイヤルカナン 猫用：ライフステージ別 (FHN) ---
@@ -86,7 +85,15 @@
     { name: "ヘアボール ケア (毛玉が気になる猫用)", brand: "Royal Canin", tags: ["cat", "adult", "hairball"], img: "https://unsplash.com", amz: "#", rak: "#" },
     { name: "ライト ウェイト ケア (肥満気味の猫用)", brand: "Royal Canin", tags: ["cat", "adult", "diet"], img: "https://unsplash.com", amz: "#", rak: "#" },
     { name: "ユリナリー ケア (健康な尿を維持したい猫用)", brand: "Royal Canin", tags: ["cat", "adult", "kidney"], img: "https://unsplash.com", amz: "#", rak: "#" },
-    { name: "オーラル ケア (歯垢・歯石が気になる猫用)", brand: "Royal Canin", tags: ["cat", "adult", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" }
+    { name: "オーラル ケア (歯垢・歯石が気になる猫用)", brand: "Royal Canin", tags: ["cat", "adult", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    
+    // --- ロイヤルカナン 犬用：お悩み別 (CCN) 補完分 ---
+    { name: "CCN ミニ ダイジェスティブ ケア (おなかの健康維持)", brand: "Royal Canin", tags: ["dog", "adult", "small", "stomach"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "CCN ミニ デンタル ケア (歯垢・歯石が気になる犬用)", brand: "Royal Canin", tags: ["dog", "adult", "small", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "CCN ミニ エクシジェント (食欲にムラがある犬用)", brand: "Royal Canin", tags: ["dog", "adult", "small", "appetite"], img: "https://unsplash.com", amz: "#", rak: "#" },
 
-    // ※ここに「涙やけケア(tear)」もいくつか含めました
-]; 
+    // --- ロイヤルカナン 猫用：お悩み別 (FCN) 補完分 ---
+    { name: "FCN ダイジェスティブ ケア (胃腸が弱い猫用)", brand: "Royal Canin", tags: ["cat", "adult", "stomach"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "FCN オーラル ケア (歯の健康維持)", brand: "Royal Canin", tags: ["cat", "adult", "tooth"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "FCN ヘア＆スキン ケア (皮膚・被毛の健康維持)", brand: "Royal Canin", tags: ["cat", "adult", "skin"], img: "https://unsplash.com", amz: "#", rak: "#" },
+    { name: "FCN アペタイト コントロール (おねだりの多い猫用)", brand: "Royal Canin", tags: ["cat", "adult", "diet", "appetite"], img: "https://unsplash.com", amz: "#", rak: "#" }
