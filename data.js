@@ -1,3 +1,29 @@
+const productData = [
+    { 
+        name: "ロイヤルカナン ダーマコンフォート (皮膚・被毛・涙やけ・アレルギー配慮)", 
+        brand: "Royal Canin", 
+        tags: ["dog", "adult", "skin", "tear"], 
+        desc: "皮膚が敏感な小型犬用。健康な皮膚と被毛を維持するための特別な栄養バランス。",
+        img: "https://unsplash.com", 
+        amz: "#", rak: "#", yah: "#" 
+    },
+    { 
+        name: "シュプレモ 湖畔のレシピ ラム (穀物不使用・成犬用・アレルギー・涙やけケア)", 
+        brand: "Supremo", 
+        tags: ["dog", "adult", "gf", "lamb", "tear"], 
+        desc: "高品質なラム肉を第一主原料に使用。穀物不使用で消化にも優しく、涙やけが気になる子にも。",
+        img: "https://unsplash.com", 
+        amz: "#", rak: "#", yah: "#" 
+    },
+    { 
+        name: "ロイヤルカナン ユリナリー ケア (猫用・尿路健康・結石予防・腎臓ケア)", 
+        brand: "Royal Canin", 
+        tags: ["cat", "adult", "kidney"], 
+        desc: "健康な尿を維持したい猫用。ミネラルバランスを調整し、尿路結石の形成を抑制します。",
+        img: "https://unsplash.com", 
+        amz: "#", rak: "#", yah: "#" 
+    }
+];
   const productData = [
     // --- ニュートロ 犬用：ナチュラル チョイス（サイズ・年齢・悩み別） ---
     { name: "ナチュラル チョイス 子犬用 超小型犬〜中型犬 チキン＆玄米", brand: "Nutro", tags: ["dog", "puppy", "growth", "chicken"], img: "https://unsplash.com", amz: "#", rak: "#" },
