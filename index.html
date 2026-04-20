@@ -5,7 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>pet925 | Premium Pet Nutrition</title>
     <!-- データの読み込み -->
-    <script src="data.js" defer></script>
+    <!-- index.html の script 部分をこれに差し替え -->
+<script>
+// 1. 先ほどコピーしたスプレッドシートのCSV URLをここに入れる
+const sheetUrl = "ここにスプレッドシートのCSV URLを貼り付け";
+
+async function loadData() {
+    const response = await fetch(sheetUrl);
+    const csvData = await response.text();
+    
+    // CSVを使いやすいデータ形式(productData)に変換
+    const rows = csvData.split('\n').slice(1); // 1行目(見出し)を飛ばす
+    const productData = rows.map(row => {
+        const [name, brand, tags, desc, img, amz, rak, yah] = row.split(',');
+        return {
+            name, brand, 
+            tags: tags ? tags.split('/') : [], // タグは「/」区切りで入力すると想定
+            desc, img, amz, rak, yah
+        };
+    });
+
+    // ここにこれまでの表示処理（forEachなど）を書く
+    renderProducts(productData);
+}
+
+function renderProducts(data) {
+    const container = document.getElementById('product-list');
+    container.innerHTML = ""; // 一度空にする
+    data.forEach(item => {
+        if(!item.name) return; // 空行対策
+        container.innerHTML += `
+            <div class="card">
+                <h3>${item.name}</h3>
+                <p>${item.desc}</p>
+                <small>${item.brand} / Tags: ${item.tags.join(', ')}</small>
+            </div>`;
+    });
+}
+
+loadData();
+</script>
+
     <style>
         :root { --gold: #c5a059; --dark: #1a1a1a; --gray: #f4f4f4; }
         body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fff; color: var(--dark); margin: 0; padding-bottom: 60px; line-height: 1.6; }
