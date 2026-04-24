@@ -110,7 +110,7 @@ function render() {
     if (!productData || productData.length === 0) return;
     const list = document.getElementById('product-list');
     const searchVal = document.getElementById('search-input').value.toLowerCase().replace(/　/g, ' ').trim();
-    const searchWords = searchVal.split(' ');
+    const searchWords = searchVal.split(/\s+/).filter(w => w !== '');
     
     list.innerHTML = "";
     
