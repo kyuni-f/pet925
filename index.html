@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>pet925 | Premium Pet Nutrition</title>
+    <meta name="description" content="科学的な根拠に基づいたプレミアムキャットフード・ドッグフードの選定ガイド。涙やけや皮膚ケアなど、お悩み別に最適な一皿を見つけます。">
     <!-- データの読み込み -->
     <script src="data.js"></script>
 
@@ -46,14 +47,28 @@
         
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
         .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 3px 8px; text-transform: uppercase; }
+        
+        /* 特典情報のテキスト */
+        .promo-text { font-size: 0.75rem; color: #e67e22; font-weight: bold; margin-bottom: 10px; display: block; }
+        /* おすすめバッジ */
+        .featured-badge { position: absolute; top: 10px; left: 10px; background: var(--gold); color: #fff; padding: 4px 12px; font-size: 0.7rem; font-weight: bold; z-index: 10; }
+        /* 最安値バッジ（ボタン内） */
+        .lowest-price-badge { background: #27ae60; color: #fff; padding: 2px 6px; font-size: 0.6rem; border-radius: 2px; margin-left: 5px; vertical-align: middle; }
+        /* 価格の強調表示 */
+        .price-text { font-family: "Helvetica Neue", sans-serif; font-weight: 600; margin-left: 4px; }
+
+        .no-results { grid-column: 1 / -1; text-align: center; padding: 100px 20px; color: #999; font-size: 0.9rem; letter-spacing: 2px; }
 
         /* モール別ボタン */
         .shop-links { display: flex; flex-direction: column; gap: 8px; }
         .btn-shop { text-decoration: none; padding: 12px; font-size: 0.75rem; font-weight: 700; text-align: center; border-radius: 4px; transition: 0.3s; letter-spacing: 1px; }
         .btn-amz { background: #232f3e; color: #fff; }
         .btn-rak { background: #bf0000; color: #fff; }
+        .btn-a8 { background: #d35400; color: #fff; border: 2px solid #d35400; position: relative; overflow: hidden; }
+        .btn-a8:after { content: '★ 一番おすすめ'; position: absolute; right: 10px; font-size: 0.6rem; opacity: 0.8; }
         .btn-yah { background: #ff0033; color: #fff; }
         .btn-shop:hover { opacity: 0.8; transform: translateY(-2px); }
+
     </style>
 </head>
 <body>
@@ -71,21 +86,14 @@
     <div class="filter-nav">
         <div class="filter-group">
             <span class="group-label">Animal / 種類</span>
-            <div class="scroll-box">
-                <button class="filter-btn active" data-cat="animal" data-val="all" onclick="toggleFilter(this)">すべて</button>
-                <button class="filter-btn" data-cat="animal" data-val="dog" onclick="toggleFilter(this)">犬 (DOG)</button>
-                <button class="filter-btn" data-cat="animal" data-val="cat" onclick="toggleFilter(this)">猫 (CAT)</button>
+            <div class="scroll-box" id="filter-animal">
+                <!-- JSで自動生成 -->
             </div>
         </div>
         <div class="filter-group">
             <span class="group-label">Condition / お悩み</span>
-            <div class="scroll-box">
-                <button class="filter-btn active" data-cat="cond" data-val="all" onclick="toggleFilter(this)">すべて</button>
-                <button class="filter-btn" data-cat="cond" data-val="tear" onclick="toggleFilter(this)">涙やけ (TEAR)</button>
-                <button class="filter-btn" data-cat="cond" data-val="gf" onclick="toggleFilter(this)">穀物不使用 (GF)</button>
-                <button class="filter-btn" data-cat="cond" data-val="diet" onclick="toggleFilter(this)">体重管理 (WEIGHT)</button>
-                <button class="filter-btn" data-cat="cond" data-val="kidney" onclick="toggleFilter(this)">腎臓・尿路 (KIDNEY)</button>
-                <button class="filter-btn" data-cat="cond" data-val="senior" onclick="toggleFilter(this)">シニア (SENIOR)</button>
+            <div class="scroll-box" id="filter-cond">
+                <!-- JSで自動生成 -->
             </div>
         </div>
     </div>
@@ -105,6 +113,45 @@ function toggleFilter(btn) {
     render();
 }
 
+function renderFilters() {
+    if (typeof tagMaster === 'undefined') return;
+    
+    for (const [category, tags] of Object.entries(tagMaster)) {
+        const container = document.getElementById(`filter-${category}`);
+        if (!container) continue;
+
+        let html = `<button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
+        
+        for (const [tagKey, tagName] of Object.entries(tags)) {
+            html += `<button class="filter-btn" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${tagName}</button>`;
+        }
+        container.innerHTML = html;
+    }
+}
+
+// 価格表示とショップ名を表示するヘルパー
+function getShopButtonContent(shopName, price, isLowest) {
+    // 価格がない場合はデフォルトのテキストを返す
+    if (!price || price === "" || price === "0" || isNaN(Number(price))) {
+        return `${shopName}で最安値を確認`;
+    }
+    const formattedPrice = Number(price).toLocaleString();
+    return `
+        ${shopName}: <span class="price-text">¥${formattedPrice}</span>
+        ${isLowest ? '<span class="lowest-price-badge">最安値</span>' : ''}
+    `;
+}
+
+// 各サイトの最安値検索URLを生成するヘルパー
+function getSearchUrl(shop, name, fallbackUrl) {
+    if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
+    const q = encodeURIComponent(name);
+    if (shop === 'amz') return `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
+    if (shop === 'rak') return `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
+    if (shop === 'yah') return `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
+    return '#';
+}
+
 function render() {
     if (typeof productData === 'undefined') return;
     if (!productData || productData.length === 0) return;
@@ -113,6 +160,7 @@ function render() {
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '');
     
     list.innerHTML = "";
+    let matchCount = 0;
     
     productData.forEach(item => {
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
@@ -120,19 +168,39 @@ function render() {
         const matchSearch = searchWords.every(word => 
             item.name.toLowerCase().includes(word) || 
             item.brand.toLowerCase().includes(word) || 
-            item.tags.some(t => t.toLowerCase().includes(word))
+            item.tags.some(t => t.toLowerCase().includes(word)) ||
+            (item.label && item.label.toLowerCase().includes(word)) ||
+            (item.promo && item.promo.toLowerCase().includes(word))
         );
 
         if (matchAnimal && matchCond && matchSearch) {
+            matchCount++;
             const card = document.createElement('div');
             card.className = 'product-card';
+
+            // 最安値の判定ロジック（数値が有効なものだけを抽出）
+            const parseP = (p) => {
+                const n = Number(p);
+                return (p && !isNaN(n) && n > 0) ? n : Infinity;
+            };
             
-            // ★ここを修正：画像がない場合に備えて、予備の画像を表示する設定を追加
-            const imageSource = item.img && item.img !== "#" ? item.img : "https://unsplash.com";
+            const prices = [
+                { id: 'amz', val: parseP(item.amz_p) },
+                { id: 'rak', val: parseP(item.rak_p) },
+                { id: 'yah', val: parseP(item.yah_p) }
+            ].filter(p => p.val !== Infinity);
+            
+            const lowestPriceObj = prices.length > 0 ? prices.reduce((min, p) => p.val < min.val ? p : min, prices[0]) : null;
+            const minPrice = lowestPriceObj ? lowestPriceObj.val : null;
+
+            // 画像がない、または未設定（#）の場合は、代わりの画像を表示
+            const defaultImg = "https://images.unsplash.com/photo-1544568100-847a948585b9?q=80&w=1000&auto=format&fit=crop";
+            const imageSource = (item.img && item.img !== "#") ? item.img : defaultImg;
 
             card.innerHTML = `
                 <div class="img-container">
-                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='https://unsplash.com'">
+                    ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
+                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'">
                 </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
@@ -140,19 +208,33 @@ function render() {
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
                     <div class="shop-links">
-                        <a href="${item.amz || '#'}" class="btn-shop btn-amz">Amazonで最安値を確認</a>
-                        <a href="${item.rak || '#'}" class="btn-shop btn-rak">楽天市場で最安値を確認</a>
-                        <a href="${item.yah || '#'}" class="btn-shop btn-yah">Yahoo!ショッピングで確認</a>
+                        ${item.promo ? `<span class="promo-text">${item.promo}</span>` : ''}
+                        ${item.a8 && item.a8 !== '#' ? `
+                            <a href="${item.a8}" target="_blank" rel="nofollow" class="btn-shop btn-a8">
+                                公式サイトで詳細を見る
+                            </a>
+                        ` : ''}
+                        <a href="${getSearchUrl('amz', item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow">${getShopButtonContent('Amazon', item.amz_p, minPrice && parseP(item.amz_p) === minPrice)}</a>
+                        <a href="${getSearchUrl('rak', item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow">${getShopButtonContent('楽天', item.rak_p, minPrice && parseP(item.rak_p) === minPrice)}</a>
+                        <a href="${getSearchUrl('yah', item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow">${getShopButtonContent('Yahoo!', item.yah_p, minPrice && parseP(item.yah_p) === minPrice)}</a>
                     </div>
                 </div>
             `;
             list.appendChild(card);
         }
     });
+
+    if (matchCount === 0) {
+        list.innerHTML = `
+            <div class="no-results">
+                NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした
+            </div>`;
+    }
 }
 // ページ読み込み時に描画を開始
 window.addEventListener('DOMContentLoaded', () => {
     if (typeof productData !== 'undefined') {
+        renderFilters();
         render();
     }
 });

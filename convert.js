@@ -1,17 +1,35 @@
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 
-const filesInDir = fs.readdirSync(__dirname);
-// 'products.csv ' のように末尾にスペースが入っていても自動で検知できるようにします
-const csvFileName = filesInDir.find(f => f.trim() === 'products.csv') || 'products.csv';
-const CSV_PATH = path.join(__dirname, csvFileName);
 const JS_PATH = path.join(__dirname, 'data.js');
 
-// 許可されているタグのリスト（index.htmlのフィルターと連動するもの）
-const ALLOWED_TAGS = [
-    'dog', 'cat', 'tear', 'gf', 'diet', 'kidney', 'senior',
-    'adult', 'skin', 'lamb', 'venison', 'joint', 'tooth', 'appetite'
-];
+// タグのマスター定義（表示名とカテゴリを管理）
+const TAG_MASTER = {
+    animal: {
+        dog: '犬 (DOG)',
+        cat: '猫 (CAT)'
+    },
+    cond: {
+        tear: '涙やけ (TEAR)',
+        gf: '穀物不使用 (GF)',
+        diet: '体重管理 (WEIGHT)',
+        kidney: '腎臓・尿路 (KIDNEY)',
+        senior: 'シニア (SENIOR)',
+        adult: '成犬用 (ADULT)',
+        skin: '皮膚ケア (SKIN)',
+        lamb: 'ラム肉 (LAMB)',
+        venison: '鹿肉 (VENISON)',
+        joint: '関節ケア (JOINT)',
+        tooth: '歯の健康 (TOOTH)',
+        appetite: '食いつき (APPETITE)'
+    }
+};
+
+// バリデーション用にキーだけの配列を作成
+const ALLOWED_TAGS = Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj));
+
+let validationErrors = [];
 
 // 簡易的なCSVパース関数（クォート対応）
 function parseCSV(content) {
@@ -20,30 +38,27 @@ function parseCSV(content) {
     
     // 「name,brand」で始まる行（見出し行）を探す
     // より確実に、カンマの数なども考慮した正規表現で探すように強化
-    const headerIndex = lines.findIndex(l => /^(?:"?name"?,"?brand"?,"?tags"?)/.test(l));
+    // 見出し行をより柔軟に探す（前後の空白を許容）
+    const headerIndex = lines.findIndex(l => /^\s*(?:"?name"?,"?brand"?,"?tags"?)/i.test(l));
     if (headerIndex === -1) throw new Error('見出し行(name,brand...)が見つかりません。');
 
-    const headers = lines[headerIndex].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    // 許可リストが混入していないか簡易チェック
+    if (lines.some(l => /^(dog|cat)/i.test(l.trim()))) {
+        console.log('💡 ヒント: CSV内に許可リストが混入している可能性がありますが、自動でデータ行のみを抽出します。');
+    }
+
+    // 引用符内のカンマを無視してヘッダーを分割
+    const headers = lines[headerIndex].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+        .map(h => h.trim().replace(/^"|"$/g, ''));
     
     return lines.slice(headerIndex + 1).map((line, index) => {
-        const values = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let char of line) {
-            if (char === '"') inQuotes = !inQuotes;
-            else if (char === ',' && !inQuotes) {
-                values.push(current.trim());
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-        values.push(current.trim());
+        // データ行も同様のルールで分割。空の列も正確に配列に入れる。
+        const rawValues = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
 
         const obj = {};
         headers.forEach((header, i) => {
-            let val = values[i] || '';
+            // データが存在しない列も安全に処理（空文字をセット）
+            let val = (rawValues[i] !== undefined ? rawValues[i] : '').replace(/^\s+|\s+$/g, '');
             // クォートで囲まれている場合は除去
             val = val.replace(/^"|"$/g, '').trim();
 
@@ -54,7 +69,7 @@ function parseCSV(content) {
                 // タグのバリデーション（チェック）
                 tags.forEach(tag => {
                     if (!ALLOWED_TAGS.includes(tag)) {
-                        console.warn(`⚠️  警告: [行 ${index + headerIndex + 2}] 未定義のタグがあります: "${tag}" (商品: ${obj.name || '不明'})`);
+                        validationErrors.push(`行 ${index + headerIndex + 2}: "${tag}" (商品: ${obj.name || '不明'})`);
                     }
                 });
                 obj[header] = tags;
@@ -66,35 +81,106 @@ function parseCSV(content) {
     });
 }
 
-try {
-    // ファイルが存在するか事前にチェック
-    if (!fs.existsSync(CSV_PATH)) {
-        console.error(`❌ エラー: CSVファイルが見つかりません。`);
-        console.error(`期待されている場所: ${CSV_PATH}`);
+async function run() {
+    try {
+        const filesInDir = await fs.readdir(__dirname);
+        // productsが含まれるCSVファイルをすべて探し、重複があれば警告を出します
+        const csvCandidates = filesInDir.filter(f => {
+            const name = f.trim().toLowerCase();
+            return name.includes('products') && name.endsWith('.csv') && !f.startsWith('.');
+        });
 
-        // フォルダ内のファイル一覧を表示して、ユーザーが間違いに気づけるようにする
-        const files = fs.readdirSync(__dirname);
-        console.log('\n--- 現在のフォルダにあるファイル一覧 ---');
-        files.forEach(f => console.log(` - ${f}`));
+        // マスターファイル（.ods）が存在するかチェック
+        const hasMasterFile = filesInDir.some(f => {
+            const name = f.toLowerCase();
+            return (name.endsWith('.ods') || name.endsWith('.xlsx')) && name.includes('pet925');
+        });
+
+        if (csvCandidates.length > 1) {
+            console.warn('⚠️  警告: CSVファイルが複数見つかりました。');
+        }
+
+        // 最も正しい名前（products.csv）を優先
+        const csvFileName = csvCandidates.find(f => f === 'products.csv') || 
+                            csvCandidates.find(f => f.trim() === 'products.csv') || 
+                            csvCandidates[0];
+
+        if (!csvFileName) {
+            console.error(`❌ エラー: CSVファイルが見つかりません。`);
+            if (hasMasterFile) console.log('💡 ヒント: マスターファイル(.ods)から CSV を書き出してください。');
+            return;
+        }
+
+        const CSV_PATH = path.join(__dirname, csvFileName);
+        validationErrors = []; // エラーリストをリセット
+
+        if (!fsSync.existsSync(CSV_PATH)) {
+            console.error(`❌ エラー: CSVファイルが見つかりません。`);
+            const files = await fs.readdir(__dirname);
+            console.log('\n--- 現在のフォルダにあるファイル一覧 ---');
+            files.forEach(f => console.log(` - ${f}`));
+            
+            if (hasMasterFile) {
+                console.log('\n💡 ヒント: 管理用のマスターファイル（.ods/.xlsx）は見つかりました。');
+                console.log('   LibreOffice Calc 等で開き、[ファイル] > [保存コピーを保存] から');
+                console.log('   "products.csv" を作成（エクスポート）して、このフォルダに置いてください。');
+            } else {
+                console.log('\n👉 スプレッドシートを "products.csv" という名前でこのフォルダに保存してください。');
+            }
+            process.exit(1);
+        }
+
+        const csvContent = await fs.readFile(CSV_PATH, 'utf8');
+        const stats = await fs.stat(CSV_PATH);
+        const products = parseCSV(csvContent);
         
-        console.error('\n👉 上記の一覧に "products.csv" はありますか？');
-        console.error('拡張子が .csv.txt や .csv.csv になっていないか確認してください。');
-        process.exit(1);
+        const output = `// Last Updated: ${new Date().toLocaleString()}\n` +
+                       `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
+                       `const productData = ${JSON.stringify(products, null, 4)};\n`;
+
+        await fs.writeFile(JS_PATH, output);
+        const fileTime = stats.mtime.toLocaleString();
+        console.log('--------------------------------------------------');
+        console.log(`📄 変換完了: ${csvFileName}`);
+        if (validationErrors.length > 0) {
+            console.warn(`⚠️  タグに ${validationErrors.length} 個の入力ミスが見つかりました：`);
+            validationErrors.forEach(err => console.log(`   - ${err}`));
+            console.log('--------------------------------------------------');
+            console.log(`💡 上記のミスをマスターファイル(.ods)で修正してください。`);
+        } else {
+            console.log(`✅ 完了: ${products.length} 件の商品をすべて正常に処理しました。`);
+        }
+        
+        console.log(`⏰ 実行時刻: ${new Date().toLocaleString()}`);
+        console.log(`文書の更新: ${fileTime} (ファイル: ${csvFileName})`);
+        console.log('--------------------------------------------------');
+    } catch (err) {
+        console.error('❌ 変換エラー:', err.message);
     }
+}
 
-    const csvContent = fs.readFileSync(CSV_PATH, 'utf8');
-    const products = parseCSV(csvContent);
-    
-    // 更新日時を追加することで、ブラウザのコンソールで更新を確認しやすくします
-    const output = `// Last Updated: ${new Date().toLocaleString()}\n` +
-                   `const productData = ${JSON.stringify(products, null, 4)};\n`;
+// 外部（テスト）から関数を呼び出せるようにエクスポート
+module.exports = { 
+    parseCSV, 
+    TAG_MASTER, 
+    getValidationErrors: () => validationErrors, 
+    clearValidationErrors: () => { validationErrors = []; } 
+};
 
-    fs.writeFileSync(JS_PATH, output);
-    console.log('--------------------------------------------------');
-    console.log(`✅ 完了: ${products.length} 件の商品を処理しました。`);
-    console.log(`⏰ 更新時刻: ${new Date().toLocaleString()}`);
-    console.log('👉 index.html を [Ctrl + F5] でリロードしてください。');
-    console.log('--------------------------------------------------');
-} catch (err) {
-    console.error('❌ 変換エラー:', err.message);
+// 監視モードの判定
+if (require.main === module) {
+    if (process.argv.includes('--watch')) {
+        console.log('👀 監視モードを起動しました。CSVの変更を待機中...');
+        run(); // 初回実行
+        
+        let debounceTimer;
+        fsSync.watch(__dirname, (eventType, filename) => {
+            if (filename && filename.includes('products') && filename.endsWith('.csv') && !filename.startsWith('.')) {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => run(), 200); // 連続保存対策のディレイ
+            }
+        });
+    } else {
+        run();
+    }
 }

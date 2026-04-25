@@ -1,0 +1,25 @@
+{
+  "name": "pet925",
+  "version": "1.0.0",
+  "description": "",
+  "main": "convert.js",
+  "scripts": {
+    "start": "node convert.js --watch",
+    "test": "jest",
+    "build": "node convert.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kyuni-f/pet925.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kyuni-f/pet925/issues"
+  },
+  "homepage": "https://github.com/kyuni-f/pet925#readme",
+  "devDependencies": {
+    "jest": "^30.3.0"
+  }
+}
