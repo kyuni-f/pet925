@@ -2,7 +2,9 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 
-const JS_PATH = path.join(__dirname, 'data.js');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 
 // タグのマスター定義（表示名とカテゴリを管理）
 const TAG_MASTER = {
@@ -83,14 +85,25 @@ function parseCSV(content) {
 
 async function run() {
     try {
-        const filesInDir = await fs.readdir(__dirname);
+        // フォルダが存在しない場合は作成（エラー防止）
+        if (!fsSync.existsSync(DATA_DIR)) {
+            await fs.mkdir(DATA_DIR, { recursive: true });
+        }
+
+        let filesInDir = [];
+        try {
+            filesInDir = await fs.readdir(DATA_DIR);
+        } catch (e) {
+            throw new Error(`data フォルダを読み込めません: ${DATA_DIR}`);
+        }
+
         // productsが含まれるCSVファイルをすべて探し、重複があれば警告を出します
         const csvCandidates = filesInDir.filter(f => {
             const name = f.trim().toLowerCase();
             return name.includes('products') && name.endsWith('.csv') && !f.startsWith('.');
         });
 
-        // マスターファイル（.ods）が存在するかチェック
+        // マスターファイル（.ods/.xlsx）が存在するかチェック
         const hasMasterFile = filesInDir.some(f => {
             const name = f.toLowerCase();
             return (name.endsWith('.ods') || name.endsWith('.xlsx')) && name.includes('pet925');
@@ -106,18 +119,18 @@ async function run() {
                             csvCandidates[0];
 
         if (!csvFileName) {
-            console.error(`❌ エラー: CSVファイルが見つかりません。`);
+            console.error(`❌ エラー: data フォルダ内に CSVファイルが見つかりません。`);
             if (hasMasterFile) console.log('💡 ヒント: マスターファイル(.ods)から CSV を書き出してください。');
             return;
         }
 
-        const CSV_PATH = path.join(__dirname, csvFileName);
+        const CSV_PATH = path.join(DATA_DIR, csvFileName);
         validationErrors = []; // エラーリストをリセット
 
         if (!fsSync.existsSync(CSV_PATH)) {
-            console.error(`❌ エラー: CSVファイルが見つかりません。`);
-            const files = await fs.readdir(__dirname);
-            console.log('\n--- 現在のフォルダにあるファイル一覧 ---');
+            console.error(`❌ エラー: ${CSV_PATH} が見つかりません。`);
+            const files = await fs.readdir(DATA_DIR);
+            console.log('\n--- data フォルダにあるファイル一覧 ---');
             files.forEach(f => console.log(` - ${f}`));
             
             if (hasMasterFile) {
@@ -174,7 +187,7 @@ if (require.main === module) {
         run(); // 初回実行
         
         let debounceTimer;
-        fsSync.watch(__dirname, (eventType, filename) => {
+        fsSync.watch(DATA_DIR, (eventType, filename) => {
             if (filename && filename.includes('products') && filename.endsWith('.csv') && !filename.startsWith('.')) {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => run(), 200); // 連続保存対策のディレイ

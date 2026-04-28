@@ -2,11 +2,11 @@
   "name": "pet925",
   "version": "1.0.0",
   "description": "",
-  "main": "convert.js",
+  "main": "src/convert.js",
   "scripts": {
-    "start": "node convert.js --watch",
-    "test": "jest",
-    "build": "node convert.js"
+    "start": "node src/convert.js --watch",
+    "test": "jest src",
+    "build": "node src/convert.js"
   },
   "repository": {
     "type": "git",
