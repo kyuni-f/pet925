@@ -28,9 +28,11 @@
         .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
         .filter-group { margin-bottom: 10px; }
         .group-label { font-size: 0.6rem; font-weight: 700; color: #bbb; margin-bottom: 5px; display: block; letter-spacing: 1px; }
-        .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; cursor: grab; user-select: none; }
-        .scroll-box::-webkit-scrollbar { display: none; }
-        .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; transition: 0.3s; }
+        .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; cursor: default; user-select: none; }
+        .scroll-box.dragging { cursor: grabbing !important; }
+        .scroll-box.dragging .filter-btn { cursor: grabbing !important; }
+        .scroll-box::-webkit-scrollbar { display: none; } /* スクロールバーを非表示 */
+        .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: grab; white-space: nowrap; transition: 0.3s; }
         .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
 
         /* 商品カード：カタログのような美しさ */
@@ -91,6 +93,18 @@
             </div>
         </div>
         <div class="filter-group">
+            <span class="group-label">Age / 年齢</span>
+            <div class="scroll-box" id="filter-age">
+                <!-- JSで自動生成 -->
+            </div>
+        </div>
+        <div class="filter-group">
+            <span class="group-label">Commitment / こだわり</span>
+            <div class="scroll-box" id="filter-pref">
+                <!-- JSで自動生成 -->
+            </div>
+        </div>
+        <div class="filter-group">
             <span class="group-label">Condition / お悩み</span>
             <div class="scroll-box" id="filter-cond">
                 <!-- JSで自動生成 -->
@@ -102,7 +116,7 @@
 </div>
 
 <script>
-let activeFilters = { animal: "all", cond: "all" };
+let activeFilters = { animal: "all", age: "all", pref: "all", cond: "all" };
 
 function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
@@ -111,6 +125,43 @@ function toggleFilter(btn) {
     btn.classList.add('active');
     activeFilters[category] = value;
     render();
+}
+
+// マウスドラッグによる横スクロールを有効にする
+function initDragScroll() {
+    console.log('initDragScroll called'); // デバッグ用ログ
+    const sliders = document.querySelectorAll('.scroll-box');
+    sliders.forEach(slider => {
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+        let moved = false;
+
+        slider.addEventListener('mousedown', (e) => {
+            isDown = true;
+            moved = false;
+            slider.classList.add('dragging');
+            startX = e.pageX - slider.getBoundingClientRect().left; // より正確な相対位置を取得
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', () => { isDown = false; slider.classList.remove('dragging'); });
+        slider.addEventListener('mouseup', () => { isDown = false; slider.classList.remove('dragging'); });
+
+        slider.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const currentX = e.pageX - slider.getBoundingClientRect().left;
+            const walk = (currentX - startX) * 2; // スクロール速度
+            if (Math.abs(currentX - startX) > 5) moved = true; // 5px以上動いたらドラッグとみなす
+            slider.scrollLeft = scrollLeft - walk;
+        });
+
+        // ドラッグ終了時に誤ってボタンがクリックされるのを防ぐ
+        slider.addEventListener('click', (e) => {
+            if (moved) e.stopImmediatePropagation();
+        }, true);
+    });
 }
 
 function renderFilters() {
@@ -122,48 +173,16 @@ function renderFilters() {
 
         let html = `<button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
         
+        // タグの並び順をTAG_MASTERで定義した順にする
         for (const [tagKey, tagName] of Object.entries(tags)) {
             html += `<button class="filter-btn" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${tagName}</button>`;
         }
         container.innerHTML = html;
     }
+    // renderFiltersが完了した後にドラッグスクロールを初期化
+    initDragScroll();
 }
 
-// マウスドラッグによる横スクロールを有効にする
-function initDragScroll() {
-    const sliders = document.querySelectorAll('.scroll-box');
-    sliders.forEach(slider => {
-        let isDown = false;
-        let startX;
-        let scrollLeft;
-        let moved = false;
-
-        slider.addEventListener('mousedown', (e) => {
-            isDown = true;
-            moved = false;
-            slider.style.cursor = 'grabbing';
-            startX = e.pageX - slider.offsetLeft;
-            scrollLeft = slider.scrollLeft;
-        });
-
-        slider.addEventListener('mouseleave', () => { isDown = false; slider.style.cursor = 'grab'; });
-        slider.addEventListener('mouseup', () => { isDown = false; slider.style.cursor = 'grab'; });
-
-        slider.addEventListener('mousemove', (e) => {
-            if (!isDown) return;
-            const x = e.pageX - slider.offsetLeft;
-            if (Math.abs(x - startX) > 5) moved = true; // 5px以上動いたらドラッグとみなす
-            e.preventDefault();
-            const walk = (x - startX) * 2; // スクロール速度
-            slider.scrollLeft = scrollLeft - walk;
-        });
-
-        // ドラッグ終了時に誤ってボタンがクリックされるのを防ぐ
-        slider.addEventListener('click', (e) => {
-            if (moved) e.stopImmediatePropagation();
-        }, true);
-    });
-}
 
 // 価格表示とショップ名を表示するヘルパー
 function getShopButtonContent(shopName, price, isLowest) {
@@ -200,6 +219,8 @@ function render() {
     
     productData.forEach(item => {
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
+        const matchAge = activeFilters.age === 'all' || item.tags.includes(activeFilters.age);
+        const matchPref = activeFilters.pref === 'all' || item.tags.includes(activeFilters.pref);
         const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
         const matchSearch = searchWords.every(word => 
             item.name.toLowerCase().includes(word) || 
@@ -209,7 +230,7 @@ function render() {
             (item.promo && item.promo.toLowerCase().includes(word))
         );
 
-        if (matchAnimal && matchCond && matchSearch) {
+        if (matchAnimal && matchAge && matchPref && matchCond && matchSearch) {
             matchCount++;
             const card = document.createElement('div');
             card.className = 'product-card';
@@ -271,7 +292,6 @@ function render() {
 window.addEventListener('DOMContentLoaded', () => {
     if (typeof productData !== 'undefined') {
         renderFilters();
-        initDragScroll();
         render();
     }
 });

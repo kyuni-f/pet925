@@ -1,19 +1,28 @@
-// Last Updated: 2026/4/28 13:34:33
+// Last Updated: 2026/4/29 1:01:57
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
         "cat": "猫 (CAT)"
     },
+    "age": {
+        "all_ages": "全年齢用 (ALL AGES)",
+        "puppy": "子犬・子猫 (PUPPY)",
+        "adult": "成犬・成猫 (ADULT)",
+        "senior": "シニア (SENIOR)"
+    },
+    "pref": {
+        "dry": "ドライ (DRY)",
+        "wet": "ウェット (WET)",
+        "freeze_dried": "フリーズドライ (FD)",
+        "lamb": "ラム肉 (LAMB)",
+        "fish": "魚 (FISH)",
+        "gf": "穀物不使用 (GF)"
+    },
     "cond": {
         "tear": "涙やけ (TEAR)",
-        "gf": "穀物不使用 (GF)",
         "diet": "体重管理 (WEIGHT)",
         "kidney": "腎臓・尿路 (KIDNEY)",
-        "senior": "シニア (SENIOR)",
-        "adult": "成犬用 (ADULT)",
         "skin": "皮膚ケア (SKIN)",
-        "lamb": "ラム肉 (LAMB)",
-        "venison": "鹿肉 (VENISON)",
         "joint": "関節ケア (JOINT)",
         "tooth": "歯の健康 (TOOTH)",
         "appetite": "食いつき (APPETITE)"
@@ -70,8 +79,7 @@ const productData = [
             "dog",
             "adult",
             "gf",
-            "tear",
-            "venison"
+            "tear"
         ],
         "desc": "野生の食性に近い高タンパク・穀物不使用レシピ。鹿肉を使用し、アレルギーや涙やけにも配慮。",
         "img": "https://unsplash.com",

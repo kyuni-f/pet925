@@ -12,24 +12,36 @@ const TAG_MASTER = {
         dog: '犬 (DOG)',
         cat: '猫 (CAT)'
     },
+    age: {
+        all_ages: '全年齢用 (ALL AGES)',
+        puppy: '子犬・子猫 (PUPPY)',
+        adult: '成犬・成猫 (ADULT)',
+        senior: 'シニア (SENIOR)'
+    },
+    pref: {
+        dry: 'ドライ (DRY)',
+        wet: 'ウェット (WET)',
+        freeze_dried: 'フリーズドライ (FD)',
+        lamb: 'ラム肉 (LAMB)',
+        fish: '魚 (FISH)',
+        gf: '穀物不使用 (GF)'
+    },
     cond: {
         tear: '涙やけ (TEAR)',
-        gf: '穀物不使用 (GF)',
         diet: '体重管理 (WEIGHT)',
         kidney: '腎臓・尿路 (KIDNEY)',
-        senior: 'シニア (SENIOR)',
-        adult: '成犬用 (ADULT)',
         skin: '皮膚ケア (SKIN)',
-        lamb: 'ラム肉 (LAMB)',
-        venison: '鹿肉 (VENISON)',
         joint: '関節ケア (JOINT)',
         tooth: '歯の健康 (TOOTH)',
         appetite: '食いつき (APPETITE)'
     }
 };
 
+// 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
+const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
+
 // バリデーション用にキーだけの配列を作成
-const ALLOWED_TAGS = Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj));
+const ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES];
 
 let validationErrors = [];
 
@@ -74,6 +86,11 @@ function parseCSV(content) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: "${tag}" (商品: ${obj.name || '不明'})`);
                     }
                 });
+
+                // 魚種タグが含まれている場合、フィルタリング用に 'fish' を自動付与
+                if (tags.some(t => FISH_TAG_ALIASES.includes(t)) && !tags.includes('fish')) {
+                    tags.push('fish');
+                }
                 obj[header] = tags;
             } else {
                 obj[header] = val;
