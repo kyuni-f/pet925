@@ -28,7 +28,7 @@
         .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
         .filter-group { margin-bottom: 10px; }
         .group-label { font-size: 0.6rem; font-weight: 700; color: #bbb; margin-bottom: 5px; display: block; letter-spacing: 1px; }
-        .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; cursor: grab; user-select: none; }
         .scroll-box::-webkit-scrollbar { display: none; }
         .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; transition: 0.3s; }
         .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
@@ -127,6 +127,42 @@ function renderFilters() {
         }
         container.innerHTML = html;
     }
+}
+
+// マウスドラッグによる横スクロールを有効にする
+function initDragScroll() {
+    const sliders = document.querySelectorAll('.scroll-box');
+    sliders.forEach(slider => {
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+        let moved = false;
+
+        slider.addEventListener('mousedown', (e) => {
+            isDown = true;
+            moved = false;
+            slider.style.cursor = 'grabbing';
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', () => { isDown = false; slider.style.cursor = 'grab'; });
+        slider.addEventListener('mouseup', () => { isDown = false; slider.style.cursor = 'grab'; });
+
+        slider.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            const x = e.pageX - slider.offsetLeft;
+            if (Math.abs(x - startX) > 5) moved = true; // 5px以上動いたらドラッグとみなす
+            e.preventDefault();
+            const walk = (x - startX) * 2; // スクロール速度
+            slider.scrollLeft = scrollLeft - walk;
+        });
+
+        // ドラッグ終了時に誤ってボタンがクリックされるのを防ぐ
+        slider.addEventListener('click', (e) => {
+            if (moved) e.stopImmediatePropagation();
+        }, true);
+    });
 }
 
 // 価格表示とショップ名を表示するヘルパー
@@ -235,6 +271,7 @@ function render() {
 window.addEventListener('DOMContentLoaded', () => {
     if (typeof productData !== 'undefined') {
         renderFilters();
+        initDragScroll();
         render();
     }
 });
