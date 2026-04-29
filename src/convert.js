@@ -19,7 +19,6 @@ const TAG_MASTER = {
         senior: 'シニア (SENIOR)'
     },
     pref: {
-        dry: 'ドライ (DRY)',
         wet: 'ウェット (WET)',
         freeze_dried: 'フリーズドライ (FD)',
         lamb: 'ラム肉 (LAMB)',

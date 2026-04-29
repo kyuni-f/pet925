@@ -28,7 +28,6 @@
 - `senior` : シニア・高齢期
 
 ### こだわり (Commitment)
-- `dry` : ドライフード
 - `wet` : ウェットフード（缶詰・パウチ）
 - `freeze_dried` : フリーズドライ
 - `lamb` : ラム肉

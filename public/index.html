@@ -116,14 +116,40 @@
 </div>
 
 <script>
-let activeFilters = { animal: "all", age: "all", pref: "all", cond: "all" };
+let activeFilters = { animal: "all", age: "all", pref: [], cond: [] };
 
 function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
     const value = btn.getAttribute('data-val');
-    btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    activeFilters[category] = value;
+
+    if (category === 'animal' || category === 'age') {
+        // 単一選択（種類・年齢）
+        btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilters[category] = value;
+    } else {
+        // 複数選択（こだわり・お悩み）
+        if (value === 'all') {
+            activeFilters[category] = [];
+            btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        } else {
+            const allBtn = btn.parentElement.querySelector('[data-val="all"]');
+            if (activeFilters[category].includes(value)) {
+                // すでに選択済みなら解除
+                activeFilters[category] = activeFilters[category].filter(v => v !== value);
+                btn.classList.remove('active');
+            } else {
+                // 未選択なら追加
+                activeFilters[category].push(value);
+                btn.classList.add('active');
+            }
+
+            // 選択状況に応じて「すべて」ボタンの状態を更新
+            if (activeFilters[category].length === 0) allBtn.classList.add('active');
+            else allBtn.classList.remove('active');
+        }
+    }
     render();
 }
 
@@ -211,23 +237,40 @@ function render() {
     if (typeof productData === 'undefined') return;
     if (!productData || productData.length === 0) return;
     const list = document.getElementById('product-list');
-    const searchVal = document.getElementById('search-input').value.toLowerCase().replace(/　/g, ' ').trim();
-    const searchWords = searchVal.split(/\s+/).filter(w => w !== '');
+
+    // ひらがなをカタカナに変換して比較しやすくする正規化関数
+    const normalize = (str) => {
+        if (!str) return "";
+        return str.replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
+                  .toLowerCase();
+    };
+
+    const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
+    const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     
     list.innerHTML = "";
     let matchCount = 0;
     
     productData.forEach(item => {
+        // タグの表示名（日本語）も検索にヒットさせるための文字列作成
+        const tagNames = item.tags.map(t => {
+            for (const cat in tagMaster) {
+                if (tagMaster[cat][t]) return tagMaster[cat][t];
+            }
+            return t;
+        }).join(' ');
+
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
         const matchAge = activeFilters.age === 'all' || item.tags.includes(activeFilters.age);
-        const matchPref = activeFilters.pref === 'all' || item.tags.includes(activeFilters.pref);
-        const matchCond = activeFilters.cond === 'all' || item.tags.includes(activeFilters.cond);
+        const matchPref = activeFilters.pref.length === 0 || activeFilters.pref.some(t => item.tags.includes(t));
+        const matchCond = activeFilters.cond.length === 0 || activeFilters.cond.some(t => item.tags.includes(t));
         const matchSearch = searchWords.every(word => 
-            item.name.toLowerCase().includes(word) || 
-            item.brand.toLowerCase().includes(word) || 
-            item.tags.some(t => t.toLowerCase().includes(word)) ||
-            (item.label && item.label.toLowerCase().includes(word)) ||
-            (item.promo && item.promo.toLowerCase().includes(word))
+            normalize(item.name).includes(word) || 
+            normalize(item.brand).includes(word) || 
+            normalize(item.desc).includes(word) || 
+            normalize(tagNames).includes(word) ||
+            (item.label && normalize(item.label).includes(word)) ||
+            (item.promo && normalize(item.promo).includes(word))
         );
 
         if (matchAnimal && matchAge && matchPref && matchCond && matchSearch) {

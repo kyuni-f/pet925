@@ -1,4 +1,4 @@
-// Last Updated: 2026/4/29 1:01:57
+// Last Updated: 2026/4/29 1:59:51
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -11,7 +11,6 @@ const tagMaster = {
         "senior": "シニア (SENIOR)"
     },
     "pref": {
-        "dry": "ドライ (DRY)",
         "wet": "ウェット (WET)",
         "freeze_dried": "フリーズドライ (FD)",
         "lamb": "ラム肉 (LAMB)",
