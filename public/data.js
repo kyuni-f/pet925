@@ -1,5 +1,5 @@
-// Last Updated: 2026/5/2 0:29:33
-const lastUpdated = "2026/5/2 0:29:33";
+// Last Updated: 2026/5/2 3:12:01
+const lastUpdated = "2026/5/2 3:12:01";
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -15,8 +15,7 @@ const tagMaster = {
         "wet": "ウェット (WET)",
         "freeze_dried": "フリーズドライ (FD)",
         "lamb": "ラム肉 (LAMB)",
-        "fish": "魚 (FISH)",
-        "gf": "穀物不使用 (GF)"
+        "fish": "魚 (FISH)"
     },
     "cond": {
         "tear": "涙やけ (TEAR)",
@@ -25,7 +24,8 @@ const tagMaster = {
         "skin": "皮膚ケア (SKIN)",
         "joint": "関節ケア (JOINT)",
         "tooth": "歯の健康 (TOOTH)",
-        "appetite": "食いつき (APPETITE)"
+        "appetite": "食いつき (APPETITE)",
+        "gf": "穀物不使用 (GF)"
     }
 };
 const productData = [

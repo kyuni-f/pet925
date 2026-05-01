@@ -22,8 +22,7 @@ let TAG_MASTER = {
         wet: 'ウェット (WET)',
         freeze_dried: 'フリーズドライ (FD)',
         lamb: 'ラム肉 (LAMB)',
-        fish: '魚 (FISH)',
-        gf: '穀物不使用 (GF)'
+        fish: '魚 (FISH)'
     },
     cond: {
         tear: '涙やけ (TEAR)',
@@ -32,17 +31,20 @@ let TAG_MASTER = {
         skin: '皮膚ケア (SKIN)',
         joint: '関節ケア (JOINT)',
         tooth: '歯の健康 (TOOTH)',
-        appetite: '食いつき (APPETITE)'
+        appetite: '食いつき (APPETITE)',
+        gf: '穀物不使用 (GF)'
     }
 };
 
 // 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
 const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
+// 穀物不使用のエイリアス
+const GF_TAG_ALIASES = ['gluten_free', 'glutenfree', 'グルテンフリー'];
 
 // 許可タグリストを動的に更新する関数
 let ALLOWED_TAGS = [];
 function updateAllowedTags() {
-    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES];
+    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES, ...GF_TAG_ALIASES];
 }
 updateAllowedTags();
 
@@ -116,6 +118,10 @@ function parseCSV(content) {
                 // 魚種タグが含まれている場合、フィルタリング用に 'fish' を自動付与
                 if (tags.some(t => FISH_TAG_ALIASES.includes(t)) && !tags.includes('fish')) {
                     tags.push('fish');
+                }
+                // グルテンフリー関連のタグが含まれている場合、フィルタリング用に 'gf' を自動付与
+                if (tags.some(t => GF_TAG_ALIASES.includes(t)) && !tags.includes('gf')) {
+                    tags.push('gf');
                 }
                 obj[header] = tags;
             } else {

@@ -53,6 +53,8 @@
         
         /* 特典情報のテキスト */
         .promo-text { font-size: 0.75rem; color: #e67e22; font-weight: bold; margin-bottom: 10px; display: block; }
+        /* 自動付与タグの注釈 */
+        .auto-note { font-size: 0.75rem; color: #27ae60; font-weight: bold; margin-bottom: 5px; display: block; }
         /* おすすめバッジ */
         .featured-badge { position: absolute; top: 10px; left: 10px; background: var(--gold); color: #fff; padding: 4px 12px; font-size: 0.7rem; font-weight: bold; z-index: 10; }
         /* 最安値バッジ（ボタン内） */
@@ -90,47 +92,32 @@
 
 <div class="container">
     <div class="search-container">
-        <input type="text" id="search-input" placeholder="キーワードを入力（例：歯, シニア, 涙やけ）" oninput="render()">
+        <input type="text" id="search-input" placeholder="商品名またはブランド名で検索" oninput="render()">
     </div>
 
-    <div class="filter-nav">
-        <div class="filter-group">
-            <span class="group-label">Animal / 種類</span>
-            <div class="scroll-box" id="filter-animal">
-                <!-- JSで自動生成 -->
-            </div>
-        </div>
-        <div class="filter-group">
-            <span class="group-label">Age / 年齢</span>
-            <div class="scroll-box" id="filter-age">
-                <!-- JSで自動生成 -->
-            </div>
-        </div>
-        <div class="filter-group">
-            <span class="group-label">Commitment / こだわり</span>
-            <div class="scroll-box" id="filter-pref">
-                <!-- JSで自動生成 -->
-            </div>
-        </div>
-        <div class="filter-group">
-            <span class="group-label">Condition / お悩み</span>
-            <div class="scroll-box" id="filter-cond">
-                <!-- JSで自動生成 -->
-            </div>
-        </div>
-    </div>
+    <div class="filter-nav" id="filter-nav-container"></div>
 
     <div id="product-list"></div>
 </div>
 
 <script>
-let activeFilters = { animal: "all", age: "all", pref: [], cond: [] };
+// 単一選択にするカテゴリのリスト
+const singleSelectCats = ['animal', 'age'];
+let activeFilters = {};
+
+// フィルターの初期状態を構築
+function initFilters() {
+    if (typeof tagMaster === 'undefined') return;
+    for (const cat in tagMaster) {
+        activeFilters[cat] = singleSelectCats.includes(cat) ? "all" : [];
+    }
+}
 
 function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
     const value = btn.getAttribute('data-val');
 
-    if (category === 'animal' || category === 'age') {
+    if (singleSelectCats.includes(category)) {
         // 単一選択（種類・年齢）
         btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -201,19 +188,34 @@ function initDragScroll() {
 function renderFilters() {
     if (typeof tagMaster === 'undefined') return;
     
-    for (const [category, tags] of Object.entries(tagMaster)) {
-        const container = document.getElementById(`filter-${category}`);
-        if (!container) continue;
+    const navContainer = document.getElementById('filter-nav-container');
+    navContainer.innerHTML = '';
 
-        let html = `<button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
+    // 表示用ラベルのマッピング
+    const categoryLabels = {
+        animal: 'Animal / 種類',
+        age: 'Age / 年齢',
+        pref: 'Recipe / 製法・原材料 (複数選択可)',
+        cond: 'Condition / お悩み (複数選択可)',
+        origin: 'Origin / 原産国' // 追加分
+    };
+
+    for (const [category, tags] of Object.entries(tagMaster)) {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'filter-group';
         
-        // タグの並び順をTAG_MASTERで定義した順にする
+        const label = categoryLabels[category] || category.charAt(0).toUpperCase() + category.slice(1);
+        let html = `<span class="group-label">${label}</span>`;
+        html += `<div class="scroll-box" id="filter-${category}">`;
+        html += `<button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
+        
         for (const [tagKey, tagName] of Object.entries(tags)) {
             html += `<button class="filter-btn" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${tagName}</button>`;
         }
-        container.innerHTML = html;
+        html += `</div>`;
+        groupDiv.innerHTML = html;
+        navContainer.appendChild(groupDiv);
     }
-    // renderFiltersが完了した後にドラッグスクロールを初期化
     initDragScroll();
 }
 
@@ -268,21 +270,24 @@ function render() {
             return t;
         }).join(' ');
 
-        const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
-        const matchAge = activeFilters.age === 'all' || item.tags.includes(activeFilters.age);
-        const matchPref = activeFilters.pref.length === 0 || activeFilters.pref.every(t => item.tags.includes(t));
-        const matchCond = activeFilters.cond.length === 0 || activeFilters.cond.every(t => item.tags.includes(t));
+        // 特定のタグに対する注釈メッセージの設定
+        const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグルテンフリーです</span>' : '';
+
+        // すべてのカテゴリの条件に合致するかチェック
+        const matchFilters = Object.keys(tagMaster).every(cat => {
+            const filterVal = activeFilters[cat];
+            if (singleSelectCats.includes(cat)) {
+                return filterVal === 'all' || item.tags.includes(filterVal);
+            }
+            return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
+        });
+
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
-            normalize(item.brand).includes(word) || 
-            normalize(item.desc).includes(word) || 
-            normalize(item.size).includes(word) || 
-            normalize(tagNames).includes(word) ||
-            (item.label && normalize(item.label).includes(word)) ||
-            (item.promo && normalize(item.promo).includes(word))
+            normalize(item.brand).includes(word)
         );
 
-        if (matchAnimal && matchAge && matchPref && matchCond && matchSearch) {
+        if (matchFilters && matchSearch) {
             matchCount++;
             const card = document.createElement('div');
             card.className = 'product-card';
@@ -314,6 +319,7 @@ function render() {
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
                     <div class="product-name">${item.name}${item.size ? `<span class="product-size">(${item.size})</span>` : ''}</div>
+                    ${gfNote}
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
                     <div class="shop-links">
@@ -347,6 +353,7 @@ function render() {
 // ページ読み込み時に描画を開始
 window.addEventListener('DOMContentLoaded', () => {
     if (typeof productData !== 'undefined') {
+        initFilters();
         renderFilters();
         render();
     }
