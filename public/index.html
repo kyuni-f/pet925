@@ -62,6 +62,13 @@
 
         .no-results { grid-column: 1 / -1; text-align: center; padding: 100px 20px; color: #999; font-size: 0.9rem; letter-spacing: 2px; }
 
+        /* 免責事項の注釈 */
+        .price-disclaimer { 
+            font-size: 0.65rem; color: #999; margin-top: 15px; text-align: right; 
+            line-height: 1.2; font-style: italic;
+        }
+        .update-date { font-weight: bold; }
+
         /* モール別ボタン */
         .shop-links { display: flex; flex-direction: column; gap: 8px; }
         .btn-shop { text-decoration: none; padding: 12px; font-size: 0.75rem; font-weight: 700; text-align: center; border-radius: 4px; transition: 0.3s; letter-spacing: 1px; }
@@ -319,6 +326,10 @@ function render() {
                         <a href="${getSearchUrl('amz', item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow">${getShopButtonContent('Amazon', item.amz_p, minPrice && parseP(item.amz_p) === minPrice)}</a>
                         <a href="${getSearchUrl('rak', item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow">${getShopButtonContent('楽天', item.rak_p, minPrice && parseP(item.rak_p) === minPrice)}</a>
                         <a href="${getSearchUrl('yah', item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow">${getShopButtonContent('Yahoo!', item.yah_p, minPrice && parseP(item.yah_p) === minPrice)}</a>
+                    </div>
+                    <div class="price-disclaimer">
+                        ※価格は掲載時のものです。最新価格は各ショップでご確認ください。<br>
+                        最終更新: <span class="update-date">${typeof lastUpdated !== 'undefined' ? lastUpdated : '不明'}</span>
                     </div>
                 </div>
             `;

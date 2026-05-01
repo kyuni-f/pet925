@@ -107,17 +107,12 @@
 
 ---
 
-## 6. Gemini（AI）への依頼テンプレート
-新しい商品を追加する際は、以下の構成をコピーしてGeminiに渡してください。
+## 6. Gemini（AI）への依頼テンプレート（最新版）
+最も確実な方法は、プロジェクト内の `docs/AI_INSTRUCTIONS.md` の内容をまるごと Gemini に渡すことです。
 
-**依頼文の例：**
-> 以下の商品の情報を、指定の列構成でCSV形式（コードブロック）で出力してください。
-> タグはマニュアルの許可リストから選んでください。
-> 
-> 【列構成】
-> `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p`
-> 【商品名】
-> （ここに商品名やURLを貼る）
+1. `docs/AI_INSTRUCTIONS.md` をコピーして Gemini に貼る。
+2. `npm start` した時にターミナルに表示される「📋 Gemini用許可タグリスト」をコピーして Gemini に貼る。
+3. 商品名やURLを渡す。
 
 ---
 

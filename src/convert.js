@@ -193,7 +193,9 @@ async function run() {
         const stats = await fs.stat(CSV_PATH);
         const products = parseCSV(csvContent);
         
-        const output = `// Last Updated: ${new Date().toLocaleString()}\n` +
+        const now = new Date().toLocaleString();
+        const output = `// Last Updated: ${now}\n` +
+                       `const lastUpdated = "${now}";\n` +
                        `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;
 
@@ -201,6 +203,14 @@ async function run() {
         const fileTime = stats.mtime.toLocaleString();
         console.log('--------------------------------------------------');
         console.log(`📄 変換完了: ${csvFileName}`);
+
+        // Geminiへのコピペ用タグリストを表示
+        console.log('\n📋 Gemini用許可タグリスト (コピペ用):');
+        const tagList = Object.entries(TAG_MASTER).flatMap(([cat, tags]) => 
+            Object.entries(tags).map(([key, name]) => `${key} (${name})`)
+        ).join(', ');
+        console.log(tagList + '\n');
+
         if (validationErrors.length > 0) {
             console.warn(`⚠️  タグに ${validationErrors.length} 個の入力ミスが見つかりました：`);
             validationErrors.forEach(err => console.log(`   - ${err}`));

@@ -58,11 +58,11 @@ Gemini に相談する際は、以下をコピーして渡すとスムーズで�
 > **プロジェクト背景:**
 > 14列構成のCSVから `data.js` を生成し、`index.html` で動的表示するペットフード比較サイト。
 > **現在の構成:**
-> - `pet925_master.ods` が原本、`products.csv` が中間ファイル。
+> - `pet925_master.ods` が原本、`products.csv` と `tags.csv` が中間ファイル。
 > - `convert.js` が監視・変換・バリデーションを担当。
 > - `index.html` がタグ生成・価格比較・描画を担当。
 > **ルール:**
-> - `MANUAL.md` の許可タグ以外は使用しない。
+> - タグは `tags.csv` に定義されている `key` のみを使用する。
 > - 列構成：`name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p`
 
 ---
