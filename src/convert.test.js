@@ -7,18 +7,19 @@ describe('CSV Parser Tests', () => {
     });
 
     test('正常なCSVデータを正しくオブジェクトに変換できること', () => {
-        const csv = `name,brand,tags,desc,img,amz,rak,yah,a8,label,promo
-テスト商品,ブランドA,dog adult,説明文,https://example.com,#,#,#,#,ラベル,プロモ`;
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+テスト商品,ブランドA,dog adult,説明文,2kg,https://example.com,#,#,#,#,ラベル,プロモ,1000,1100,1050`;
         const result = parseCSV(csv);
         
         expect(result).toHaveLength(1);
         expect(result[0].name).toBe('テスト商品');
         expect(result[0].tags).toEqual(['dog', 'adult']);
+        expect(result[0].size).toBe('2kg');
     });
 
     test('ダブルクォーテーションで囲まれたカンマを含む値を正しく処理できること', () => {
-        const csv = `name,brand,tags,desc,img,amz,rak,yah,a8,label,promo
-"商品名, カンマあり",ブランドB,cat,"説明文, カンマあり",#,#,#,#,#,,`;
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+"商品名, カンマあり",ブランドB,cat,"説明文, カンマあり",500g,#,#,#,#,#,,0,0,0`;
         const result = parseCSV(csv);
         
         expect(result[0].name).toBe('商品名, カンマあり');
@@ -26,8 +27,8 @@ describe('CSV Parser Tests', () => {
     });
 
     test('許可されていないタグが含まれている場合に警告を検知できること', () => {
-        const csv = `name,brand,tags,desc,img,amz,rak,yah,a8,label,promo
-テスト商品,ブランドC,invalid_tag,説明,#,#,#,#,#,,`;
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+テスト商品,ブランドC,invalid_tag,説明,1kg,#,#,#,#,#,,0,0,0`;
         parseCSV(csv);
         
         const errors = getValidationErrors();
@@ -36,9 +37,9 @@ describe('CSV Parser Tests', () => {
     });
 
     test('空の行が含まれていても無視されること', () => {
-        const csv = `name,brand,tags,desc,img,amz,rak,yah,a8,label,promo
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
 
-商品A,ブランドA,dog,説明,#,#,#,#,#,,`;
+商品A,ブランドA,dog,説明,1kg,#,#,#,#,#,,0,0,0`;
         const result = parseCSV(csv);
         expect(result).toHaveLength(1);
     });

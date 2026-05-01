@@ -45,6 +45,7 @@
         .card-content { padding: 20px 0; flex-grow: 1; }
         .brand-badge { font-size: 0.65rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
         .product-name { font-size: 1.15rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; }
+        .product-size { font-size: 0.8rem; color: #888; font-weight: 400; margin-left: 5px; }
         .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 3em; }
         
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
@@ -262,12 +263,13 @@ function render() {
 
         const matchAnimal = activeFilters.animal === 'all' || item.tags.includes(activeFilters.animal);
         const matchAge = activeFilters.age === 'all' || item.tags.includes(activeFilters.age);
-        const matchPref = activeFilters.pref.length === 0 || activeFilters.pref.some(t => item.tags.includes(t));
-        const matchCond = activeFilters.cond.length === 0 || activeFilters.cond.some(t => item.tags.includes(t));
+        const matchPref = activeFilters.pref.length === 0 || activeFilters.pref.every(t => item.tags.includes(t));
+        const matchCond = activeFilters.cond.length === 0 || activeFilters.cond.every(t => item.tags.includes(t));
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) || 
             normalize(item.desc).includes(word) || 
+            normalize(item.size).includes(word) || 
             normalize(tagNames).includes(word) ||
             (item.label && normalize(item.label).includes(word)) ||
             (item.promo && normalize(item.promo).includes(word))
@@ -304,7 +306,7 @@ function render() {
                 </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
-                    <div class="product-name">${item.name}</div>
+                    <div class="product-name">${item.name}${item.size ? `<span class="product-size">(${item.size})</span>` : ''}</div>
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
                     <div class="shop-links">

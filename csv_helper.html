@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>pet925 | CSV Data Helper</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.2rem; border-left: 4px solid #c5a059; padding-left: 10px; margin-bottom: 20px; }
+        .field { margin-bottom: 15px; }
+        label { display: block; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; color: #666; }
+        input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .hint { font-size: 0.7rem; color: #999; margin-top: 3px; }
+        button { width: 100%; padding: 15px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #333; }
+        #result-area { margin-top: 20px; display: none; }
+        pre { background: #eee; padding: 15px; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; border-radius: 4px; border: 1px dashed #ccc; }
+        .copy-msg { color: #27ae60; font-size: 0.8rem; font-weight: bold; margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>CSV 行作成ヘルパー</h1>
+    <p style="font-size: 0.8rem; color: #666;">入力してボタンを押すと、スプレッドシートやCSVに貼り付けられる形式で出力します。</p>
+
+    <div class="field">
+        <label>商品名 (name)</label>
+        <input type="text" id="name" placeholder="例：ナチュラル チョイス ラム＆玄米">
+    </div>
+    <div class="field">
+        <label>ブランド (brand)</label>
+        <input type="text" id="brand" placeholder="例：Nutro">
+    </div>
+    <div class="field">
+        <label>タグ (tags) ※半角スペース区切り</label>
+        <input type="text" id="tags" placeholder="例：dog adult lamb tear">
+        <div class="hint">マニュアルの許可タグを入力してください</div>
+    </div>
+    <div class="field">
+        <label>商品説明 (desc)</label>
+        <textarea id="desc" rows="3" placeholder="商品の特徴を短く入力"></textarea>
+    </div>
+    <div class="field">
+        <label>内容量 (size)</label>
+        <input type="text" id="size" placeholder="例：2kg, 800g">
+    </div>
+    <div class="field">
+        <label>画像URL (img)</label>
+        <input type="text" id="img" value="#">
+    </div>
+    <div class="field">
+        <label>公式サイト/A8リンク (a8)</label>
+        <input type="text" id="a8" value="#">
+    </div>
+    <div class="field">
+        <label>Amazon URL (amz)</label>
+        <input type="text" id="amz" value="#">
+    </div>
+    <div class="field">
+        <label>楽天 URL (rak)</label>
+        <input type="text" id="rak" value="#">
+    </div>
+    <div class="field">
+        <label>Yahoo! URL (yah)</label>
+        <input type="text" id="yah" value="#">
+    </div>
+    <div class="field">
+        <label>Amazon 価格 (amz_p)</label>
+        <input type="number" id="amz_p" placeholder="数字のみ">
+    </div>
+    <div class="field">
+        <label>楽天 価格 (rak_p)</label>
+        <input type="number" id="rak_p" placeholder="数字のみ">
+    </div>
+    <div class="field">
+        <label>Yahoo! 価格 (yah_p)</label>
+        <input type="number" id="yah_p" placeholder="数字のみ">
+    </div>
+    <div class="field">
+        <label>ラベル (label)</label>
+        <input type="text" id="label" placeholder="例：人気No.1">
+    </div>
+    <div class="field">
+        <label>特典情報 (promo)</label>
+        <input type="text" id="promo" placeholder="例：初回50%OFF">
+    </div>
+
+    <button onclick="generateCSV()">CSV用の1行を生成してコピー</button>
+
+    <div id="result-area">
+        <label>生成されたデータ（そのまま貼り付け可能）:</label>
+        <pre id="csv-output"></pre>
+        <div class="copy-msg" id="copy-msg"></div>
+    </div>
+</div>
+
+<script>
+function generateCSV() {
+    const fields = [
+        'name', 'brand', 'tags', 'desc', 'size', 'img', 
+        'amz', 'rak', 'yah', 'a8', 'label', 'promo',
+        'amz_p', 'rak_p', 'yah_p'
+    ];
+    
+    const values = fields.map(id => {
+        const el = document.getElementById(id);
+        let val = el ? el.value.trim() : "";
+        if (!val && (id === 'rak' || id === 'yah' || id === 'amz' || id === 'a8' || id === 'img')) {
+            val = "#";
+        }
+        // カンマが含まれる場合に備えてダブルクォーテーションで囲む
+        return `"${val.replace(/"/g, '""')}"`;
+    });
+
+    const csvLine = values.join(',');
+    document.getElementById('csv-output').textContent = csvLine;
+    document.getElementById('result-area').style.display = 'block';
+
+    // クリップボードにコピー
+    navigator.clipboard.writeText(csvLine).then(() => {
+        const msg = document.getElementById('copy-msg');
+        msg.textContent = "✓ クリップボードにコピーしました！そのまま貼り付けてください。";
+        setTimeout(() => { msg.textContent = ""; }, 3000);
+    });
+}
+
+// Amazon価格が入力されたら、一旦他のモールにも同じ価格を自動入力する（入力の手間を省く）
+document.getElementById('amz_p').addEventListener('input', (e) => {
+    const p = e.target.value;
+    if(!document.getElementById('rak_p').value) document.getElementById('rak_p').value = p;
+    if(!document.getElementById('yah_p').value) document.getElementById('yah_p').value = p;
+});
+</script>
+
+</body>
+</html>

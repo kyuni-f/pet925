@@ -7,7 +7,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 
 // タグのマスター定義（表示名とカテゴリを管理）
-const TAG_MASTER = {
+let TAG_MASTER = {
     animal: {
         dog: '犬 (DOG)',
         cat: '猫 (CAT)'
@@ -39,10 +39,37 @@ const TAG_MASTER = {
 // 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
 const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
 
-// バリデーション用にキーだけの配列を作成
-const ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES];
+// 許可タグリストを動的に更新する関数
+let ALLOWED_TAGS = [];
+function updateAllowedTags() {
+    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES];
+}
+updateAllowedTags();
 
 let validationErrors = [];
+
+// tags.csv があれば読み込む関数
+async function loadTagsFromCSV() {
+    const tagsPath = path.join(DATA_DIR, 'tags.csv');
+    if (fsSync.existsSync(tagsPath)) {
+        const content = await fs.readFile(tagsPath, 'utf8');
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.startsWith('category'));
+        const newMaster = {};
+        
+        lines.forEach(line => {
+            const [category, key, name] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+            if (category && key && name) {
+                if (!newMaster[category]) newMaster[category] = {};
+                newMaster[category][key] = name;
+            }
+        });
+        
+        if (Object.keys(newMaster).length > 0) {
+            TAG_MASTER = newMaster;
+            updateAllowedTags();
+        }
+    }
+}
 
 // 簡易的なCSVパース関数（クォート対応）
 function parseCSV(content) {
@@ -140,6 +167,9 @@ async function run() {
             return;
         }
 
+        // タグ定義を読み込む（ファイルがあれば上書き）
+        await loadTagsFromCSV();
+
         const CSV_PATH = path.join(DATA_DIR, csvFileName);
         validationErrors = []; // エラーリストをリセット
 
@@ -204,7 +234,7 @@ if (require.main === module) {
         
         let debounceTimer;
         fsSync.watch(DATA_DIR, (eventType, filename) => {
-            if (filename && filename.includes('products') && filename.endsWith('.csv') && !filename.startsWith('.')) {
+            if (filename && filename.endsWith('.csv') && !filename.startsWith('.')) {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => run(), 200); // 連続保存対策のディレイ
             }
