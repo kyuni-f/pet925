@@ -1,5 +1,5 @@
-// Last Updated: 2026/5/3 20:56:35
-const lastUpdated = "2026/5/3 20:56:35";
+// Last Updated: 2026/5/3 23:19:05
+const lastUpdated = "2026/5/3 23:19:05";
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -12,11 +12,8 @@ const tagMaster = {
         "senior": "シニア (SENIOR)"
     },
     "pref": {
-        "wet": "ウェット (WET)",
-        "freeze_dried": "フリーズドライ (FD)",
         "lamb": "ラム肉 (LAMB)",
-        "fish": "魚 (FISH)",
-        "gf": "穀物不使用 (GF)"
+        "fish": "魚 (FISH)"
     },
     "cond": {
         "tear": "涙やけ (TEAR)",
@@ -25,7 +22,9 @@ const tagMaster = {
         "skin": "皮膚ケア (SKIN)",
         "joint": "関節ケア (JOINT)",
         "tooth": "歯の健康 (TOOTH)",
-        "appetite": "食いつき (APPETITE)"
+        "appetite": "食いつき (APPETITE)",
+        "gf": "穀物不使用 (GF)",
+        "digestive": "消化器ケア (DIGESTIVE)"
     }
 };
 const brandMaster = {
@@ -127,7 +126,8 @@ const productData = [
             "adult",
             "gf",
             "lamb",
-            "tear"
+            "tear",
+            "digestive"
         ],
         "desc": "ラム肉を第一主原料に使用。穀物不使用で消化に優しく、目元の健康（涙やけ）が気になる子にも。",
         "img": "https://unsplash.com",
@@ -148,7 +148,8 @@ const productData = [
             "dog",
             "senior",
             "joint",
-            "tear"
+            "tear",
+            "digestive"
         ],
         "desc": "シニア期の健康維持に配慮。関節の健康を守る栄養素と、高い消化性を兼ね備えています。",
         "img": "https://unsplash.com",

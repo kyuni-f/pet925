@@ -19,8 +19,6 @@ let TAG_MASTER = {
         senior: 'シニア (SENIOR)'
     },
     pref: {
-        wet: 'ウェット (WET)',
-        freeze_dried: 'フリーズドライ (FD)',
         lamb: 'ラム肉 (LAMB)',
         fish: '魚 (FISH)'
     },
@@ -32,7 +30,8 @@ let TAG_MASTER = {
         joint: '関節ケア (JOINT)',
         tooth: '歯の健康 (TOOTH)',
         appetite: '食いつき (APPETITE)',
-        gf: '穀物不使用 (GF)'
+        gf: '穀物不使用 (GF)',
+        digestive: '消化器ケア (DIGESTIVE)'
     }
 };
 
@@ -47,12 +46,17 @@ let BRAND_MASTER = {
 // 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
 const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
 // 穀物不使用のエイリアス
-const GF_TAG_ALIASES = ['gluten_free', 'glutenfree', 'グルテンフリー'];
+const GF_TAG_ALIASES = ['grain_free', 'grainfree', 'グレインフリー'];
+// 消化器ケアの自動タグ付け用キーワード（タグ、商品名、説明文をチェックします）
+const DIGESTIVE_KEYWORDS = ['胃腸', '消化', 'おなか', 'digestive'];
+// その他の自動タグ付け用キーワード
+const GF_KEYWORDS = ['穀物不使用', 'グレインフリー'];
+const DIET_KEYWORDS = ['体重', '肥満', 'ダイエット', '減量'];
 
 // 許可タグリストを動的に更新する関数
 let ALLOWED_TAGS = [];
 function updateAllowedTags() {
-    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES, ...GF_TAG_ALIASES];
+    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES, ...GF_TAG_ALIASES, ...DIGESTIVE_KEYWORDS, ...GF_KEYWORDS, ...DIET_KEYWORDS];
 }
 updateAllowedTags();
 
@@ -62,8 +66,9 @@ let validationErrors = [];
 async function loadTagsFromCSV() {
     const tagsPath = path.join(DATA_DIR, 'tags.csv');
     if (fsSync.existsSync(tagsPath)) {
-        const content = await fs.readFile(tagsPath, 'utf8');
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.trim().startsWith('category'));
+        let content = await fs.readFile(tagsPath, 'utf8');
+        content = content.replace(/^\uFEFF/, ''); // BOMを削除
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(category|カテゴリ)/i.test(line));
         const newMaster = {};
         
         lines.forEach(line => {
@@ -85,8 +90,9 @@ async function loadTagsFromCSV() {
 async function loadBrandsFromCSV() {
     const brandsPath = path.join(DATA_DIR, 'brands.csv');
     if (fsSync.existsSync(brandsPath)) {
-        const content = await fs.readFile(brandsPath, 'utf8');
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.trim().startsWith('key'));
+        let content = await fs.readFile(brandsPath, 'utf8');
+        content = content.replace(/^\uFEFF/, ''); // BOMを削除
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(key|キー)/i.test(line));
         const newBrands = {};
         
         lines.forEach(line => {
@@ -104,6 +110,7 @@ async function loadBrandsFromCSV() {
 
 // 簡易的なCSVパース関数（クォート対応）
 function parseCSV(content) {
+    content = content.replace(/^\uFEFF/, ''); // BOMを削除
     // 改行コード（CRLF/LF）に対応し、空行を除外
     const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
     
@@ -152,11 +159,31 @@ function parseCSV(content) {
                 if (tags.some(t => GF_TAG_ALIASES.includes(t)) && !tags.includes('gf')) {
                     tags.push('gf');
                 }
+                // 消化器ケア関連のタグが含まれている場合、自動付与
+                if (tags.some(t => DIGESTIVE_KEYWORDS.includes(t)) && !tags.includes('digestive')) {
+                    tags.push('digestive');
+                }
                 obj[header] = tags;
             } else {
                 obj[header] = val;
             }
         });
+
+        // --- 名前や説明文からキーワードを検知して自動タグ付け ---
+        const checkText = (obj.name || '') + (obj.desc || '');
+        
+        const autoTags = [
+            { keywords: DIGESTIVE_KEYWORDS, tag: 'digestive' },
+            { keywords: GF_KEYWORDS, tag: 'gf' },
+            { keywords: DIET_KEYWORDS, tag: 'diet' }
+        ];
+
+        autoTags.forEach(({ keywords, tag }) => {
+            if (keywords.some(k => checkText.includes(k)) && !obj.tags.includes(tag)) {
+                obj.tags.push(tag);
+            }
+        });
+
         return obj;
     });
 }

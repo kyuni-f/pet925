@@ -45,7 +45,6 @@
         .card-content { padding: 20px 0; flex-grow: 1; }
         .brand-badge { font-size: 0.65rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
         .product-name { font-size: 1.15rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; }
-        .product-size { font-size: 0.8rem; color: #888; font-weight: 400; margin-left: 5px; }
         .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 3em; }
         
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
@@ -102,7 +101,7 @@
 
 <script>
 // 単一選択にするカテゴリのリスト
-const singleSelectCats = ['animal', 'age'];
+const singleSelectCats = ['animal', 'age', 'pref'];
 let activeFilters = {};
 
 // フィルターの初期状態を構築
@@ -195,7 +194,7 @@ function renderFilters() {
     const categoryLabels = {
         animal: 'Animal / 種類',
         age: 'Age / 年齢',
-        pref: 'Recipe / 製法・原材料 (複数選択可)',
+        pref: 'Main Ingredient / 主原料',
         cond: 'Condition / お悩み (複数選択可)',
         origin: 'Origin / 原産国' // 追加分
     };
@@ -251,8 +250,11 @@ function render() {
     // ひらがなをカタカナに変換して比較しやすくする正規化関数
     const normalize = (str) => {
         if (!str) return "";
-        return str.replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
-                  .toLowerCase();
+        // ひらがな -> カタカナ変換 + 全角英数を半角に + 伸ばし棒の揺れを考慮
+        let val = str.replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60));
+        // 「にゅうとろ」が「ニュウトロ」になった際「ニュートロ」にヒットしやすくするため、
+        // 検索時はさらに柔軟な比較が必要ですが、まずは基本のカタカナ統一を徹底します。
+        return val.toLowerCase().trim();
     };
 
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
@@ -274,7 +276,7 @@ function render() {
         }).join(' ');
 
         // 特定のタグに対する注釈メッセージの設定
-        const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグルテンフリーです</span>' : '';
+        const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグレインフリー（穀物不使用）です</span>' : '';
 
         // すべてのカテゴリの条件に合致するかチェック
         const matchFilters = Object.keys(tagMaster).every(cat => {
@@ -285,9 +287,8 @@ function render() {
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
         });
 
-        // ブランドの日本語名を取得
-        // ブランドの日本語名を取得
-        const brandJP = brandAliases[item.brand.trim().toLowerCase()] || "";
+        const brandKey = (item.brand || "").trim().toLowerCase();
+        const brandJP = brandAliases[brandKey] || "";
 
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
@@ -326,7 +327,7 @@ function render() {
                 </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
-                    <div class="product-name">${item.name}${item.size ? `<span class="product-size">(${item.size})</span>` : ''}</div>
+                    <div class="product-name">${item.name}</div>
                     ${gfNote}
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
