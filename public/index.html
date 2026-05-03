@@ -286,12 +286,13 @@ function render() {
         });
 
         // ブランドの日本語名を取得
-        const brandJP = brandAliases[item.brand.toLowerCase()] || "";
+        // ブランドの日本語名を取得
+        const brandJP = brandAliases[item.brand.trim().toLowerCase()] || "";
 
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) ||
-            normalize(brandJP).includes(word)
+            (brandJP && normalize(brandJP).includes(word))
         );
 
         if (matchFilters && matchSearch) {

@@ -1,5 +1,5 @@
-// Last Updated: 2026/5/3 19:47:12
-const lastUpdated = "2026/5/3 19:47:12";
+// Last Updated: 2026/5/3 20:56:35
+const lastUpdated = "2026/5/3 20:56:35";
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -28,6 +28,12 @@ const tagMaster = {
         "appetite": "食いつき (APPETITE)"
     }
 };
+const brandMaster = {
+    "nutro": "ニュートロ",
+    "supremo": "シュプレモ",
+    "royal canin": "ロイヤルカナン",
+    "sheba": "シーバ"
+};
 const productData = [
     {
         "name": "ナチュラル チョイス 成犬用 ラム＆玄米 (皮膚被毛・涙やけケア・お悩み別)",
@@ -40,7 +46,6 @@ const productData = [
             "tear"
         ],
         "desc": "高品質なラム肉を使用。食物アレルギーに配慮し、健康な皮膚・被毛の維持をサポートします。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -62,7 +67,6 @@ const productData = [
             "lamb"
         ],
         "desc": "低カロリー・低脂質設計。肥満が気になる愛犬の健康的な減量をサポートします。",
-        "size": "3kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -84,7 +88,6 @@ const productData = [
             "tear"
         ],
         "desc": "野生の食性に近い高タンパク・穀物不使用レシピ。鹿肉を使用し、アレルギーや涙やけにも配慮。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -105,7 +108,6 @@ const productData = [
             "tear"
         ],
         "desc": "17種類の厳選された自然素材をブレンド。栄養バランスに優れ、健康な体づくりを支えます。",
-        "size": "4kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -128,7 +130,6 @@ const productData = [
             "tear"
         ],
         "desc": "ラム肉を第一主原料に使用。穀物不使用で消化に優しく、目元の健康（涙やけ）が気になる子にも。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -150,7 +151,6 @@ const productData = [
             "tear"
         ],
         "desc": "シニア期の健康維持に配慮。関節の健康を守る栄養素と、高い消化性を兼ね備えています。",
-        "size": "4kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -171,7 +171,6 @@ const productData = [
             "tooth"
         ],
         "desc": "歯垢・歯石が気になる小型犬用。独自の粒形状で、噛むことで歯の汚れを落とします。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -193,7 +192,6 @@ const productData = [
             "tear"
         ],
         "desc": "皮膚が敏感な犬用。オメガ3・6脂肪酸を配合し、健康な皮膚の状態を維持します。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -214,7 +212,6 @@ const productData = [
             "kidney"
         ],
         "desc": "健康な尿を維持したい猫用。ミネラルバランスを調整し、尿路結石の形成を抑制します。",
-        "size": "2kg",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -235,7 +232,6 @@ const productData = [
             "appetite"
         ],
         "desc": "外はカリカリ、中はクリーミー。食欲にムラがある猫ちゃんも喜ぶ贅沢な味わいです。",
-        "size": "240g",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",

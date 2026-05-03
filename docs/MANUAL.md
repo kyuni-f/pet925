@@ -107,7 +107,8 @@
 Sub ExportAllSheetsToCSV
     Dim oDoc As Object, oSheets As Object, oSheet As Object
     Dim sURL As String, sPath As String
-    Dim args(1) As New com.sun.star.beans.PropertyValue
+    Dim args(2) As New com.sun.star.beans.PropertyValue
+    Dim aParts() As String
     
     oDoc = ThisComponent
 
@@ -118,15 +119,20 @@ Sub ExportAllSheetsToCSV
         Exit Sub
     End If
 
-    ' ディレクトリパスを取得（末尾の / を含む）
-    sPath = Left(oDoc.URL, InStrRev(oDoc.URL, "/"))
+    ' パス取得（InStrRevのエラーを避けるため、URLを分割して再結合する安全な方式を採用）
+    aParts = Split(oDoc.URL, "/")
+    aParts(UBound(aParts)) = ""
+    sPath = Join(aParts, "/")
+
     oSheets = oDoc.Sheets
     
     ' CSV出力の設定
-    args(0).Name = "FilterName"
-    args(0).Value = "Text - txt - csv (StarCalc)"
-    args(1).Name = "FilterOptions"
-    args(1).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
+    args(0).Name = "Overwrite"
+    args(0).Value = True
+    args(1).Name = "FilterName"
+    args(1).Value = "Text - txt - csv (StarCalc)"
+    args(2).Name = "FilterOptions"
+    args(2).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
     
     Dim sheetNames As Variant
     sheetNames = Array("products", "tags", "brands")
@@ -143,7 +149,7 @@ Sub ExportAllSheetsToCSV
             
             oDoc.CurrentController.setActiveSheet(oSheet)
             sURL = sPath & sName & ".csv"
-            oDoc.storeToURL(sURL, args())
+            oDoc.storeToURL(sURL, args)
         End If
     Next sName
     
@@ -153,11 +159,20 @@ End Sub
 Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     Dim i As Long, col As Integer
     Dim mandatoryCols As Variant
+    Dim sNameLower As String
     
+    sNameLower = LCase(sName) ' 小文字に統一
+
     ' シートごとの必須列（A=0, B=1, C=2...）
-    If sName = "products" Then mandatoryCols = Array(0, 1, 2) ' name, brand, tags
-    If sName = "tags"     Then mandatoryCols = Array(0, 1, 2) ' category, key, name
-    If sName = "brands"   Then mandatoryCols = Array(0, 1)    ' key, name
+    If sNameLower = "products" Then
+        mandatoryCols = Array(0, 1, 2) ' name, brand, tags
+    ElseIf sNameLower = "tags" Then
+        mandatoryCols = Array(0, 1, 2) ' category, key, name
+    ElseIf sNameLower = "brands" Then
+        mandatoryCols = Array(0, 1)    ' key, name
+    Else
+        mandatoryCols = Array()
+    End If
 
     i = 1 ' 2行目からチェック開始
     Do
@@ -186,7 +201,7 @@ End Function
         - 追加した項目を選択し、**右側の「歯車アイコン」または「修正」ボタン**をクリックして「名前の変更」や「アイコンの変更」を行う。（右クリックでも変更可能です）
         - ツールバーの使いやすい位置に配置する。
     4. 1クリックで全てのCSVが `data/` フォルダへ書き出されます。
-    4. `npm start` がそれらを検知し、即座にサイトが更新されます。
+    5. `npm start` がそれらを検知し、即座にサイトが更新されます。
 
 - **Geminiを使わずに自力で入力する場合**:
     1. 同フォルダの `csv_helper.html` をブラウザで開く。

@@ -63,7 +63,7 @@ async function loadTagsFromCSV() {
     const tagsPath = path.join(DATA_DIR, 'tags.csv');
     if (fsSync.existsSync(tagsPath)) {
         const content = await fs.readFile(tagsPath, 'utf8');
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.startsWith('category'));
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.trim().startsWith('category'));
         const newMaster = {};
         
         lines.forEach(line => {
@@ -86,7 +86,7 @@ async function loadBrandsFromCSV() {
     const brandsPath = path.join(DATA_DIR, 'brands.csv');
     if (fsSync.existsSync(brandsPath)) {
         const content = await fs.readFile(brandsPath, 'utf8');
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.startsWith('key'));
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.trim().startsWith('key'));
         const newBrands = {};
         
         lines.forEach(line => {
