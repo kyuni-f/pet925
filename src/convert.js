@@ -36,6 +36,14 @@ let TAG_MASTER = {
     }
 };
 
+// ブランド名の日本語エイリアス定義
+let BRAND_MASTER = {
+    "nutro": "ニュートロ",
+    "supremo": "シュプレモ",
+    "royal canin": "ロイヤルカナン",
+    "sheba": "シーバ"
+};
+
 // 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
 const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
 // 穀物不使用のエイリアス
@@ -69,6 +77,27 @@ async function loadTagsFromCSV() {
         if (Object.keys(newMaster).length > 0) {
             TAG_MASTER = newMaster;
             updateAllowedTags();
+        }
+    }
+}
+
+// brands.csv があれば読み込む関数
+async function loadBrandsFromCSV() {
+    const brandsPath = path.join(DATA_DIR, 'brands.csv');
+    if (fsSync.existsSync(brandsPath)) {
+        const content = await fs.readFile(brandsPath, 'utf8');
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !line.startsWith('key'));
+        const newBrands = {};
+        
+        lines.forEach(line => {
+            const [key, name] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+            if (key && name) {
+                newBrands[key.toLowerCase()] = name;
+            }
+        });
+        
+        if (Object.keys(newBrands).length > 0) {
+            BRAND_MASTER = newBrands;
         }
     }
 }
@@ -176,6 +205,9 @@ async function run() {
         // タグ定義を読み込む（ファイルがあれば上書き）
         await loadTagsFromCSV();
 
+        // ブランド定義を読み込む
+        await loadBrandsFromCSV();
+
         const CSV_PATH = path.join(DATA_DIR, csvFileName);
         validationErrors = []; // エラーリストをリセット
 
@@ -203,6 +235,7 @@ async function run() {
         const output = `// Last Updated: ${now}\n` +
                        `const lastUpdated = "${now}";\n` +
                        `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
+                       `const brandMaster = ${JSON.stringify(BRAND_MASTER, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;
 
         await fs.writeFile(JS_PATH, output);

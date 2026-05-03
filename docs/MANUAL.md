@@ -1,11 +1,11 @@
 # pet925 管理マニュアル
 
 ## 1. 運用ワークフロー（黄金のサイクル）
-データの更新は必ず以下の順番で行ってください。
+データの更新は、すべての情報を一つのマスターファイルで管理し、一括で書き出すのが効率的です。
 
 1.  **Geminiに依頼**: 商品情報を依頼する。
-2.  **マスターへ貼り付け**: `data/pet925_master.ods` を更新する。
-3.  **CSV書き出し**: `data/products.csv` として保存（上書き）。
+2.  **マスターへ貼り付け**: `data/pet925_master.ods` 内の該当シート（products/tags/brands）を更新。
+3.  **一括CSV出力**: Calcのマクロを使用して、各CSV（products/tags/brands.csv）を一気に書き出す。
 4.  **自動変換**: ターミナルで `npm start` を実行（監視モード）。
 5.  **確認**: `public/index.html` をブラウザで開き、**Ctrl + F5**。
 
@@ -36,7 +36,16 @@
 
 ---
 
-## 3. 注意事項（ここだけは気をつけて！）
+## 3. ブランドエイリアスの管理 (brands.csv)
+「Nutro」を「ニュートロ」で検索できるようにする設定は `data/brands.csv` で行います。
+
+### brands.csv の列構成
+- **key**: CSVの `brand` 列に記入している英語名（小文字で判定されます）
+- **name**: 日本語での読み方
+
+---
+
+## 4. 注意事項（ここだけは気をつけて！）
 
 ### ① ファイル名と場所
 - フォルダ内に `products.csv` という名前で存在する必要があります。
@@ -88,7 +97,97 @@
 
 ---
 
-## 5. LibreOffice Calc へのヒント
+## 5. マスターファイルの一元管理（LibreOffice Calc）
+- **マルチシート運用**: `pet925_master.ods` 内に `products`, `tags`, `brands` の3シートを作成してください。
+- **一括出力・バリデーションマクロ**: 
+    1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic] を開く。
+    2. 以下の `ExportAllSheetsToCSV` と `CheckMandatoryFields` マクロを登録する。
+
+```basic
+Sub ExportAllSheetsToCSV
+    Dim oDoc As Object, oSheets As Object, oSheet As Object
+    Dim sURL As String, sPath As String
+    Dim args(1) As New com.sun.star.beans.PropertyValue
+    
+    oDoc = ThisComponent
+
+    ' ファイルが保存されているか（URLがあるか）チェック
+    If (oDoc.URL = "") Then
+        MsgBox "エラー: ファイルが保存されていません。" & Chr(13) & _
+               "先に一度ファイルを保存してから実行してください。", 16, "実行失敗"
+        Exit Sub
+    End If
+
+    ' ディレクトリパスを取得（末尾の / を含む）
+    sPath = Left(oDoc.URL, InStrRev(oDoc.URL, "/"))
+    oSheets = oDoc.Sheets
+    
+    ' CSV出力の設定
+    args(0).Name = "FilterName"
+    args(0).Value = "Text - txt - csv (StarCalc)"
+    args(1).Name = "FilterOptions"
+    args(1).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
+    
+    Dim sheetNames As Variant
+    sheetNames = Array("products", "tags", "brands")
+    
+    For Each sName In sheetNames
+        If oSheets.hasByName(sName) Then
+            oSheet = oSheets.getByName(sName)
+            
+            ' 書き出し前に必須項目の空欄チェックを実行
+            If Not CheckMandatoryFields(oSheet, sName) Then
+                MsgBox sName & " シートに不備があるため、書き出しを中断しました。", 48, "エラー"
+                Exit Sub
+            End If
+            
+            oDoc.CurrentController.setActiveSheet(oSheet)
+            sURL = sPath & sName & ".csv"
+            oDoc.storeToURL(sURL, args())
+        End If
+    Next sName
+    
+    MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
+End Sub
+
+Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
+    Dim i As Long, col As Integer
+    Dim mandatoryCols As Variant
+    
+    ' シートごとの必須列（A=0, B=1, C=2...）
+    If sName = "products" Then mandatoryCols = Array(0, 1, 2) ' name, brand, tags
+    If sName = "tags"     Then mandatoryCols = Array(0, 1, 2) ' category, key, name
+    If sName = "brands"   Then mandatoryCols = Array(0, 1)    ' key, name
+
+    i = 1 ' 2行目からチェック開始
+    Do
+        ' A列が空ならデータの終わりとみなす
+        If oSheet.getCellByPosition(0, i).String = "" Then Exit Do
+        
+        For Each col In mandatoryCols
+            If oSheet.getCellByPosition(col, i).String = "" Then
+                MsgBox "[" & sName & "] シートの " & (i + 1) & " 行目、" & _
+                       Chr(65 + col) & " 列目が空欄です。入力してください。", 16, "入力エラー"
+                CheckMandatoryFields = False
+                Exit Function
+            End If
+        Next col
+        i = i + 1
+        If i > 10000 Then Exit Do ' 無限ループ防止
+    Loop
+    CheckMandatoryFields = True
+End Function
+```
+
+    3. **ボタンの配置**:
+        - [ツール] > [カスタマイズ] > [ツールバー] タブを開く。
+        - カテゴリから [LibreOffice マクロ] > [マイマクロ] > [Standard] > [Module1] を選択。
+        - `ExportAllSheetsToCSV` を「割り当てられたコマンド」に追加。
+        - 追加した項目を選択し、**右側の「歯車アイコン」または「修正」ボタン**をクリックして「名前の変更」や「アイコンの変更」を行う。（右クリックでも変更可能です）
+        - ツールバーの使いやすい位置に配置する。
+    4. 1クリックで全てのCSVが `data/` フォルダへ書き出されます。
+    4. `npm start` がそれらを検知し、即座にサイトが更新されます。
+
 - **Geminiを使わずに自力で入力する場合**:
     1. 同フォルダの `csv_helper.html` をブラウザで開く。
     2. フォームに必要な情報を入力する。

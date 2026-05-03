@@ -260,6 +260,9 @@ function render() {
     
     list.innerHTML = "";
     let matchCount = 0;
+
+    // ブランド名の日本語読みマップ
+    const brandAliases = typeof brandMaster !== 'undefined' ? brandMaster : {};
     
     productData.forEach(item => {
         // タグの表示名（日本語）も検索にヒットさせるための文字列作成
@@ -282,9 +285,13 @@ function render() {
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
         });
 
+        // ブランドの日本語名を取得
+        const brandJP = brandAliases[item.brand.toLowerCase()] || "";
+
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
-            normalize(item.brand).includes(word)
+            normalize(item.brand).includes(word) ||
+            normalize(brandJP).includes(word)
         );
 
         if (matchFilters && matchSearch) {
