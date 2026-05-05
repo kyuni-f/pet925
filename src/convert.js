@@ -7,56 +7,18 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 
 // タグのマスター定義（表示名とカテゴリを管理）
-let TAG_MASTER = {
-    animal: {
-        dog: '犬 (DOG)',
-        cat: '猫 (CAT)'
-    },
-    age: {
-        all_ages: '全年齢用 (ALL AGES)',
-        puppy: '子犬・子猫 (PUPPY)',
-        adult: '成犬・成猫 (ADULT)',
-        senior: 'シニア (SENIOR)'
-    },
-    pref: {
-        lamb: 'ラム肉 (LAMB)',
-        fish: '魚 (FISH)'
-    },
-    cond: {
-        tear: '涙やけ (TEAR)',
-        diet: '体重管理 (WEIGHT)',
-        kidney: '腎臓・尿路 (KIDNEY)',
-        skin: '皮膚ケア (SKIN)',
-        joint: '関節ケア (JOINT)',
-        tooth: '歯の健康 (TOOTH)',
-        appetite: '食いつき (APPETITE)',
-        gf: '穀物不使用 (GF)',
-        digestive: '消化器ケア (DIGESTIVE)'
-    }
-};
-
-// ブランド名の日本語エイリアス定義
-let BRAND_MASTER = {
-    "nutro": "ニュートロ",
-    "supremo": "シュプレモ",
-    "royal canin": "ロイヤルカナン",
-    "sheba": "シーバ"
-};
-
-// 魚の種類として認めるタグ（これらを入れると自動的に「魚」フィルタに反映されます）
-const FISH_TAG_ALIASES = ['salmon', 'tuna', 'bonito', 'mackerel', 'whitefish', 'cod', 'sardine'];
-// 穀物不使用のエイリアス
-const GF_TAG_ALIASES = ['grain_free', 'grainfree', 'グレインフリー'];
-// 消化器ケアの自動タグ付け用キーワード（タグ、商品名、説明文をチェックします）
-const DIGESTIVE_KEYWORDS = ['胃腸', '消化', 'おなか', 'digestive'];
-// その他の自動タグ付け用キーワード
-const GF_KEYWORDS = ['穀物不使用', 'グレインフリー'];
-const DIET_KEYWORDS = ['体重', '肥満', 'ダイエット', '減量'];
-
+let TAG_MASTER = {};
+let BRAND_MASTER = {};
 // 許可タグリストを動的に更新する関数
 let ALLOWED_TAGS = [];
+let AUTO_TAG_RULES = []; // rules.csv から読み込むルール
 function updateAllowedTags() {
-    ALLOWED_TAGS = [...Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj)), ...FISH_TAG_ALIASES, ...GF_TAG_ALIASES, ...DIGESTIVE_KEYWORDS, ...GF_KEYWORDS, ...DIET_KEYWORDS];
+    // TAG_MASTER内のキーと、AUTO_TAG_RULES内のキーワードをすべて「許可された言葉」とする
+    ALLOWED_TAGS = [
+        // 重複を除去してフラットな配列にする
+        ...new Set(Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj))),
+        ...AUTO_TAG_RULES.map(r => r.keyword)
+    ];
 }
 updateAllowedTags();
 
@@ -108,79 +70,135 @@ async function loadBrandsFromCSV() {
     }
 }
 
+// rules.csv があれば読み込む関数
+async function loadRulesFromCSV() {
+    const rulesPath = path.join(DATA_DIR, 'rules.csv');
+    if (fsSync.existsSync(rulesPath)) {
+        let content = await fs.readFile(rulesPath, 'utf8');
+        content = content.replace(/^\uFEFF/, ''); // BOMを削除
+        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(tag|タグ)/i.test(line));
+        const newRules = [];
+        lines.forEach(line => {
+            const [tag, keyword] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+            if (tag && keyword) {
+                newRules.push({ tag, keyword });
+            }
+        });
+        AUTO_TAG_RULES = newRules;
+        updateAllowedTags();
+    }
+}
+
 // 簡易的なCSVパース関数（クォート対応）
 function parseCSV(content) {
     content = content.replace(/^\uFEFF/, ''); // BOMを削除
-    // 改行コード（CRLF/LF）に対応し、空行を除外
-    const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
-    
-    // 「name,brand」で始まる行（見出し行）を探す
-    // より確実に、カンマの数なども考慮した正規表現で探すように強化
-    // 見出し行をより柔軟に探す（前後の空白を許容）
-    const headerIndex = lines.findIndex(l => /^\s*(?:"?name"?,"?brand"?,"?tags"?)/i.test(l));
-    if (headerIndex === -1) throw new Error('見出し行(name,brand...)が見つかりません。');
 
-    // 許可リストが混入していないか簡易チェック
-    if (lines.some(l => /^(dog|cat)/i.test(l.trim()))) {
-        console.log('💡 ヒント: CSV内に許可リストが混入している可能性がありますが、自動でデータ行のみを抽出します。');
+    const rows = [];
+    let currentRow = [];
+    let currentField = '';
+    let inQuotes = false;
+
+    // ステートマシン方式による堅牢なパース（セル内改行・エスケープ対応）
+    for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        const nextChar = content[i + 1];
+
+        if (inQuotes) {
+            if (char === '"' && nextChar === '"') {
+                currentField += '"'; // エスケープされた二重引用符
+                i++;
+            } else if (char === '"') {
+                inQuotes = false;
+            } else {
+                currentField += char;
+            }
+        } else {
+            if (char === '"') {
+                inQuotes = true;
+            } else if (char === ',') {
+                currentRow.push(currentField);
+                currentField = '';
+            } else if (char === '\r' || char === '\n') {
+                currentRow.push(currentField);
+                if (currentRow.some(cell => cell.trim() !== '')) {
+                    rows.push(currentRow);
+                }
+                currentRow = [];
+                currentField = '';
+                if (char === '\r' && nextChar === '\n') i++; // CRLF対応
+            } else {
+                currentField += char;
+            }
+        }
+    }
+    if (currentField || currentRow.length > 0) {
+        currentRow.push(currentField);
+        rows.push(currentRow);
     }
 
-    // 引用符内のカンマを無視してヘッダーを分割
-    const headers = lines[headerIndex].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-        .map(h => h.trim().replace(/^"|"$/g, ''));
-    
-    return lines.slice(headerIndex + 1).map((line, index) => {
-        // データ行も同様のルールで分割。空の列も正確に配列に入れる。
-        const rawValues = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+    // 見出し行を検索（列名に name, brand, tags が含まれる行を探す）
+    const headerIndex = rows.findIndex(r => 
+        r.some(cell => /name/i.test(cell)) && r.some(cell => /brand/i.test(cell))
+    );
 
+    if (headerIndex === -1) throw new Error('見出し行(name,brand...)が見つかりません。');
+
+    const headers = rows[headerIndex].map(h => h.trim().toLowerCase());
+    
+    return rows.slice(headerIndex + 1).map((rowValues, index) => {
         const obj = {};
+        // ヘッダーの数とデータの数が合わない場合への対応
         headers.forEach((header, i) => {
-            // データが存在しない列も安全に処理（空文字をセット）
-            let val = (rawValues[i] !== undefined ? rawValues[i] : '').replace(/^\s+|\s+$/g, '');
-            // クォートで囲まれている場合は除去
-            val = val.replace(/^"|"$/g, '').trim();
+            // データが存在しない列も安全に空文字として処理
+            let val = (i < rowValues.length ? rowValues[i] : '').trim();
 
             // tags列はスペース区切りを配列に変換
             if (header === 'tags') {
                 // 全角スペースも半角に変換してから分割
-                const tags = val.replace(/　/g, ' ').split(/\s+/).filter(t => t);
+                // 入力ミスを防ぐため小文字に統一
+                const tags = val.replace(/　/g, ' ').toLowerCase().split(/\s+/).filter(t => t);
                 // タグのバリデーション（チェック）
                 tags.forEach(tag => {
                     if (!ALLOWED_TAGS.includes(tag)) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: "${tag}" (商品: ${obj.name || '不明'})`);
                     }
                 });
-
-                // 魚種タグが含まれている場合、フィルタリング用に 'fish' を自動付与
-                if (tags.some(t => FISH_TAG_ALIASES.includes(t)) && !tags.includes('fish')) {
-                    tags.push('fish');
-                }
-                // グルテンフリー関連のタグが含まれている場合、フィルタリング用に 'gf' を自動付与
-                if (tags.some(t => GF_TAG_ALIASES.includes(t)) && !tags.includes('gf')) {
-                    tags.push('gf');
-                }
-                // 消化器ケア関連のタグが含まれている場合、自動付与
-                if (tags.some(t => DIGESTIVE_KEYWORDS.includes(t)) && !tags.includes('digestive')) {
-                    tags.push('digestive');
-                }
                 obj[header] = tags;
+            } else if (header === 'brand') {
+                // ブランド名の検証（小文字で比較）
+                if (val) {
+                    const brandKey = val.trim().toLowerCase();
+                    if (!BRAND_MASTER[brandKey]) {
+                        validationErrors.push(`行 ${index + headerIndex + 2}: ブランド "${val}" は brands.csv に未登録です。`);
+                    }
+                }
+                obj[header] = val;
             } else {
                 obj[header] = val;
             }
         });
 
-        // --- 名前や説明文からキーワードを検知して自動タグ付け ---
+        // --- ブランド名の自動検知（ブランド列が空の場合のみ、名前や説明文から推測） ---
         const checkText = (obj.name || '') + (obj.desc || '');
-        
-        const autoTags = [
-            { keywords: DIGESTIVE_KEYWORDS, tag: 'digestive' },
-            { keywords: GF_KEYWORDS, tag: 'gf' },
-            { keywords: DIET_KEYWORDS, tag: 'diet' }
-        ];
+        if (!obj.brand) {
+            for (const [key, name] of Object.entries(BRAND_MASTER)) {
+                // 英語キー（nutro）または日本語名（ニュートロ）が含まれているかチェック
+                if (checkText.toLowerCase().includes(key) || checkText.includes(name)) {
+                    // 見つかったブランドの「本来の表記（最初の文字を大文字にするなど）」を適用
+                    // ここでは brands.csv の key を元に、元データがあればそれを尊重
+                    obj.brand = key.charAt(0).toUpperCase() + key.slice(1);
+                    break;
+                }
+            }
+        }
 
-        autoTags.forEach(({ keywords, tag }) => {
-            if (keywords.some(k => checkText.includes(k)) && !obj.tags.includes(tag)) {
-                obj.tags.push(tag);
+        // --- rules.csv に基づく自動タグ付け（タグ列、名前、説明文を横断チェック） ---
+        AUTO_TAG_RULES.forEach(rule => {
+            if (obj.tags.includes(rule.tag)) return; // すでにタグがあればスキップ
+
+            // キーワードがタグ列に含まれているか、または名前/説明文に含まれているか
+            if (obj.tags.includes(rule.keyword) || checkText.includes(rule.keyword)) {
+                obj.tags.push(rule.tag);
             }
         });
 
@@ -235,6 +253,9 @@ async function run() {
         // ブランド定義を読み込む
         await loadBrandsFromCSV();
 
+        // 自動タグ付けルールを読み込む
+        await loadRulesFromCSV();
+
         const CSV_PATH = path.join(DATA_DIR, csvFileName);
         validationErrors = []; // エラーリストをリセット
 
@@ -270,12 +291,25 @@ async function run() {
         console.log('--------------------------------------------------');
         console.log(`📄 変換完了: ${csvFileName}`);
 
-        // Geminiへのコピペ用タグリストを表示
-        console.log('\n📋 Gemini用許可タグリスト (コピペ用):');
+        // Geminiへのコピペ用ガイドを表示
+        console.log('\n📋 Gemini用 許可リスト (データ作成時に渡してください):');
+        console.log('--- [TAGS] ---');
         const tagList = Object.entries(TAG_MASTER).flatMap(([cat, tags]) => 
             Object.entries(tags).map(([key, name]) => `${key} (${name})`)
         ).join(', ');
-        console.log(tagList + '\n');
+        console.log(tagList);
+
+        console.log('\n--- [BRANDS] ---');
+        // アルファベット順に並び替えて表示
+        const brandList = Object.entries(BRAND_MASTER)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([k, v]) => `${k} (${v})`).join(', ');
+        console.log(brandList + '\n');
+
+        if (AUTO_TAG_RULES.length > 0) {
+            console.log('🤖 自動判定キーワード（これらを含めると自動タグ付けされます）:');
+            console.log(AUTO_TAG_RULES.map(r => `${r.keyword} → ${r.tag}`).join(', ') + '\n');
+        }
 
         if (validationErrors.length > 0) {
             console.warn(`⚠️  タグに ${validationErrors.length} 個の入力ミスが見つかりました：`);
