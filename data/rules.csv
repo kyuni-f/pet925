@@ -1,20 +1,5 @@
-tag,keyword
-fish,salmon
-fish,tuna
-fish,bonito
-fish,mackerel
-fish,whitefish
-fish,cod
-fish,sardine
-gf,grain_free
-gf,grainfree
-gf,グレインフリー
-gf,穀物不使用
-digestive,胃腸
-digestive,消化
-digestive,おなか
-digestive,digestive
-diet,体重
-diet,肥満
-diet,ダイエット
-diet,減量
+tag,keywords
+gf,grain_free grainfree グレインフリー 穀物不使用
+digestive,胃腸 消化 おなか digestive
+diet,体重 肥満 ダイエット 減量
+lamb,ラム肉 lamb

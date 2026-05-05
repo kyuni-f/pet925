@@ -6,6 +6,16 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 
+// ひらがなをカタカナに変換し、小文字に統一する正規化関数（Node.js用）
+function normalizeText(str) {
+    if (!str) return "";
+    return str
+        .replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0)) // 全角英数を半角に
+        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
+        .toLowerCase()
+        .trim();
+}
+
 // タグのマスター定義（表示名とカテゴリを管理）
 let TAG_MASTER = {};
 let BRAND_MASTER = {};
@@ -79,9 +89,17 @@ async function loadRulesFromCSV() {
         const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(tag|タグ)/i.test(line));
         const newRules = [];
         lines.forEach(line => {
-            const [tag, keyword] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-            if (tag && keyword) {
-                newRules.push({ tag, keyword });
+            // 最初のカンマで分割（キーワードの中にカンマが含まれる可能性を考慮）
+            const firstComma = line.indexOf(',');
+            if (firstComma !== -1) {
+                const tag = line.substring(0, firstComma).trim().replace(/^"|"$/g, '');
+                const keywordsPart = line.substring(firstComma + 1).trim().replace(/^"|"$/g, '');
+                // スペルミスや表記揺れを吸収するため、スペース、カンマ、読点で分割
+                const keywords = keywordsPart.split(/[\s,，、/]+/).filter(k => k);
+                keywords.forEach(keyword => {
+                    // キーワード自体を正規化して保存
+                    newRules.push({ tag, keyword: normalizeText(keyword) });
+                });
             }
         });
         AUTO_TAG_RULES = newRules;
@@ -147,6 +165,7 @@ function parseCSV(content) {
     
     return rows.slice(headerIndex + 1).map((rowValues, index) => {
         const obj = {};
+        const rowValidationTags = []; // バリデーション用
         // ヘッダーの数とデータの数が合わない場合への対応
         headers.forEach((header, i) => {
             // データが存在しない列も安全に空文字として処理
@@ -159,7 +178,8 @@ function parseCSV(content) {
                 const tags = val.replace(/　/g, ' ').toLowerCase().split(/\s+/).filter(t => t);
                 // タグのバリデーション（チェック）
                 tags.forEach(tag => {
-                    if (!ALLOWED_TAGS.includes(tag)) {
+                    const normalizedTag = normalizeText(tag);
+                    if (!ALLOWED_TAGS.includes(normalizedTag)) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: "${tag}" (商品: ${obj.name || '不明'})`);
                     }
                 });
@@ -167,7 +187,7 @@ function parseCSV(content) {
             } else if (header === 'brand') {
                 // ブランド名の検証（小文字で比較）
                 if (val) {
-                    const brandKey = val.trim().toLowerCase();
+                    const brandKey = normalizeText(val);
                     if (!BRAND_MASTER[brandKey]) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: ブランド "${val}" は brands.csv に未登録です。`);
                     }
@@ -179,11 +199,13 @@ function parseCSV(content) {
         });
 
         // --- ブランド名の自動検知（ブランド列が空の場合のみ、名前や説明文から推測） ---
-        const checkText = (obj.name || '') + (obj.desc || '');
+        const rawCheckText = (obj.name || '') + (obj.desc || '');
+        const checkText = normalizeText(rawCheckText); // 判定対象を正規化
+
         if (!obj.brand) {
             for (const [key, name] of Object.entries(BRAND_MASTER)) {
-                // 英語キー（nutro）または日本語名（ニュートロ）が含まれているかチェック
-                if (checkText.toLowerCase().includes(key) || checkText.includes(name)) {
+                // キー（正規化済み）または日本語名（正規化して比較）が含まれているか
+                if (checkText.includes(normalizeText(key)) || checkText.includes(normalizeText(name))) {
                     // 見つかったブランドの「本来の表記（最初の文字を大文字にするなど）」を適用
                     // ここでは brands.csv の key を元に、元データがあればそれを尊重
                     obj.brand = key.charAt(0).toUpperCase() + key.slice(1);
@@ -197,7 +219,8 @@ function parseCSV(content) {
             if (obj.tags.includes(rule.tag)) return; // すでにタグがあればスキップ
 
             // キーワードがタグ列に含まれているか、または名前/説明文に含まれているか
-            if (obj.tags.includes(rule.keyword) || checkText.includes(rule.keyword)) {
+            // タグ列の中身も正規化して比較
+            if (obj.tags.some(t => normalizeText(t) === rule.keyword) || checkText.includes(rule.keyword)) {
                 obj.tags.push(rule.tag);
             }
         });

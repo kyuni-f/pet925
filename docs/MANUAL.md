@@ -24,23 +24,22 @@
 | **key** | `products.csv` の `tags` 列に記入する英単語 | `lamb`, `tear`, `gf` |
 | **name** | サイトのボタンに表示される名前 | `ラム肉 (LAMB)` |
 
-### 自動タグ付けルール (rules.csv)
-特定のキーワードが含まれている場合に、自動で特定のタグを付与するルールを `data/rules.csv` で管理しています。
+### タグ・エイリアス設定 (rules.csv)
+特定の言葉が含まれている場合に、自動で正式なタグ（絞り込み用）を付与する「別名リスト」です。
 
 - **判定場所**: 商品名、説明文、およびタグ列のすべてが対象です。
 - **設定例**: 
-    - `fish,salmon` -> 名前やタグに「salmon」があれば「fish」タグを自動付与。
-    - `gf,穀物不使用` -> 商品名に「穀物不使用」があれば「gf」タグを自動付与。
+    - `gf,グレインフリー 穀物不使用` -> 商品名にこれらがあれば自動で「GF」タグを付与。
+    - `lamb,ラム肉` -> 商品名にこれらがあれば自動で「ラム肉 (LAMB)」に分類。
 
-新しい判定ルールを追加したい場合は、マスターファイル（.ods）に「rules」シートを作成し、`tag` と `keyword` を入力して CSV 書き出しを行ってください。
+キーワードは**スペース、カンマ、または読点**で区切って1行にまとめて記述できます。
 
 > **注意**: `グルテンフリー` という言葉での自動判定は廃止されました。
 
 ### カテゴリの役割
 - **animal**: 種類（犬・猫など。単一選択）
 - **age**: 年齢（成犬・シニアなど。単一選択）
-- **pref**: 主原料（ラム肉、魚など。単一選択）
-- **cond**: お悩み（健康ケア。**複数選択可**）
+- **cond**: こだわり（健康ケア。**複数選択可**）
 
 ---
 
@@ -145,11 +144,6 @@ Sub ExportAllSheetsToCSV
     Dim sheetNames As Variant
     sheetNames = Array("products", "tags", "brands", "rules")
 
-    ' --- 自動同期機能：productsシートにある新しいブランド・タグを自動登録 ---
-    If oDoc.Sheets.hasByName("products") Then
-        AutoSyncDefinitions(oDoc)
-    End If
-
     For Each sName In sheetNames
         If oSheets.hasByName(sName) Then
             oSheet = oSheets.getByName(sName)
@@ -166,76 +160,7 @@ Sub ExportAllSheetsToCSV
         End If
     Next sName
     
-    MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！" & Chr(13) & _
-           "新しいタグやブランドがあった場合は自動登録されています。各シートを確認してください。", 64, "完了"
-End Sub
-
-Sub AutoSyncDefinitions(oDoc As Object)
-    Dim oProdSheet As Object, oBrandSheet As Object, oTagSheet As Object
-    Dim i As Long, j As Long, lastRow As Long
-    Dim brandName As String, tagsStr As String, tagArr As Variant, t As String
-    Dim found As Boolean
-
-    ' 必要なシートが揃っているか確認
-    If Not oDoc.Sheets.hasByName("products") Or Not oDoc.Sheets.hasByName("brands") Or Not oDoc.Sheets.hasByName("tags") Then
-        Exit Sub
-    End If
-
-    oProdSheet = oDoc.Sheets.getByName("products")
-    oBrandSheet = oDoc.Sheets.getByName("brands")
-    oTagSheet = oDoc.Sheets.getByName("tags")
-
-    i = 1 ' 2行目からスキャン
-    Do
-        brandName = Trim(oProdSheet.getCellByPosition(1, i).String) ' B列: Brand
-        tagsStr = Trim(oProdSheet.getCellByPosition(2, i).String)   ' C列: Tags
-        If brandName = "" AND tagsStr = "" Then Exit Do
-
-        ' --- ブランドの自動登録 ---
-        If brandName <> "" Then
-            found = False
-            j = 1
-            Do
-                If LCase(oBrandSheet.getCellByPosition(0, j).String) = LCase(brandName) Then
-                    found = True : Exit Do
-                End If
-                If oBrandSheet.getCellByPosition(0, j).String = "" Then Exit Do
-                j = j + 1
-            Loop
-            ' 未登録なら追記
-            If Not found Then
-                oBrandSheet.getCellByPosition(0, j).String = brandName ' キー名は入力そのまま
-                oBrandSheet.getCellByPosition(1, j).String = brandName ' 日本語名はとりあえず英語のまま
-            End If
-        End If
-
-        ' --- タグの自動登録 ---
-        If tagsStr <> "" Then
-            ' 全角スペースを半角にして分割
-            tagArr = Split(Replace(tagsStr, "　", " "), " ")
-            For j = 0 To UBound(tagArr)
-                t = LCase(Trim(tagArr(j)))
-                If t <> "" Then
-                    found = False
-                    Dim k As Long : k = 1
-                    Do
-                        If LCase(oTagSheet.getCellByPosition(1, k).String) = t Then
-                            found = True : Exit Do
-                        End If
-                        If oTagSheet.getCellByPosition(1, k).String = "" Then Exit Do
-                        k = k + 1
-                    Loop
-                    ' 未登録なら追記 (カテゴリはとりあえず "cond" に設定)
-                    If Not found Then
-                        oTagSheet.getCellByPosition(0, k).String = "cond"
-                        oTagSheet.getCellByPosition(1, k).String = t ' キー名は小文字
-                        oTagSheet.getCellByPosition(2, k).String = t & " (AUTO)"
-                    End If
-                End If
-            Next j
-        End If
-        i = i + 1
-    Loop
+    MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
 End Sub
 
 Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean

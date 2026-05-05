@@ -1,5 +1,5 @@
-// Last Updated: 2026/5/5 22:07:08
-const lastUpdated = "2026/5/5 22:07:08";
+// Last Updated: 2026/5/6 1:19:14
+const lastUpdated = "2026/5/6 1:19:14";
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -11,10 +11,6 @@ const tagMaster = {
         "adult": "成犬・成猫 (ADULT)",
         "senior": "シニア (SENIOR)"
     },
-    "pref": {
-        "lamb": "ラム肉 (LAMB)",
-        "fish": "魚 (FISH)"
-    },
     "cond": {
         "tear": "涙やけ (TEAR)",
         "diet": "体重管理 (WEIGHT)",
@@ -24,7 +20,8 @@ const tagMaster = {
         "tooth": "歯の健康 (TOOTH)",
         "appetite": "食いつき (APPETITE)",
         "gf": "穀物不使用 (GF)",
-        "digestive": "消化器ケア (DIGESTIVE)"
+        "digestive": "消化器ケア (DIGESTIVE)",
+        "lamb": "ラム肉 (LAMB)"
     }
 };
 const brandMaster = {
@@ -243,5 +240,25 @@ const productData = [
         "amz_p": "800",
         "rak_p": "750",
         "yah_p": "850"
+    },
+    {
+        "name": "ワイルド レシピ サーモン (成犬用・穀物不使用)",
+        "brand": "Nutro",
+        "tags": [
+            "dog",
+            "adult",
+            "gf"
+        ],
+        "desc": "すり身のサーモンを第一主原料に使用。肉食の祖先が食べていた食事を再現した高タンパク・穀物不使用のフードです。",
+        "img": "https://images.unsplash.com/photo-1599043513900-ed6fe01d3833?q=80&w=1000&auto=format&fit=crop",
+        "amz": "#",
+        "rak": "#",
+        "yah": "#",
+        "a8": "#",
+        "label": "高タンパク",
+        "promo": "",
+        "amz_p": "3800",
+        "rak_p": "3750",
+        "yah_p": "3900"
     }
 ];

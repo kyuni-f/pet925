@@ -24,16 +24,43 @@
         #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
         #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
-        /* 複数絞り込みナビ：日本語併記・横スクロール */
+        /* フィルターナビゲーション */
         .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
-        .filter-group { margin-bottom: 10px; }
-        .group-label { font-size: 0.6rem; font-weight: 700; color: #bbb; margin-bottom: 5px; display: block; letter-spacing: 1px; }
-        .scroll-box { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none; cursor: default; user-select: none; }
-        .scroll-box.dragging { cursor: grabbing !important; }
-        .scroll-box.dragging .filter-btn { cursor: grabbing !important; }
-        .scroll-box::-webkit-scrollbar { display: none; } /* スクロールバーを非表示 */
-        .filter-btn { background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; cursor: grab; white-space: nowrap; transition: 0.3s; }
+        .filter-group { margin-bottom: 25px; }
+        
+        /* カテゴリヘッダーの改善 */
+        .group-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; padding-left: 5px; }
+        .group-label-jp { font-size: 0.95rem; font-weight: 600; color: var(--dark); }
+        .group-label-en { font-size: 0.6rem; font-weight: 700; color: #bbb; letter-spacing: 1px; text-transform: uppercase; }
+        .multi-badge { 
+            font-size: 0.75rem; color: var(--gold); border: 1px solid var(--gold); 
+            padding: 3px 12px; border-radius: 4px; font-weight: bold;
+            background: rgba(197, 160, 89, 0.08);
+            letter-spacing: 1px;
+        }
+
+        /* タイルレイアウト */
+        .filter-wrap-box { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px; }
+
+        .filter-btn { 
+            background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; 
+            transition: 0.3s; cursor: pointer; white-space: nowrap; border-radius: 2px;
+        }
+        .filter-btn:hover { border-color: var(--gold); color: var(--gold); }
         .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
+
+        /* 複数選択ボタンがアクティブな時のチェックマーク */
+        .filter-group[data-multiselect="true"] .filter-btn.active::before {
+            content: '✓';
+            margin-right: 8px;
+            font-size: 0.9rem;
+            color: var(--gold);
+        }
+        /* 複数選択時は視覚的に強調 */
+        .filter-group[data-multiselect="true"] .filter-btn.active {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
 
         /* 商品カード：カタログのような美しさ */
         #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 50px; margin-top: 40px; }
@@ -91,7 +118,8 @@
 
 <div class="container">
     <div class="search-container">
-        <input type="text" id="search-input" placeholder="商品名またはブランド名で検索" oninput="render()">
+        <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
+        <input type="text" id="search-input" placeholder="商品名、ブランド名、主原料（ラム・サーモン等）で検索" oninput="render()">
     </div>
 
     <div class="filter-nav" id="filter-nav-container"></div>
@@ -100,11 +128,21 @@
 </div>
 
 <script>
-// 単一選択にするカテゴリのリスト
-const singleSelectCats = ['animal', 'age', 'pref'];
+// --- 状態管理 ---
+const singleSelectCats = ['animal', 'age'];
 let activeFilters = {};
 
-// フィルターの初期状態を構築
+// --- ユーティリティ (convert.jsと共通の正規化ロジック) ---
+const normalize = (str) => {
+    if (!str) return "";
+    return str
+        .replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0)) // 全角英数を半角に
+        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
+        .toLowerCase()
+        .trim();
+};
+
+// --- フィルター関連 ---
 function initFilters() {
     if (typeof tagMaster === 'undefined') return;
     for (const cat in tagMaster) {
@@ -147,66 +185,35 @@ function toggleFilter(btn) {
     render();
 }
 
-// マウスドラッグによる横スクロールを有効にする
-function initDragScroll() {
-    console.log('initDragScroll called'); // デバッグ用ログ
-    const sliders = document.querySelectorAll('.scroll-box');
-    sliders.forEach(slider => {
-        let isDown = false;
-        let startX;
-        let scrollLeft;
-        let moved = false;
-
-        slider.addEventListener('mousedown', (e) => {
-            isDown = true;
-            moved = false;
-            slider.classList.add('dragging');
-            startX = e.pageX - slider.getBoundingClientRect().left; // より正確な相対位置を取得
-            scrollLeft = slider.scrollLeft;
-        });
-
-        slider.addEventListener('mouseleave', () => { isDown = false; slider.classList.remove('dragging'); });
-        slider.addEventListener('mouseup', () => { isDown = false; slider.classList.remove('dragging'); });
-
-        slider.addEventListener('mousemove', (e) => {
-            if (!isDown) return;
-            e.preventDefault();
-            const currentX = e.pageX - slider.getBoundingClientRect().left;
-            const walk = (currentX - startX) * 2; // スクロール速度
-            if (Math.abs(currentX - startX) > 5) moved = true; // 5px以上動いたらドラッグとみなす
-            slider.scrollLeft = scrollLeft - walk;
-        });
-
-        // ドラッグ終了時に誤ってボタンがクリックされるのを防ぐ
-        slider.addEventListener('click', (e) => {
-            if (moved) e.stopImmediatePropagation();
-        }, true);
-    });
-}
-
 function renderFilters() {
     if (typeof tagMaster === 'undefined') return;
     
     const navContainer = document.getElementById('filter-nav-container');
     navContainer.innerHTML = '';
 
-    // 表示用ラベルのマッピング
     const categoryLabels = {
-        animal: 'Animal / 種類',
-        age: 'Age / 年齢',
-        pref: 'Main Ingredient / 主原料',
-        cond: 'Condition / お悩み (複数選択可)',
-        origin: 'Origin / 原産国' // 追加分
+        animal: { jp: '種類', en: 'Animal' },
+        age: { jp: '年齢', en: 'Age' },
+        cond: { jp: 'こだわり', en: 'Preference' }
     };
 
     for (const [category, tags] of Object.entries(tagMaster)) {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'filter-group';
         
-        const label = categoryLabels[category] || category.charAt(0).toUpperCase() + category.slice(1);
-        let html = `<span class="group-label">${label}</span>`;
-        html += `<div class="scroll-box" id="filter-${category}">`;
-        html += `<button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
+        const isMulti = !singleSelectCats.includes(category);
+        if (isMulti) groupDiv.setAttribute('data-multiselect', 'true');
+        
+        const labels = categoryLabels[category] || { jp: category, en: category.toUpperCase() };
+        let html = `
+            <div class="group-header">
+                <span class="group-label-jp">${labels.jp}</span>
+                <span class="group-label-en">${labels.en}</span>
+                ${isMulti ? '<span class="multi-badge">複数選択可</span>' : ''}
+            </div>
+            <div class="filter-wrap-box" id="filter-${category}">
+                <button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>
+        `;
         
         for (const [tagKey, tagName] of Object.entries(tags)) {
             html += `<button class="filter-btn" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${tagName}</button>`;
@@ -215,9 +222,7 @@ function renderFilters() {
         groupDiv.innerHTML = html;
         navContainer.appendChild(groupDiv);
     }
-    initDragScroll();
 }
-
 
 // 価格表示とショップ名を表示するヘルパー
 function getShopButtonContent(shopName, price, isLowest) {
@@ -242,42 +247,19 @@ function getSearchUrl(shop, name, fallbackUrl) {
     return '#';
 }
 
+// --- メイン描画処理 ---
 function render() {
-    if (typeof productData === 'undefined') return;
-    if (!productData || productData.length === 0) return;
+    if (typeof productData === 'undefined' || !productData) return;
+
     const list = document.getElementById('product-list');
-
-    // ひらがなをカタカナに変換して比較しやすくする正規化関数
-    const normalize = (str) => {
-        if (!str) return "";
-        // ひらがな -> カタカナ変換 + 全角英数を半角に + 伸ばし棒の揺れを考慮
-        let val = str.replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60));
-        // 「にゅうとろ」が「ニュウトロ」になった際「ニュートロ」にヒットしやすくするため、
-        // 検索時はさらに柔軟な比較が必要ですが、まずは基本のカタカナ統一を徹底します。
-        return val.toLowerCase().trim();
-    };
-
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
+    const brandAliases = typeof brandMaster !== 'undefined' ? brandMaster : {};
     
     list.innerHTML = "";
     let matchCount = 0;
-
-    // ブランド名の日本語読みマップ
-    const brandAliases = typeof brandMaster !== 'undefined' ? brandMaster : {};
     
     productData.forEach(item => {
-        // タグの表示名（日本語）も検索にヒットさせるための文字列作成
-        const tagNames = item.tags.map(t => {
-            for (const cat in tagMaster) {
-                if (tagMaster[cat][t]) return tagMaster[cat][t];
-            }
-            return t;
-        }).join(' ');
-
-        // 特定のタグに対する注釈メッセージの設定
-        const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグレインフリー（穀物不使用）です</span>' : '';
-
         // すべてのカテゴリの条件に合致するかチェック
         const matchFilters = Object.keys(tagMaster).every(cat => {
             const filterVal = activeFilters[cat];
@@ -287,17 +269,21 @@ function render() {
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
         });
 
-        const brandKey = (item.brand || "").trim().toLowerCase();
+        const brandKey = normalize(item.brand);
         const brandJP = brandAliases[brandKey] || "";
 
+        // 検索対象：名前、ブランド（英・日）、説明文、タグ名
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) ||
-            (brandJP && normalize(brandJP).includes(word))
+            normalize(brandJP).includes(word) ||
+            normalize(item.desc).includes(word) ||
+            item.tags.some(t => normalize(t).includes(word))
         );
 
         if (matchFilters && matchSearch) {
             matchCount++;
+            const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグレインフリー（穀物不使用）です</span>' : '';
             const card = document.createElement('div');
             card.className = 'product-card';
 
