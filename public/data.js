@@ -1,5 +1,3 @@
-// Last Updated: 2026/5/6 1:19:14
-const lastUpdated = "2026/5/6 1:19:14";
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -32,7 +30,7 @@ const brandMaster = {
 };
 const productData = [
     {
-        "name": "ナチュラル チョイス 成犬用 ラム＆玄米 (皮膚被毛・涙やけケア・お悩み別)",
+        "name": "ニュートロ ナチュラル チョイス プロテイン シリーズ ラム＆玄米 成犬用 超小型犬～小型犬用",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -54,7 +52,7 @@ const productData = [
         "yah_p": "1300"
     },
     {
-        "name": "ナチュラル チョイス 減量用 全犬種用 (体重管理・ダイエット・低カロリー)",
+        "name": "ニュートロ ナチュラル チョイス スペシャル ケア 減量用 ラム＆玄米 全犬種用 成犬用",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -75,7 +73,7 @@ const productData = [
         "yah_p": "2400"
     },
     {
-        "name": "ワイルド レシピ 鹿肉 (穀物不使用・成犬用・高タンパク・アレルギーケア)",
+        "name": "ニュートロ ワイルド レシピ 鹿肉 超小型犬～小型犬用 成犬用",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -96,7 +94,7 @@ const productData = [
         "yah_p": "4150"
     },
     {
-        "name": "シュプレモ 成犬用 (全犬種用・涙やけ・栄養バランス・ホリスティック)",
+        "name": "ニュートロ シュプレモ 成犬用 全犬種用",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -116,7 +114,7 @@ const productData = [
         "yah_p": "2900"
     },
     {
-        "name": "シュプレモ 湖畔のレシピ ラム (穀物不使用・成犬用・涙やけケア・アレルギー)",
+        "name": "ニュートロ シュプレモ レシピ シリーズ 地中海のレシピ ラム 成犬用",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -139,7 +137,7 @@ const productData = [
         "yah_p": "3600"
     },
     {
-        "name": "シュプレモ エイジングケア (シニア犬用・高齢犬・関節ケア・健康維持)",
+        "name": "ニュートロ シュプレモ エイジングケア シニア犬用 全犬種用",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -161,7 +159,7 @@ const productData = [
         "yah_p": "3950"
     },
     {
-        "name": "ロイヤルカナン ミニ デンタル ケア (小型犬用・歯垢・歯石・歯の健康)",
+        "name": "ロイヤルカナン ケア シリーズ ミニ デンタル ケア",
         "brand": "Royal Canin",
         "tags": [
             "dog",
@@ -181,7 +179,7 @@ const productData = [
         "yah_p": "1450"
     },
     {
-        "name": "ロイヤルカナン ダーマコンフォート (皮膚被毛・涙やけ・アレルギー配慮)",
+        "name": "ロイヤルカナン ケア シリーズ ミニ ダーマコンフォート",
         "brand": "Royal Canin",
         "tags": [
             "dog",
@@ -202,7 +200,7 @@ const productData = [
         "yah_p": "2900"
     },
     {
-        "name": "ロイヤルカナン ユリナリー ケア (猫用・尿路健康・結石予防・腎臓)",
+        "name": "ロイヤルカナン フィーライン ケア ニュートリション ユリナリー ケア",
         "brand": "Royal Canin",
         "tags": [
             "cat",
@@ -222,7 +220,7 @@ const productData = [
         "yah_p": "1950"
     },
     {
-        "name": "シーバ デュオ まぐろ味セレクション (猫用・食いつき・おやつ・偏食)",
+        "name": "シーバ デュオ 香りのまぐろ味セレクション",
         "brand": "Sheba",
         "tags": [
             "cat",
@@ -242,7 +240,7 @@ const productData = [
         "yah_p": "850"
     },
     {
-        "name": "ワイルド レシピ サーモン (成犬用・穀物不使用)",
+        "name": "ニュートロ ワイルド レシピ サーモン 超小型犬～小型犬用 成犬用",
         "brand": "Nutro",
         "tags": [
             "dog",

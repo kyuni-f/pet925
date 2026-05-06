@@ -10,7 +10,7 @@ const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 function normalizeText(str) {
     if (!str) return "";
     return str
-        .replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0)) // 全角英数を半角に
+        .normalize('NFKC') // Unicode正規化 (全角英数・記号の半角化を含む)
         .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
         .toLowerCase()
         .trim();
@@ -303,9 +303,7 @@ async function run() {
         const products = parseCSV(csvContent);
         
         const now = new Date().toLocaleString();
-        const output = `// Last Updated: ${now}\n` +
-                       `const lastUpdated = "${now}";\n` +
-                       `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
+        const output = `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
                        `const brandMaster = ${JSON.stringify(BRAND_MASTER, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;
 

@@ -3,8 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-XXXXXXXXXX');
+    </script>
     <title>pet925 | Premium Pet Nutrition</title>
-    <meta name="description" content="科学的な根拠に基づいたプレミアムキャットフード・ドッグフードの選定ガイド。涙やけや皮膚ケアなど、お悩み別に最適な一皿を見つけます。">
+    <meta name="description" content="愛犬・愛猫へのこだわりから最適なプレミアムフードを見つける選定ガイド。グレインフリー、特定のタンパク源、低カロリーなど、飼い主様のこだわりから最高の一皿を提案します。">
     <!-- データの読み込み -->
     <script src="data.js"></script>
 
@@ -24,7 +33,7 @@
         #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
         #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
-        /* フィルターナビゲーション */
+        /* こだわり条件フィルターナビゲーション */
         .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
         .filter-group { margin-bottom: 25px; }
         
@@ -83,19 +92,8 @@
         .auto-note { font-size: 0.75rem; color: #27ae60; font-weight: bold; margin-bottom: 5px; display: block; }
         /* おすすめバッジ */
         .featured-badge { position: absolute; top: 10px; left: 10px; background: var(--gold); color: #fff; padding: 4px 12px; font-size: 0.7rem; font-weight: bold; z-index: 10; }
-        /* 最安値バッジ（ボタン内） */
-        .lowest-price-badge { background: #27ae60; color: #fff; padding: 2px 6px; font-size: 0.6rem; border-radius: 2px; margin-left: 5px; vertical-align: middle; }
-        /* 価格の強調表示 */
-        .price-text { font-family: "Helvetica Neue", sans-serif; font-weight: 600; margin-left: 4px; }
 
         .no-results { grid-column: 1 / -1; text-align: center; padding: 100px 20px; color: #999; font-size: 0.9rem; letter-spacing: 2px; }
-
-        /* 免責事項の注釈 */
-        .price-disclaimer { 
-            font-size: 0.65rem; color: #999; margin-top: 15px; text-align: right; 
-            line-height: 1.2; font-style: italic;
-        }
-        .update-date { font-weight: bold; }
 
         /* モール別ボタン */
         .shop-links { display: flex; flex-direction: column; gap: 8px; }
@@ -119,7 +117,7 @@
 <div class="container">
     <div class="search-container">
         <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
-        <input type="text" id="search-input" placeholder="商品名、ブランド名、主原料（ラム・サーモン等）で検索" oninput="render()">
+        <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render()">
     </div>
 
     <div class="filter-nav" id="filter-nav-container"></div>
@@ -131,12 +129,30 @@
 // --- 状態管理 ---
 const singleSelectCats = ['animal', 'age'];
 let activeFilters = {};
+let lastTrackedSearch = "";
+let searchTrackTimer = null;
+
+// --- ユーザー行動追跡 (将来的な集計用) ---
+function trackEvent(category, action, label) {
+    // 開発環境（localhostなど）でのみログを表示し、本番での負荷をゼロに近づける
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        console.log(`[Analytics] ${category} > ${action}: ${label}`);
+    }
+
+    // Google Analytics (GA4) にイベントを送信
+    if (window.gtag) {
+        gtag('event', action, {
+            'event_category': category,
+            'event_label': label
+        });
+    }
+}
 
 // --- ユーティリティ (convert.jsと共通の正規化ロジック) ---
 const normalize = (str) => {
     if (!str) return "";
     return str
-        .replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0)) // 全角英数を半角に
+        .normalize('NFKC') // Unicode正規化 (全角英数・記号の半角化を含む)
         .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
         .toLowerCase()
         .trim();
@@ -182,6 +198,9 @@ function toggleFilter(btn) {
             else allBtn.classList.remove('active');
         }
     }
+
+    // タグ選択のログを記録
+    trackEvent('Filter', 'select_tag', `${category}:${value}`);
     render();
 }
 
@@ -224,23 +243,15 @@ function renderFilters() {
     }
 }
 
-// 価格表示とショップ名を表示するヘルパー
-function getShopButtonContent(shopName, price, isLowest) {
-    // 価格がない場合はデフォルトのテキストを返す
-    if (!price || price === "" || price === "0" || isNaN(Number(price))) {
-        return `${shopName}で最安値を確認`;
-    }
-    const formattedPrice = Number(price).toLocaleString();
-    return `
-        ${shopName}: <span class="price-text">¥${formattedPrice}</span>
-        ${isLowest ? '<span class="lowest-price-badge">最安値</span>' : ''}
-    `;
+// ショップ名を表示するヘルパー（価格表示を削除）
+function getShopButtonContent(shopName) {
+    return `${shopName}で詳細を確認`;
 }
 
 // 各サイトの最安値検索URLを生成するヘルパー
-function getSearchUrl(shop, name, fallbackUrl) {
+function getSearchUrl(shop, brand, name, fallbackUrl) {
     if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
-    const q = encodeURIComponent(name);
+    const q = encodeURIComponent(`${brand} ${name}`);
     if (shop === 'amz') return `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
     if (shop === 'rak') return `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
     if (shop === 'yah') return `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
@@ -256,6 +267,24 @@ function render() {
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     const brandAliases = typeof brandMaster !== 'undefined' ? brandMaster : {};
     
+    // 検索ワードの集計（デバウンス処理：入力が1.5秒止まったらログを送信）
+    const currentSearchQuery = searchWords.join(' ');
+    if (currentSearchQuery && currentSearchQuery !== lastTrackedSearch) {
+        clearTimeout(searchTrackTimer);
+        searchTrackTimer = setTimeout(() => {
+            trackEvent('Search', 'input_keyword', currentSearchQuery);
+            lastTrackedSearch = currentSearchQuery;
+        }, 1500);
+    }
+
+    // 表示用にタグのキー（例: dog）を日本語名（例: 犬）に変換するマップを作成
+    const tagLookup = {};
+    if (typeof tagMaster !== 'undefined') {
+        Object.values(tagMaster).forEach(group => {
+            Object.assign(tagLookup, group);
+        });
+    }
+
     list.innerHTML = "";
     let matchCount = 0;
     
@@ -272,13 +301,13 @@ function render() {
         const brandKey = normalize(item.brand);
         const brandJP = brandAliases[brandKey] || "";
 
-        // 検索対象：名前、ブランド（英・日）、説明文、タグ名
+        // 検索対象：名前、ブランド（英・日）、説明文、タグ（キーと日本語名）
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) ||
             normalize(brandJP).includes(word) ||
             normalize(item.desc).includes(word) ||
-            item.tags.some(t => normalize(t).includes(word))
+            item.tags.some(t => normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word))
         );
 
         if (matchFilters && matchSearch) {
@@ -286,21 +315,6 @@ function render() {
             const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグレインフリー（穀物不使用）です</span>' : '';
             const card = document.createElement('div');
             card.className = 'product-card';
-
-            // 最安値の判定ロジック（数値が有効なものだけを抽出）
-            const parseP = (p) => {
-                const n = Number(p);
-                return (p && !isNaN(n) && n > 0) ? n : Infinity;
-            };
-            
-            const prices = [
-                { id: 'amz', val: parseP(item.amz_p) },
-                { id: 'rak', val: parseP(item.rak_p) },
-                { id: 'yah', val: parseP(item.yah_p) }
-            ].filter(p => p.val !== Infinity);
-            
-            const lowestPriceObj = prices.length > 0 ? prices.reduce((min, p) => p.val < min.val ? p : min, prices[0]) : null;
-            const minPrice = lowestPriceObj ? lowestPriceObj.val : null;
 
             // 画像がない、または未設定（#）の場合は、代わりの画像を表示
             const defaultImg = "https://images.unsplash.com/photo-1544568100-847a948585b9?q=80&w=1000&auto=format&fit=crop";
@@ -316,7 +330,7 @@ function render() {
                     <div class="product-name">${item.name}</div>
                     ${gfNote}
                     <p class="description">${item.desc || ""}</p>
-                    <div class="tag-list">${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+                    <div class="tag-list">${item.tags.map(t => `<span class="tag">${tagLookup[t] || t}</span>`).join('')}</div>
                     <div class="shop-links">
                         ${item.promo ? `<span class="promo-text">${item.promo}</span>` : ''}
                         ${item.a8 && item.a8 !== '#' ? `
@@ -324,13 +338,9 @@ function render() {
                                 公式サイトで詳細を見る
                             </a>
                         ` : ''}
-                        <a href="${getSearchUrl('amz', item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow">${getShopButtonContent('Amazon', item.amz_p, minPrice && parseP(item.amz_p) === minPrice)}</a>
-                        <a href="${getSearchUrl('rak', item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow">${getShopButtonContent('楽天', item.rak_p, minPrice && parseP(item.rak_p) === minPrice)}</a>
-                        <a href="${getSearchUrl('yah', item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow">${getShopButtonContent('Yahoo!', item.yah_p, minPrice && parseP(item.yah_p) === minPrice)}</a>
-                    </div>
-                    <div class="price-disclaimer">
-                        ※価格は掲載時のものです。最新価格は各ショップでご確認ください。<br>
-                        最終更新: <span class="update-date">${typeof lastUpdated !== 'undefined' ? lastUpdated : '不明'}</span>
+                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow">${getShopButtonContent('Amazon')}</a>
+                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow">${getShopButtonContent('楽天')}</a>
+                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow">${getShopButtonContent('Yahoo!')}</a>
                     </div>
                 </div>
             `;
