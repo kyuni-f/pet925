@@ -157,13 +157,18 @@ function parseCSV(content, useHeaderMap = true) {
         r.some(cell => /name/i.test(cell)) && r.some(cell => /brand/i.test(cell))
     );
 
-    if (headerIndex === -1) throw new Error('見出し行(name,brand...)が見つかりません。');
+    if (headerIndex === -1) {
+        throw new Error(
+            'スプレッドシートの「見出し行」が見つかりません。\n' +
+            '👉 [解決策]: 1行目または2行目に "name" や "brand" という列名があるか確認してください。\n' +
+            '   (大文字・小文字はどちらでも大丈夫です)'
+        );
+    }
 
     const headers = rows[headerIndex].map(h => h.trim().toLowerCase());
     
     return rows.slice(headerIndex + 1).map((rowValues, index) => {
         const obj = {};
-        const rowValidationTags = []; // バリデーション用
         // ヘッダーの数とデータの数が合わない場合への対応
         headers.forEach((header, i) => {
             // データが存在しない列も安全に空文字として処理
@@ -228,73 +233,44 @@ function parseCSV(content, useHeaderMap = true) {
 }
 
 async function run() {
+    const isCI = process.env.GITHUB_ACTIONS === 'true';
     try {
         // フォルダが存在しない場合は作成（エラー防止）
         if (!fsSync.existsSync(DATA_DIR)) {
             await fs.mkdir(DATA_DIR, { recursive: true });
         }
 
-        let filesInDir = [];
-        try {
-            filesInDir = await fs.readdir(DATA_DIR);
-        } catch (e) {
-            throw new Error(`data フォルダを読み込めません: ${DATA_DIR}`);
+        const files = await fs.readdir(DATA_DIR);
+        const csvFiles = files.filter(f => f.toLowerCase().includes('products') && f.endsWith('.csv'));
+        const csvFileName = csvFiles[0] || 'products.csv';
+        const hasMasterFile = files.some(f => f.endsWith('.ods'));
+
+        // 出力先（ルートディレクトリ）の存在チェック
+        if (!fsSync.existsSync(PUBLIC_DIR)) {
+            throw new Error(
+                `出力先のフォルダが見つかりません: ${PUBLIC_DIR}\n` +
+                `👉 [解決策]: プロジェクトのルートディレクトリ（index.htmlがある場所）で実行してください。`
+            );
         }
-
-        // productsが含まれるCSVファイルをすべて探し、重複があれば警告を出します
-        const csvCandidates = filesInDir.filter(f => {
-            const name = f.trim().toLowerCase();
-            return name.includes('products') && name.endsWith('.csv') && !f.startsWith('.');
-        });
-
-        // マスターファイル（.ods/.xlsx）が存在するかチェック
-        const hasMasterFile = filesInDir.some(f => {
-            const name = f.toLowerCase();
-            return (name.endsWith('.ods') || name.endsWith('.xlsx')) && name.includes('pet925');
-        });
-
-        if (csvCandidates.length > 1) {
-            console.warn('⚠️  警告: CSVファイルが複数見つかりました。');
-        }
-
-        // 最も正しい名前（products.csv）を優先
-        const csvFileName = csvCandidates.find(f => f === 'products.csv') || 
-                            csvCandidates.find(f => f.trim() === 'products.csv') || 
-                            csvCandidates[0];
-
-        if (!csvFileName) {
-            console.error(`❌ エラー: data フォルダ内に CSVファイルが見つかりません。`);
-            if (hasMasterFile) console.log('💡 ヒント: マスターファイル(.ods)から CSV を書き出してください。');
-            return;
-        }
-
-        // タグ定義を読み込む（ファイルがあれば上書き）
-        await loadTagsFromCSV();
-
-        // ブランド定義を読み込む
-        await loadBrandsFromCSV();
-
-        // 自動タグ付けルールを読み込む
-        await loadRulesFromCSV();
 
         const CSV_PATH = path.join(DATA_DIR, csvFileName);
-        validationErrors = []; // エラーリストをリセット
-
         if (!fsSync.existsSync(CSV_PATH)) {
-            console.error(`❌ エラー: ${CSV_PATH} が見つかりません。`);
-            const files = await fs.readdir(DATA_DIR);
-            console.log('\n--- data フォルダにあるファイル一覧 ---');
+            console.log('\n--- 📁 フォルダ内の状態 ---');
             files.forEach(f => console.log(` - ${f}`));
             
-            if (hasMasterFile) {
-                console.log('\n💡 ヒント: 管理用のマスターファイル（.ods/.xlsx）は見つかりました。');
-                console.log('   LibreOffice Calc 等で開き、[ファイル] > [保存コピーを保存] から');
-                console.log('   "products.csv" を作成（エクスポート）して、このフォルダに置いてください。');
-            } else {
-                console.log('\n👉 スプレッドシートを "products.csv" という名前でこのフォルダに保存してください。');
-            }
-            process.exit(1);
+            throw new Error(
+                `${csvFileName} が見つかりません。\n` +
+                (hasMasterFile 
+                    ? '👉 [解決策]: マスターファイル(.ods)からCSV形式で「products.csv」を書き出し直してください。' 
+                    : '👉 [解決策]: スプレッドシートを「products.csv」という名前で data フォルダに保存してください。')
+            );
         }
+
+        // 設定ファイルと商品データを読み込む
+        validationErrors = []; 
+        await loadTagsFromCSV();
+        await loadBrandsFromCSV();
+        await loadRulesFromCSV();
 
         const csvContent = await fs.readFile(CSV_PATH, 'utf8');
         const stats = await fs.stat(CSV_PATH);
@@ -342,8 +318,25 @@ async function run() {
         console.log(`⏰ 実行時刻: ${new Date().toLocaleString()}`);
         console.log(`文書の更新: ${fileTime} (ファイル: ${csvFileName})`);
         console.log('--------------------------------------------------');
+
     } catch (err) {
-        console.error('❌ 変換エラー:', err.message);
+        console.log('\n**************************************************');
+        console.log('❌ エラーが発生しました');
+        console.log('**************************************************');
+        console.log(`内容: ${err.message}`);
+
+        if (err.stack && err.stack.includes('ReferenceError')) {
+            console.log('\n👉 [エンジニア用ヒント]: プログラム内の変数名が間違っている可能性があります。最近書き換えた箇所を確認してください。');
+        }
+
+        if (isCI) {
+            console.log('\n🌐 [GitHub Actions ヒント]:');
+            console.log('   - data/products.csv などのファイルが正しく push されているか確認してください。');
+            console.log(`::error title=ビルド失敗::${err.message.replace(/\n/g, ' ')}`);
+            process.exit(1);
+        }
+
+        console.log('**************************************************\n');
     }
 }
 
