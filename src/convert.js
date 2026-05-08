@@ -3,7 +3,7 @@ const fsSync = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PUBLIC_DIR = path.join(__dirname, '..'); // data.jsの出力先をルートディレクトリに設定
 const JS_PATH = path.join(PUBLIC_DIR, 'data.js');
 
 // ひらがなをカタカナに変換し、小文字に統一する正規化関数（Node.js用）
@@ -34,83 +34,79 @@ updateAllowedTags();
 
 let validationErrors = [];
 
-// tags.csv があれば読み込む関数
+// 設定ファイルを読み込むための汎用関数
+async function loadSettingsCSV(fileName, callback) {
+    const filePath = path.join(DATA_DIR, fileName);
+    if (fsSync.existsSync(filePath)) {
+        const content = await fs.readFile(filePath, 'utf8');
+        // parseCSVの第2引数に false を渡し、ヘッダーの解析をスキップして生の行データを得る
+        const rows = parseCSV(content, false); 
+        if (rows.length > 0) {
+            callback(rows);
+        }
+    }
+}
+
 async function loadTagsFromCSV() {
-    const tagsPath = path.join(DATA_DIR, 'tags.csv');
-    if (fsSync.existsSync(tagsPath)) {
-        let content = await fs.readFile(tagsPath, 'utf8');
-        content = content.replace(/^\uFEFF/, ''); // BOMを削除
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(category|カテゴリ)/i.test(line));
+    await loadSettingsCSV('tags.csv', (rows) => {
         const newMaster = {};
-        
-        lines.forEach(line => {
-            const [category, key, name] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+        rows.forEach(row => {
+            // ヘッダー行や空行をスキップ
+            if (row.length < 3 || /category|カテゴリ/i.test(row[0])) return;
+            const [category, key, name] = row.map(s => s.trim());
             if (category && key && name) {
                 if (!newMaster[category]) newMaster[category] = {};
                 newMaster[category][key] = name;
             }
         });
-        
         if (Object.keys(newMaster).length > 0) {
             TAG_MASTER = newMaster;
             updateAllowedTags();
         }
-    }
+    });
 }
 
 // brands.csv があれば読み込む関数
 async function loadBrandsFromCSV() {
-    const brandsPath = path.join(DATA_DIR, 'brands.csv');
-    if (fsSync.existsSync(brandsPath)) {
-        let content = await fs.readFile(brandsPath, 'utf8');
-        content = content.replace(/^\uFEFF/, ''); // BOMを削除
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(key|キー)/i.test(line));
+    await loadSettingsCSV('brands.csv', (rows) => { 
         const newBrands = {};
-        
-        lines.forEach(line => {
-            const [key, name] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+        rows.forEach(row => {
+            if (row.length < 2 || /key|キー/i.test(row[0])) return;
+            const [key, name] = row.map(s => s.trim());
             if (key && name) {
                 newBrands[key.toLowerCase()] = name;
             }
         });
-        
         if (Object.keys(newBrands).length > 0) {
             BRAND_MASTER = newBrands;
         }
-    }
+    });
 }
 
 // rules.csv があれば読み込む関数
 async function loadRulesFromCSV() {
-    const rulesPath = path.join(DATA_DIR, 'rules.csv');
-    if (fsSync.existsSync(rulesPath)) {
-        let content = await fs.readFile(rulesPath, 'utf8');
-        content = content.replace(/^\uFEFF/, ''); // BOMを削除
-        const lines = content.split(/\r?\n/).filter(line => line.trim() !== '' && !/^\s*(tag|タグ)/i.test(line));
+    await loadSettingsCSV('rules.csv', (rows) => { 
         const newRules = [];
-        lines.forEach(line => {
-            // 最初のカンマで分割（キーワードの中にカンマが含まれる可能性を考慮）
-            const firstComma = line.indexOf(',');
-            if (firstComma !== -1) {
-                const tag = line.substring(0, firstComma).trim().replace(/^"|"$/g, '');
-                const keywordsPart = line.substring(firstComma + 1).trim().replace(/^"|"$/g, '');
+        rows.forEach(row => {
+            if (row.length < 2 || /tag|タグ/i.test(row[0])) return;
+            const tag = row[0].trim();
+            const keywordsPart = row[1].trim();
+            if (tag && keywordsPart) {
                 // スペルミスや表記揺れを吸収するため、スペース、カンマ、読点で分割
                 const keywords = keywordsPart.split(/[\s,，、/]+/).filter(k => k);
                 keywords.forEach(keyword => {
-                    // キーワード自体を正規化して保存
                     newRules.push({ tag, keyword: normalizeText(keyword) });
                 });
             }
         });
         AUTO_TAG_RULES = newRules;
         updateAllowedTags();
-    }
+    });
 }
 
 // 簡易的なCSVパース関数（クォート対応）
-function parseCSV(content) {
+function parseCSV(content, useHeaderMap = true) {
     content = content.replace(/^\uFEFF/, ''); // BOMを削除
-
     const rows = [];
     let currentRow = [];
     let currentField = '';
@@ -153,6 +149,8 @@ function parseCSV(content) {
         currentRow.push(currentField);
         rows.push(currentRow);
     }
+
+    if (!useHeaderMap) return rows;
 
     // 見出し行を検索（列名に name, brand, tags が含まれる行を探す）
     const headerIndex = rows.findIndex(r => 
