@@ -273,7 +273,6 @@ async function run() {
         await loadRulesFromCSV();
 
         const csvContent = await fs.readFile(CSV_PATH, 'utf8');
-        const stats = await fs.stat(CSV_PATH);
         const products = parseCSV(csvContent);
         
         const output = `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
