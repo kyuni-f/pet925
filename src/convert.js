@@ -272,6 +272,7 @@ async function run() {
         await loadBrandsFromCSV();
         await loadRulesFromCSV();
 
+        const stats = await fs.stat(CSV_PATH);
         const csvContent = await fs.readFile(CSV_PATH, 'utf8');
         const products = parseCSV(csvContent);
         
