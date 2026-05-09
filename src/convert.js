@@ -342,7 +342,9 @@ async function run() {
 // 外部（テスト）から関数を呼び出せるようにエクスポート
 module.exports = { 
     parseCSV, 
-    TAG_MASTER, 
+    TAG_MASTER,
+    BRAND_MASTER,
+    updateAllowedTags,
     getValidationErrors: () => validationErrors, 
     clearValidationErrors: () => { validationErrors = []; } 
 };
