@@ -276,7 +276,6 @@ async function run() {
         const stats = await fs.stat(CSV_PATH);
         const products = parseCSV(csvContent);
         
-        const now = new Date().toLocaleString();
         const output = `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
                        `const brandMaster = ${JSON.stringify(BRAND_MASTER, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;

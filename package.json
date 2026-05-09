@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/convert.js --watch",
     "test": "jest src",
-    "build": "node src/convert.js"
+    "build": "node src/convert.js",
+    "deploy": "git add . && git commit -m \"update data\" && git push"
   },
   "repository": {
     "type": "git",
