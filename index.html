@@ -13,7 +13,8 @@
       gtag('js', new Date());
 
       gtag('config', 'G-XR7TWP7ZJ0', {
-        'send_page_view': true
+        'send_page_view': true,
+        'debug_mode': true
       });
     </script>
     <title>pet925 | Premium Pet Nutrition</title>
@@ -386,9 +387,9 @@ function render() {
                                 公式サイトで詳細を見る
                             </a>
                         ` : ''}
-                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'click_amazon', '${item.name}')">${getShopButtonContent('Amazon')}</a>
-                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'click_rakuten', '${item.name}')">${getShopButtonContent('楽天')}</a>
-                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'click_yahoo', '${item.name}')">${getShopButtonContent('Yahoo!')}</a>
+                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Amazon', '${item.name}')">${getShopButtonContent('Amazon')}</a>
+                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Rakuten', '${item.name}')">${getShopButtonContent('楽天')}</a>
+                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Yahoo', '${item.name}')">${getShopButtonContent('Yahoo!')}</a>
                     </div>
                 </div>
             `;

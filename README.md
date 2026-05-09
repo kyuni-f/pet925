@@ -26,7 +26,13 @@ npm install
 npm start
 
 # 3. テストの実行
-npm test
+npm test   # 変換ロジックが壊れていないか自動チェック（デプロイ前に推奨）
+
+# 4. データの公開（デプロイ）
+npm run deploy   # データの保存、コミット、プッシュを一括実行
+
+# 5. 強制同期（競合等でプッシュできない場合）
+git push origin main --force
 ```
 
 ## 🤖 AIへの指示 (AI Instructions)

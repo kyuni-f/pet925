@@ -239,6 +239,7 @@ async function run() {
         if (!fsSync.existsSync(DATA_DIR)) {
             await fs.mkdir(DATA_DIR, { recursive: true });
         }
+        validationErrors = []; // 実行ごとにエラーリストをリセット
 
         const files = await fs.readdir(DATA_DIR);
         const csvFiles = files.filter(f => f.toLowerCase().includes('products') && f.endsWith('.csv'));
@@ -267,7 +268,6 @@ async function run() {
         }
 
         // 設定ファイルと商品データを読み込む
-        validationErrors = []; 
         await loadTagsFromCSV();
         await loadBrandsFromCSV();
         await loadRulesFromCSV();
