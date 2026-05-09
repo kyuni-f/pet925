@@ -172,10 +172,8 @@ function updateURL() {
     
     // GA4に仮想的なページビューを送信（クエリパラメータを認識させる）
     if (window.gtag) {
-        // 絶対URLを明示的に送ることで、GitHub Pagesのサブドメインでも正確に集計されます
-        const fullUrl = window.location.origin + window.location.pathname + window.location.search;
         gtag('event', 'page_view', {
-            page_location: fullUrl,
+            page_location: window.location.href,
             page_path: window.location.pathname + window.location.search,
             page_title: document.title
         });
