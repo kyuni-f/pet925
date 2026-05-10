@@ -209,9 +209,8 @@ function parseCSV(content, useHeaderMap = true) {
             for (const [key, name] of Object.entries(BRAND_MASTER)) {
                 // キー（正規化済み）または日本語名（正規化して比較）が含まれているか
                 if (checkText.includes(normalizeText(key)) || checkText.includes(normalizeText(name))) {
-                    // 見つかったブランドの「本来の表記（最初の文字を大文字にするなど）」を適用
-                    // ここでは brands.csv の key を元に、元データがあればそれを尊重
-                    obj.brand = key.charAt(0).toUpperCase() + key.slice(1);
+                    // brands.csv で定義した表示名（name）を採用する
+                    obj.brand = name;
                     break;
                 }
             }
@@ -342,8 +341,10 @@ async function run() {
 // 外部（テスト）から関数を呼び出せるようにエクスポート
 module.exports = { 
     parseCSV, 
+    normalizeText,
     TAG_MASTER,
     BRAND_MASTER,
+    AUTO_TAG_RULES,
     updateAllowedTags,
     getValidationErrors: () => validationErrors, 
     clearValidationErrors: () => { validationErrors = []; } 
