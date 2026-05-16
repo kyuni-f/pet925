@@ -56,23 +56,36 @@
         .filter-wrap-box { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px; }
 
         .filter-btn { 
-            background: #fff; border: 1px solid #eee; padding: 8px 18px; font-size: 0.75rem; 
+            position: relative;
+            background: #fff; border: 1px solid #eee; padding: 8px 20px; font-size: 0.75rem; 
             transition: 0.3s; cursor: pointer; white-space: nowrap; border-radius: 2px;
         }
         .filter-btn:hover { border-color: var(--gold); color: var(--gold); }
         .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
 
         /* 複数選択ボタンがアクティブな時のチェックマーク */
-        .filter-group[data-multiselect="true"] .filter-btn.active::before {
+        .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
+            padding-left: 32px; /* チェックマーク用のスペースを常に確保 */
+        }
+        .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
             content: '✓';
-            margin-right: 8px;
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
             font-size: 0.9rem;
             color: var(--gold);
+            opacity: 0;
+            transition: 0.2s;
         }
+        .filter-group[data-multiselect="true"] .filter-btn.active:not([data-val="all"])::before {
+            opacity: 1;
+        }
+
         /* 複数選択時は視覚的に強調 */
         .filter-group[data-multiselect="true"] .filter-btn.active {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-color: var(--dark);
         }
 
         /* 商品カード：カタログのような美しさ */
@@ -314,18 +327,11 @@ function render() {
     const list = document.getElementById('product-list');
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
-    const brandAliases = typeof brandMaster !== 'undefined' ? brandMaster : {};
     
-    // デバウンス：入力が止まってからURLを更新（GA4イベントの連打を防ぐ）
-    clearTimeout(searchTrackTimer);
-    searchTrackTimer = setTimeout(() => {
-        updateURL();
-        if (searchWords.length > 0 && matchCount === 0) {
-            trackEvent('Search', 'no_match', searchWords.join(' '));
-        }
-    }, 800);
+    list.innerHTML = "";
+    let matchCount = 0;
 
-    // 表示用にタグのキー（例: dog）を日本語名（例: 犬）に変換するマップを作成
+    // 表示用にタグのキーを日本語名に変換するマップ
     const tagLookup = {};
     if (typeof tagMaster !== 'undefined') {
         Object.values(tagMaster).forEach(group => {
@@ -333,9 +339,16 @@ function render() {
         });
     }
 
-    list.innerHTML = "";
-    let matchCount = 0;
-    
+    // デバウンス：入力が止まってからURLを更新（GA4イベントの連打を防ぐ）
+    clearTimeout(searchTrackTimer);
+    const currentMatchCount = () => matchCount; // クロージャで現在のカウントを取得可能にする
+    searchTrackTimer = setTimeout(() => {
+        updateURL();
+        if (searchWords.length > 0 && currentMatchCount() === 0) {
+            trackEvent('Search', 'no_match', searchWords.join(' '));
+        }
+    }, 800);
+
     productData.forEach(item => {
         // すべてのカテゴリの条件に合致するかチェック
         const matchFilters = Object.keys(tagMaster).every(cat => {
@@ -346,20 +359,18 @@ function render() {
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
         });
 
-        const brandKey = normalize(item.brand);
-        const brandJP = brandAliases[brandKey] || "";
-
-        // 検索対象：名前、ブランド（英・日）、説明文、タグ（キーと日本語名）
+        // 検索対象：名前、ブランド(表示名)、ブランドID(英語等)、説明文、タグ(キーと日本語名)
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) ||
-            normalize(brandJP).includes(word) ||
+            normalize(item.brand_id || "").includes(word) ||
             normalize(item.desc).includes(word) ||
             item.tags.some(t => normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word))
         );
 
         if (matchFilters && matchSearch) {
             matchCount++;
+
             const gfNote = item.tags.includes('gf') ? '<span class="auto-note">※この商品はグレインフリー（穀物不使用）です</span>' : '';
             const card = document.createElement('div');
             card.className = 'product-card';
@@ -386,9 +397,9 @@ function render() {
                                 公式サイトで詳細を見る
                             </a>
                         ` : ''}
-                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Amazon', '${item.name}')">${getShopButtonContent('Amazon')}</a>
-                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Rakuten', '${item.name}')">${getShopButtonContent('楽天')}</a>
-                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Yahoo', '${item.name}')">${getShopButtonContent('Yahoo!')}</a>
+                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Amazon', '${item.name}')">Amazonで詳細を見る</a>
+                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Rakuten', '${item.name}')">楽天で詳細を見る</a>
+                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Yahoo', '${item.name}')">Yahoo!で詳細を見る</a>
                     </div>
                 </div>
             `;

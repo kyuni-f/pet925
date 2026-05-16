@@ -23,12 +23,12 @@ let BRAND_MASTER = {};
 let ALLOWED_TAGS = [];
 let AUTO_TAG_RULES = []; // rules.csv から読み込むルール
 function updateAllowedTags() {
-    // TAG_MASTER内のキーと、AUTO_TAG_RULES内のキーワードをすべて「許可された言葉」とする
-    ALLOWED_TAGS = [
-        // 重複を除去してフラットな配列にする
+    // 重複を除去して、すべてのカテゴリのタグID、自動タグ用のID、キーワードを許可リストにする
+    ALLOWED_TAGS = [...new Set([
         ...new Set(Object.values(TAG_MASTER).flatMap(obj => Object.keys(obj))),
+        ...AUTO_TAG_RULES.map(r => r.tag),
         ...AUTO_TAG_RULES.map(r => r.keyword)
-    ];
+    ])];
 }
 updateAllowedTags();
 
@@ -57,10 +57,18 @@ async function loadTagsFromCSV() {
             if (category && key && name) {
                 if (!newMaster[category]) newMaster[category] = {};
                 newMaster[category][key] = name;
-            }
+             }
         });
         if (Object.keys(newMaster).length > 0) {
-            TAG_MASTER = newMaster;
+            // カテゴリ名とタグキーを正規化・ソートして保存
+            const sortedMaster = {};
+            Object.keys(newMaster).sort().forEach(cat => {
+                sortedMaster[cat] = {};
+                Object.keys(newMaster[cat]).sort().forEach(key => {
+                    sortedMaster[cat][normalizeText(key)] = newMaster[cat][key];
+                });
+            });
+            TAG_MASTER = sortedMaster;
             updateAllowedTags();
         }
     });
@@ -74,11 +82,17 @@ async function loadBrandsFromCSV() {
             if (row.length < 2 || /key|キー/i.test(row[0])) return;
             const [key, name] = row.map(s => s.trim());
             if (key && name) {
-                newBrands[key.toLowerCase()] = name;
+                // キーを正規化して登録
+                newBrands[normalizeText(key)] = name;
             }
         });
         if (Object.keys(newBrands).length > 0) {
-            BRAND_MASTER = newBrands;
+            // キー（ブランドID）をアルファベット順に並び替えて保存
+            const sortedBrands = {};
+            Object.keys(newBrands).sort().forEach(key => {
+                sortedBrands[key] = newBrands[key];
+            });
+            BRAND_MASTER = sortedBrands;
         }
     });
 }
@@ -145,6 +159,10 @@ function parseCSV(content, useHeaderMap = true) {
             }
         }
     }
+    // 解析終了時に引用符が閉じていない場合は異常
+    if (inQuotes) {
+        validationErrors.push('CSV解析エラー: 閉じられていない引用符 (") が検出されました。データが壊れている可能性があります。');
+    }
     if (currentField || currentRow.length > 0) {
         currentRow.push(currentField);
         rows.push(currentRow);
@@ -169,6 +187,11 @@ function parseCSV(content, useHeaderMap = true) {
     
     return rows.slice(headerIndex + 1).map((rowValues, index) => {
         const obj = {};
+        // --- 列数の不一致チェック ---
+        if (rowValues.length !== headers.length) {
+            validationErrors.push(`行 ${index + headerIndex + 2}: 列数が一致しません (期待: ${headers.length}, 実際: ${rowValues.length}) 商品: ${rowValues[0] || '不明'}`);
+        }
+
         // ヘッダーの数とデータの数が合わない場合への対応
         headers.forEach((header, i) => {
             // データが存在しない列も安全に空文字として処理
@@ -176,13 +199,17 @@ function parseCSV(content, useHeaderMap = true) {
 
             // tags列はスペース区切りを配列に変換
             if (header === 'tags') {
-                // 全角スペースも半角に変換してから分割
-                // 入力ミスを防ぐため小文字に統一
-                const tags = val.replace(/　/g, ' ').toLowerCase().split(/\s+/).filter(t => t);
+                // 分割と同時にすべて正規化を適用
+                const tags = [...new Set(
+                    val.replace(/　/g, ' ')
+                       .split(/\s+/)
+                       .filter(t => t)
+                       .map(t => normalizeText(t))
+                )];
+
                 // タグのバリデーション（チェック）
                 tags.forEach(tag => {
-                    const normalizedTag = normalizeText(tag);
-                    if (!ALLOWED_TAGS.includes(normalizedTag)) {
+                    if (!ALLOWED_TAGS.includes(tag)) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: "${tag}" (商品: ${obj.name || '不明'})`);
                     }
                 });
@@ -191,15 +218,30 @@ function parseCSV(content, useHeaderMap = true) {
                 // ブランド名の検証（小文字で比較）
                 if (val) {
                     const brandKey = normalizeText(val);
-                    if (!BRAND_MASTER[brandKey]) {
+                    // ブランドIDを保持（検索用）
+                    obj['brand_id'] = brandKey;
+                    if (BRAND_MASTER[brandKey]) {
+                        val = BRAND_MASTER[brandKey];
+                    } else {
                         validationErrors.push(`行 ${index + headerIndex + 2}: ブランド "${val}" は brands.csv に未登録です。`);
                     }
+                }
+                obj[header] = val;
+            } else if (header.endsWith('_p')) {
+                // --- 価格バリデーション（数値のみか） ---
+                if (val && !/^\d+$/.test(val)) {
+                    validationErrors.push(`行 ${index + headerIndex + 2}: 価格列 "${header}" に数値以外が含まれています: "${val}"`);
                 }
                 obj[header] = val;
             } else {
                 obj[header] = val;
             }
         });
+
+        // --- 必須項目チェック ---
+        if (!obj.name) {
+            validationErrors.push(`行 ${index + headerIndex + 2}: 商品名(name)が空です。`);
+        }
 
         // --- ブランド名の自動検知（ブランド列が空の場合のみ、名前や説明文から推測） ---
         const rawCheckText = (obj.name || '') + (obj.desc || '');
@@ -210,6 +252,7 @@ function parseCSV(content, useHeaderMap = true) {
                 // キー（正規化済み）または日本語名（正規化して比較）が含まれているか
                 if (checkText.includes(normalizeText(key)) || checkText.includes(normalizeText(name))) {
                     // brands.csv で定義した表示名（name）を採用する
+                    obj.brand_id = key;
                     obj.brand = name;
                     break;
                 }

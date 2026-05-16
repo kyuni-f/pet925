@@ -37,16 +37,18 @@ describe('CSV Parser Tests', () => {
         // タグの準備
         TAG_MASTER['animal'] = { 'dog': '犬' };
         TAG_MASTER['age'] = { 'adult': '成犬' };
+        BRAND_MASTER['nutro'] = 'ニュートロ';
         updateAllowedTags();
 
         const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
-テスト商品,Nutro,dog adult,説明文,2kg,https://example.com,#,#,#,#,ラベル,プロモ,1000,1100,1050`;
+テスト商品,nutro,dog adult,説明文,2kg,https://example.com,#,#,#,#,ラベル,プロモ,1000,1100,1050`;
         const result = parseCSV(csv);
         
         expect(result).toHaveLength(1);
         expect(result[0].name).toBe('テスト商品');
+        expect(result[0].brand).toBe('ニュートロ'); // 正規化されて正式名称になること
         expect(result[0].tags).toEqual(['dog', 'adult']);
-        expect(getValidationErrors()).toHaveLength(0); // バリデーションエラーがないこと
+        expect(getValidationErrors()).toHaveLength(0);
     });
 
     test('useHeaderMap: false の場合、ヘッダーを無視して生の配列を返すこと', () => {
@@ -83,6 +85,56 @@ describe('CSV Parser Tests', () => {
         expect(errors.some(e => e.includes('UnknownBrand'))).toBe(true);
     });
 
+    test('引用符が閉じられていない場合にエラーを検知すること', () => {
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+"閉じていない引用符,Nutro,dog,desc,1kg,#,#,#,#,#,,0,0,0`;
+        parseCSV(csv);
+        const errors = getValidationErrors();
+        expect(errors.some(e => e.includes('閉じられていない引用符'))).toBe(true);
+    });
+
+    test('列数が一致しない行がある場合に警告を出すこと', () => {
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+列が足りない商品,Nutro,dog`;
+        parseCSV(csv);
+        const errors = getValidationErrors();
+        expect(errors.some(e => e.includes('列数が一致しません'))).toBe(true);
+    });
+
+    test('価格列に数値以外が入っている場合に警告を出すこと', () => {
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+テスト商品,Nutro,dog,説明,1kg,#,#,#,#,#,,0,1200円,1,0`;
+        parseCSV(csv);
+        const errors = getValidationErrors();
+        expect(errors.some(e => e.includes('数値以外が含まれています'))).toBe(true);
+    });
+
+    test('商品名(name)が空の場合に警告を出すこと', () => {
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+,Nutro,dog,説明,1kg,#,#,#,#,#,,0,0,0`;
+        parseCSV(csv);
+        const errors = getValidationErrors();
+        expect(errors.some(e => e.includes('商品名(name)が空です'))).toBe(true);
+    });
+
+    test('タグの重複が自動的に排除されること', () => {
+        TAG_MASTER['animal'] = { 'dog': '犬' };
+        updateAllowedTags();
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+重複タグ商品,Nutro,dog dog dog,説明,1kg,#,#,#,#,#,,0,0,0`;
+        const result = parseCSV(csv);
+        expect(result[0].tags).toEqual(['dog']);
+    });
+
+    test('ブランド列が空の場合、商品名からブランドを自動検知できること', () => {
+        BRAND_MASTER['nutro'] = 'ニュートロ';
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+ニュートロの犬缶,,dog,おいしい,1kg,#,#,#,#,#,,0,0,0`;
+        const result = parseCSV(csv);
+        
+        expect(result[0].brand).toBe('ニュートロ');
+    });
+
     test('見出し行（name, brand）が存在しない場合にエラーを投げること', () => {
         const csv = `id,value,info\n1,test,data`;
         
@@ -95,15 +147,6 @@ describe('CSV Parser Tests', () => {
 商品A,ブランドA,dog,説明,1kg,#,#,#,#,#,,0,0,0`;
         const result = parseCSV(csv);
         expect(result).toHaveLength(1);
-    });
-
-    test('ブランド列が空の場合、商品名からブランドを自動検知できること', () => {
-        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
-ニュートロの犬缶,,dog,おいしい,1kg,#,#,#,#,#,,0,0,0`;
-        const result = parseCSV(csv);
-        
-        // BRAND_MASTER['nutro'] = 'ニュートロ' に基づいて補完される
-        expect(result[0].brand).toBe('Nutro');
     });
 
     test('AUTO_TAG_RULES に基づき、説明文からタグが自動付与されること', () => {
