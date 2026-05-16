@@ -375,14 +375,14 @@ function render() {
             const card = document.createElement('div');
             card.className = 'product-card';
 
-            // 画像がない、または未設定（#）の場合は、代わりの画像を表示
-            const defaultImg = "https://images.unsplash.com/photo-1544568100-847a948585b9?q=80&w=1000&auto=format&fit=crop";
+            // 画像がない場合は、軽量なプレースホルダー画像（または自前のno-image.jpg）を指定
+            const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23f4f4f4'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
             const imageSource = (item.img && item.img !== "#") ? item.img : defaultImg;
 
             card.innerHTML = `
                 <div class="img-container">
                     ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
-                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'">
+                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy">
                 </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>
