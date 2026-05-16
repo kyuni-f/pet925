@@ -220,9 +220,7 @@ function parseCSV(content, useHeaderMap = true) {
                     const brandKey = normalizeText(val);
                     // ブランドIDを保持（検索用）
                     obj['brand_id'] = brandKey;
-                    if (BRAND_MASTER[brandKey]) {
-                        val = BRAND_MASTER[brandKey];
-                    } else {
+                    if (!BRAND_MASTER[brandKey]) {
                         validationErrors.push(`行 ${index + headerIndex + 2}: ブランド "${val}" は brands.csv に未登録です。`);
                     }
                 }

@@ -270,7 +270,7 @@ function renderFilters() {
     const categoryLabels = {
         animal: { jp: '種類', en: 'Animal' },
         age: { jp: '年齢', en: 'Age' },
-        cond: { jp: 'こだわり', en: 'Preference' }
+        cond: { jp: 'こだわり・お悩み', en: 'Preference' }
     };
 
     for (const [category, tags] of Object.entries(tagMaster)) {
@@ -303,11 +303,6 @@ function renderFilters() {
         groupDiv.innerHTML = html;
         navContainer.appendChild(groupDiv);
     }
-}
-
-// ショップ名を表示するヘルパー（価格表示を削除）
-function getShopButtonContent(shopName) {
-    return `${shopName}で詳細を確認`;
 }
 
 // 各サイトの最安値検索URLを生成するヘルパー
@@ -359,11 +354,13 @@ function render() {
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
         });
 
-        // 検索対象：名前、ブランド(表示名)、ブランドID(英語等)、説明文、タグ(キーと日本語名)
+        // 検索対象：名前、ブランド(表示名)、ブランドID(英語等)、マスターの日本語名、説明文、タグ
+        const brandJP = (typeof brandMaster !== 'undefined' && item.brand_id) ? brandMaster[item.brand_id] : "";
         const matchSearch = searchWords.every(word => 
             normalize(item.name).includes(word) || 
             normalize(item.brand).includes(word) ||
             normalize(item.brand_id || "").includes(word) ||
+            normalize(brandJP || "").includes(word) ||
             normalize(item.desc).includes(word) ||
             item.tags.some(t => normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word))
         );
@@ -375,14 +372,17 @@ function render() {
             const card = document.createElement('div');
             card.className = 'product-card';
 
-            // 画像がない場合は、軽量なプレースホルダー画像（または自前のno-image.jpg）を指定
+            // 画像がない、または既知の非画像URLの場合は、軽量なプレースホルダー画像を指定
             const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23f4f4f4'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
-            const imageSource = (item.img && item.img !== "#") ? item.img : defaultImg;
+            let imageSource = item.img;
+            if (!item.img || item.img === "#" || item.img === "https://unsplash.com") {
+                imageSource = defaultImg;
+            }
 
             card.innerHTML = `
                 <div class="img-container">
                     ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
-                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy">
+                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async">
                 </div>
                 <div class="card-content">
                     <span class="brand-badge">${item.brand}</span>

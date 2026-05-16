@@ -1,36 +1,37 @@
 const tagMaster = {
-    "animal": {
-        "dog": "犬 (DOG)",
-        "cat": "猫 (CAT)"
-    },
     "age": {
+        "adult": "成犬・成猫 (ADULT)",
         "all_ages": "全年齢用 (ALL AGES)",
         "puppy": "子犬・子猫 (PUPPY)",
-        "adult": "成犬・成猫 (ADULT)",
         "senior": "シニア (SENIOR)"
     },
+    "animal": {
+        "cat": "猫 (CAT)",
+        "dog": "犬 (DOG)"
+    },
     "cond": {
-        "tear": "涙やけ (TEAR)",
-        "diet": "体重管理 (WEIGHT)",
-        "kidney": "腎臓・尿路 (KIDNEY)",
-        "skin": "皮膚ケア (SKIN)",
-        "joint": "関節ケア (JOINT)",
-        "tooth": "歯の健康 (TOOTH)",
         "appetite": "食いつき (APPETITE)",
-        "gf": "穀物不使用 (GF)",
+        "diet": "体重管理 (WEIGHT)",
         "digestive": "消化器ケア (DIGESTIVE)",
-        "lamb": "ラム肉 (LAMB)"
+        "gf": "穀物不使用 (GF)",
+        "joint": "関節ケア (JOINT)",
+        "kidney": "腎臓・尿路 (KIDNEY)",
+        "lamb": "ラム肉 (LAMB)",
+        "skin": "皮膚ケア (SKIN)",
+        "tear": "涙やけ (TEAR)",
+        "tooth": "歯の健康 (TOOTH)"
     }
 };
 const brandMaster = {
     "nutro": "ニュートロ",
-    "supremo": "シュプレモ",
     "royal canin": "ロイヤルカナン",
-    "sheba": "シーバ"
+    "sheba": "シーバ",
+    "supremo": "シュプレモ"
 };
 const productData = [
     {
         "name": "ニュートロ ナチュラル チョイス プロテイン シリーズ ラム＆玄米 成犬用 超小型犬～小型犬用",
+        "brand_id": "nutro",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -53,6 +54,7 @@ const productData = [
     },
     {
         "name": "ニュートロ ナチュラル チョイス スペシャル ケア 減量用 ラム＆玄米 全犬種用 成犬用",
+        "brand_id": "nutro",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -74,6 +76,7 @@ const productData = [
     },
     {
         "name": "ニュートロ ワイルド レシピ 鹿肉 超小型犬～小型犬用 成犬用",
+        "brand_id": "nutro",
         "brand": "Nutro",
         "tags": [
             "dog",
@@ -95,6 +98,7 @@ const productData = [
     },
     {
         "name": "ニュートロ シュプレモ 成犬用 全犬種用",
+        "brand_id": "supremo",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -115,6 +119,7 @@ const productData = [
     },
     {
         "name": "ニュートロ シュプレモ レシピ シリーズ 地中海のレシピ ラム 成犬用",
+        "brand_id": "supremo",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -138,6 +143,7 @@ const productData = [
     },
     {
         "name": "ニュートロ シュプレモ エイジングケア シニア犬用 全犬種用",
+        "brand_id": "supremo",
         "brand": "Supremo",
         "tags": [
             "dog",
@@ -160,6 +166,7 @@ const productData = [
     },
     {
         "name": "ロイヤルカナン ケア シリーズ ミニ デンタル ケア",
+        "brand_id": "royal canin",
         "brand": "Royal Canin",
         "tags": [
             "dog",
@@ -180,6 +187,7 @@ const productData = [
     },
     {
         "name": "ロイヤルカナン ケア シリーズ ミニ ダーマコンフォート",
+        "brand_id": "royal canin",
         "brand": "Royal Canin",
         "tags": [
             "dog",
@@ -201,6 +209,7 @@ const productData = [
     },
     {
         "name": "ロイヤルカナン フィーライン ケア ニュートリション ユリナリー ケア",
+        "brand_id": "royal canin",
         "brand": "Royal Canin",
         "tags": [
             "cat",
@@ -221,6 +230,7 @@ const productData = [
     },
     {
         "name": "シーバ デュオ 香りのまぐろ味セレクション",
+        "brand_id": "sheba",
         "brand": "Sheba",
         "tags": [
             "cat",
@@ -241,6 +251,7 @@ const productData = [
     },
     {
         "name": "ニュートロ ワイルド レシピ サーモン 超小型犬～小型犬用 成犬用",
+        "brand_id": "nutro",
         "brand": "Nutro",
         "tags": [
             "dog",

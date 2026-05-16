@@ -1,7 +1,7 @@
 {
   "name": "pet925",
   "version": "1.0.0",
-  "description": "",
+  "description": "科学的な根拠に基づいたプレミアムペットフードの選定ガイドシステム (Premium Pet Nutrition Guide)",
   "main": "src/convert.js",
   "scripts": {
     "start": "node src/convert.js --watch",
@@ -13,8 +13,12 @@
     "type": "git",
     "url": "git+https://github.com/kyuni-f/pet925.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "petfood",
+    "nutrition",
+    "guide"
+  ],
+  "author": "kyuni",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/kyuni-f/pet925/issues"

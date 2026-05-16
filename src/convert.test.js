@@ -46,7 +46,7 @@ describe('CSV Parser Tests', () => {
         
         expect(result).toHaveLength(1);
         expect(result[0].name).toBe('テスト商品');
-        expect(result[0].brand).toBe('ニュートロ'); // 正規化されて正式名称になること
+        expect(result[0].brand).toBe('nutro'); // 入力の値が維持されること
         expect(result[0].tags).toEqual(['dog', 'adult']);
         expect(getValidationErrors()).toHaveLength(0);
     });
