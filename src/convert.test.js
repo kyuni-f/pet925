@@ -117,6 +117,22 @@ describe('CSV Parser Tests', () => {
         expect(errors.some(e => e.includes('商品名(name)が空です'))).toBe(true);
     });
 
+    test('商品ごとのタグが「種類 -> 年齢 -> こだわり」の順に自動で並び替えられること', () => {
+        // カテゴリの準備
+        TAG_MASTER['animal'] = { 'dog': '犬' };
+        TAG_MASTER['age'] = { 'adult': '成犬' };
+        TAG_MASTER['cond'] = { 'gf': '穀物不使用' };
+        updateAllowedTags();
+
+        // 入力は「こだわり(gf) -> 年齢(adult) -> 種類(dog)」のバラバラな順番
+        const csv = `name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p
+テスト商品,Nutro,gf adult dog,説明,1kg,#,#,#,#,#,,0,0,0`;
+        const result = parseCSV(csv);
+
+        // 期待される順番: dog (animal=1) -> adult (age=2) -> gf (cond=3)
+        expect(result[0].tags).toEqual(['dog', 'adult', 'gf']);
+    });
+
     test('タグの重複が自動的に排除されること', () => {
         TAG_MASTER['animal'] = { 'dog': '犬' };
         updateAllowedTags();
