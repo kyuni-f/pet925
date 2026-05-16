@@ -60,14 +60,30 @@ async function loadTagsFromCSV() {
              }
         });
         if (Object.keys(newMaster).length > 0) {
-            // カテゴリ名とタグキーを正規化・ソートして保存
+            // カテゴリ名とタグキーを正規化・並び替えて保存
+            const categoryOrder = ['animal', 'age', 'cond'];
             const sortedMaster = {};
-            Object.keys(newMaster).sort().forEach(cat => {
-                sortedMaster[cat] = {};
-                Object.keys(newMaster[cat]).sort().forEach(key => {
-                    sortedMaster[cat][normalizeText(key)] = newMaster[cat][key];
-                });
+
+            // 1. 指定された順序（種類 -> 年齢 -> こだわり）に従って配置
+            categoryOrder.forEach(cat => {
+                if (newMaster[cat]) {
+                    sortedMaster[cat] = {};
+                    Object.keys(newMaster[cat]).sort().forEach(key => {
+                        sortedMaster[cat][normalizeText(key)] = newMaster[cat][key];
+                    });
+                }
             });
+
+            // 2. それ以外のカテゴリがあれば最後に追加
+            Object.keys(newMaster).forEach(cat => {
+                if (!categoryOrder.includes(cat)) {
+                    sortedMaster[cat] = {};
+                    Object.keys(newMaster[cat]).sort().forEach(key => {
+                        sortedMaster[cat][normalizeText(key)] = newMaster[cat][key];
+                    });
+                }
+            });
+
             TAG_MASTER = sortedMaster;
             updateAllowedTags();
         }
@@ -315,9 +331,17 @@ async function run() {
         const stats = await fs.stat(CSV_PATH);
         const csvContent = await fs.readFile(CSV_PATH, 'utf8');
         const products = parseCSV(csvContent);
+
+        // タグIDごとのキーワード（エイリアス）をまとめる
+        const tagKeywordsMap = {};
+        AUTO_TAG_RULES.forEach(r => {
+            if (!tagKeywordsMap[r.tag]) tagKeywordsMap[r.tag] = [];
+            tagKeywordsMap[r.tag].push(r.keyword);
+        });
         
         const output = `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
                        `const brandMaster = ${JSON.stringify(BRAND_MASTER, null, 4)};\n` +
+                       `const tagKeywords = ${JSON.stringify(tagKeywordsMap, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;
 
         await fs.writeFile(JS_PATH, output);

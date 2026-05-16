@@ -28,6 +28,31 @@ const brandMaster = {
     "sheba": "シーバ",
     "supremo": "シュプレモ"
 };
+const tagKeywords = {
+    "gf": [
+        "grain_free",
+        "grainfree",
+        "グレインフリー",
+        "穀物不使用"
+    ],
+    "digestive": [
+        "胃腸",
+        "消化",
+        "オナカ",
+        "digestive",
+        "オ腹"
+    ],
+    "diet": [
+        "体重",
+        "肥満",
+        "ダイエット",
+        "減量"
+    ],
+    "lamb": [
+        "ラム肉",
+        "lamb"
+    ]
+};
 const productData = [
     {
         "name": "ニュートロ ナチュラル チョイス プロテイン シリーズ ラム＆玄米 成犬用 超小型犬～小型犬用",

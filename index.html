@@ -29,6 +29,7 @@
         header { padding: 60px 20px; text-align: center; border-bottom: 1px solid #eee; }
         h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; }
         .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--gold); margin-top: 10px; text-transform: uppercase; }
+        .site-intro { max-width: 600px; margin: 30px auto 0; font-size: 0.85rem; color: #666; line-height: 1.8; }
 
         .container { width: 92%; max-width: 1100px; margin: 0 auto; }
 
@@ -129,6 +130,9 @@
 <header>
     <h1>pet925</h1>
     <div class="sub-copy">Scientific Nutrition x High Style</div>
+    <div class="site-intro">
+        ー愛犬・愛猫にぴったりのフードを探せるお手伝いをー
+    </div>
 </header>
 
 <div class="container">
@@ -362,7 +366,11 @@ function render() {
             normalize(item.brand_id || "").includes(word) ||
             normalize(brandJP || "").includes(word) ||
             normalize(item.desc).includes(word) ||
-            item.tags.some(t => normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word))
+            item.tags.some(t => {
+                if (normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word)) return true;
+                const aliases = (typeof tagKeywords !== 'undefined') ? tagKeywords[t] : null;
+                return aliases && aliases.some(a => normalize(a).includes(word));
+            })
         );
 
         if (matchFilters && matchSearch) {
