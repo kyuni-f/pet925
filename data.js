@@ -1,13 +1,13 @@
 const tagMaster = {
+    "animal": {
+        "cat": "猫 (CAT)",
+        "dog": "犬 (DOG)"
+    },
     "age": {
         "adult": "成犬・成猫 (ADULT)",
         "all_ages": "全年齢用 (ALL AGES)",
         "puppy": "子犬・子猫 (PUPPY)",
         "senior": "シニア (SENIOR)"
-    },
-    "animal": {
-        "cat": "猫 (CAT)",
-        "dog": "犬 (DOG)"
     },
     "cond": {
         "appetite": "食いつき (APPETITE)",

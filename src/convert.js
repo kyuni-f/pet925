@@ -53,7 +53,8 @@ async function loadTagsFromCSV() {
         rows.forEach(row => {
             // ヘッダー行や空行をスキップ
             if (row.length < 3 || /category|カテゴリ/i.test(row[0])) return;
-            const [category, key, name] = row.map(s => s.trim());
+            const [rawCategory, key, name] = row.map(s => s.trim());
+            const category = rawCategory.toLowerCase(); // カテゴリ名を小文字に統一して判定ミスを防ぐ
             if (category && key && name) {
                 if (!newMaster[category]) newMaster[category] = {};
                 newMaster[category][key] = name;
@@ -222,6 +223,18 @@ function parseCSV(content, useHeaderMap = true) {
                        .filter(t => t)
                        .map(t => normalizeText(t))
                 )];
+
+                // 商品カード内のタグの並び順も「種類 -> 年齢 -> お悩み・こだわり」に固定する
+                tags.sort((a, b) => {
+                    const getOrder = (tag) => {
+                        // TAG_MASTERの定義順序に従って重みを付ける
+                        if (TAG_MASTER.animal && TAG_MASTER.animal[tag]) return 1;
+                        if (TAG_MASTER.age && TAG_MASTER.age[tag]) return 2;
+                        if (TAG_MASTER.cond && TAG_MASTER.cond[tag]) return 3;
+                        return 4;
+                    };
+                    return getOrder(a) - getOrder(b);
+                });
 
                 // タグのバリデーション（チェック）
                 tags.forEach(tag => {
