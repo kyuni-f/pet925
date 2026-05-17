@@ -22,6 +22,28 @@ const tagMaster = {
         "tooth": "歯の健康 (TOOTH)"
     }
 };
+const categoryMaster = {
+    "type": {
+        "jp": "カテゴリー",
+        "en": "Category",
+        "multi": false
+    },
+    "animal": {
+        "jp": "種類",
+        "en": "Animal",
+        "multi": false
+    },
+    "age": {
+        "jp": "年齢",
+        "en": "Age",
+        "multi": false
+    },
+    "cond": {
+        "jp": "こだわり・お悩み",
+        "en": "Preference",
+        "multi": true
+    }
+};
 const brandMaster = {
     "nutro": "ニュートロ",
     "royal canin": "ロイヤルカナン",
@@ -55,7 +77,7 @@ const tagKeywords = {
 };
 const productData = [
     {
-        "name": "ニュートロ ナチュラル チョイス プロテイン シリーズ ラム＆玄米 成犬用 超小型犬～小型犬用",
+        "name": "ナチュラル チョイス プロテイン シリーズ ラム＆玄米 成犬用 超小型犬～小型犬用",
         "brand_id": "nutro",
         "brand": "Nutro",
         "tags": [
@@ -66,6 +88,7 @@ const productData = [
             "tear"
         ],
         "desc": "高品質なラム肉を使用。食物アレルギーに配慮し、健康な皮膚・被毛の維持をサポートします。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -88,6 +111,7 @@ const productData = [
             "lamb"
         ],
         "desc": "低カロリー・低脂質設計。肥満が気になる愛犬の健康的な減量をサポートします。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -110,6 +134,7 @@ const productData = [
             "tear"
         ],
         "desc": "野生の食性に近い高タンパク・穀物不使用レシピ。鹿肉を使用し、アレルギーや涙やけにも配慮。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -131,6 +156,7 @@ const productData = [
             "tear"
         ],
         "desc": "17種類の厳選された自然素材をブレンド。栄養バランスに優れ、健康な体づくりを支えます。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -155,6 +181,7 @@ const productData = [
             "digestive"
         ],
         "desc": "ラム肉を第一主原料に使用。穀物不使用で消化に優しく、目元の健康（涙やけ）が気になる子にも。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -178,6 +205,7 @@ const productData = [
             "digestive"
         ],
         "desc": "シニア期の健康維持に配慮。関節の健康を守る栄養素と、高い消化性を兼ね備えています。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -199,6 +227,7 @@ const productData = [
             "tooth"
         ],
         "desc": "歯垢・歯石が気になる小型犬用。独自の粒形状で、噛むことで歯の汚れを落とします。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -221,6 +250,7 @@ const productData = [
             "tear"
         ],
         "desc": "皮膚が敏感な犬用。オメガ3・6脂肪酸を配合し、健康な皮膚の状態を維持します。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -242,6 +272,7 @@ const productData = [
             "kidney"
         ],
         "desc": "健康な尿を維持したい猫用。ミネラルバランスを調整し、尿路結石の形成を抑制します。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -263,6 +294,7 @@ const productData = [
             "appetite"
         ],
         "desc": "外はカリカリ、中はクリーミー。食欲にムラがある猫ちゃんも喜ぶ贅沢な味わいです。",
+        "size": "#",
         "img": "https://unsplash.com",
         "amz": "#",
         "rak": "#",
@@ -284,6 +316,7 @@ const productData = [
             "gf"
         ],
         "desc": "すり身のサーモンを第一主原料に使用。肉食の祖先が食べていた食事を再現した高タンパク・穀物不使用のフードです。",
+        "size": "#",
         "img": "https://images.unsplash.com/photo-1599043513900-ed6fe01d3833?q=80&w=1000&auto=format&fit=crop",
         "amz": "#",
         "rak": "#",

@@ -39,13 +39,18 @@
         #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
         /* こだわり条件フィルターナビゲーション */
-        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
+        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; }
         .filter-group { margin-bottom: 25px; }
         
         /* カテゴリヘッダーの改善 */
-        .group-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; padding-left: 5px; }
+        .group-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 5px; cursor: pointer; user-select: none; transition: 0.2s; }
+        .group-header:hover { background: var(--gray); }
         .group-label-jp { font-size: 0.95rem; font-weight: 600; color: var(--dark); }
         .group-label-en { font-size: 0.6rem; font-weight: 700; color: #bbb; letter-spacing: 1px; text-transform: uppercase; }
+        .collapse-icon { font-size: 0.6rem; color: #ccc; transition: 0.3s; margin-left: auto; }
+        .filter-group.collapsed .filter-wrap-box { display: none; }
+        .filter-group.collapsed .collapse-icon { transform: rotate(-90deg); }
+
         .multi-badge { 
             font-size: 0.75rem; color: var(--gold); border: 1px solid var(--gold); 
             padding: 3px 12px; border-radius: 4px; font-weight: bold;
@@ -89,6 +94,15 @@
             border-color: var(--dark);
         }
 
+        /* アクティブフィルターのチップ表示 */
+        .active-chips-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; min-height: 32px; }
+        .chip { background: var(--gold); color: #fff; font-size: 0.65rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.3s; letter-spacing: 1px; }
+        .chip:hover { opacity: 0.8; transform: scale(0.95); }
+        .chip-close { font-size: 0.8rem; line-height: 1; }
+        .clear-all { font-size: 0.65rem; color: #999; text-decoration: underline; cursor: pointer; margin-left: 10px; border: none; background: none; padding: 5px; }
+        .clear-all:hover { color: var(--dark); }
+        .active-chips-label { font-size: 0.6rem; color: #bbb; font-weight: bold; margin-right: 5px; }
+
         /* 商品カード：カタログのような美しさ */
         #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 50px; margin-top: 40px; }
         .product-card { display: flex; flex-direction: column; }
@@ -109,6 +123,8 @@
         
         /* 特典情報のテキスト */
         .promo-text { font-size: 0.75rem; color: #e67e22; font-weight: bold; margin-bottom: 10px; display: block; }
+        /* おすすめバッジ（ラベル用） */
+        .featured-badge { position: absolute; top: 10px; left: 10px; background: var(--gold); color: #fff; padding: 4px 12px; font-size: 0.7rem; font-weight: bold; z-index: 10; }
 
         .no-results { grid-column: 1 / -1; text-align: center; padding: 100px 20px; color: #999; font-size: 0.9rem; letter-spacing: 2px; }
 
@@ -139,6 +155,8 @@
         <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render(true)">
     </div>
 
+    <div id="active-chips-container" class="active-chips-area"></div>
+
     <div class="filter-nav" id="filter-nav-container"></div>
 
     <div id="product-list"></div>
@@ -146,11 +164,23 @@
 
 <script>
 // --- 状態管理 ---
-const singleSelectCats = ['animal', 'age'];
-let activeFilters = {};
+
+// data.jsが未更新（categories.csv未反映）の場合のフォールバック安全装置
+if (typeof categoryMaster === 'undefined') {
+    window.categoryMaster = {
+        type: { jp: 'カテゴリー', en: 'Category', multi: false },
+        animal: { jp: '種類', en: 'Animal', multi: false },
+        age: { jp: '年齢', en: 'Age', multi: false },
+        cond: { jp: 'こだわり・お悩み', en: 'Preference', multi: true }
+    };
+}
+
+let activeFilters = {}; // 内部で cat: value(or array) を保持
 let searchTrackTimer = null;
 
-// --- ユーザー行動追跡 (将来的な集計用) ---
+// カテゴリが単一選択かどうかを判定するヘルパー（categoryMasterを参照）
+const isMulti = (cat) => (typeof categoryMaster !== 'undefined' && categoryMaster[cat]) ? categoryMaster[cat].multi : false;
+
 function trackEvent(category, action, label) {
     // 開発環境（localhostなど）でのみログを表示し、本番での負荷をゼロに近づける
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
@@ -218,9 +248,9 @@ function initFilters() {
     for (const cat in tagMaster) {
         if (params.has(cat)) {
             const val = params.get(cat);
-            activeFilters[cat] = singleSelectCats.includes(cat) ? val : val.split(',');
+            activeFilters[cat] = isMulti(cat) ? val.split(',') : val;
         } else {
-            activeFilters[cat] = singleSelectCats.includes(cat) ? "all" : [];
+            activeFilters[cat] = isMulti(cat) ? [] : "all";
         }
     }
 }
@@ -229,13 +259,13 @@ function toggleFilter(btn) {
     const category = btn.getAttribute('data-cat');
     const value = btn.getAttribute('data-val');
 
-    if (singleSelectCats.includes(category)) {
-        // 単一選択（種類・年齢）
+    if (!isMulti(category)) {
+        // 単一選択
         btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         activeFilters[category] = value;
     } else {
-        // 複数選択（こだわり・お悩み）
+        // 複数選択
         if (value === 'all') {
             activeFilters[category] = [];
             btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -263,34 +293,56 @@ function toggleFilter(btn) {
     render(false); // フィルター時は即時描画（URL更新は済んでいるのでタイマー側では行わない）
 }
 
+function toggleGroupCollapse(header) {
+    const group = header.parentElement;
+    group.classList.toggle('collapsed');
+}
+
+function clearAllFilters() {
+    for (const cat in categoryMaster) {
+        activeFilters[cat] = isMulti(cat) ? [] : "all";
+    }
+    document.getElementById('search-input').value = '';
+    
+    // UIの表示状態を物理的にリセット（activeクラスの除去など）
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === 'all') btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+    
+    trackEvent('Filter', 'clear_all', 'all');
+    updateURL();
+    render(false);
+}
+
 function renderFilters() {
     if (typeof tagMaster === 'undefined') return;
     
     const navContainer = document.getElementById('filter-nav-container');
     navContainer.innerHTML = '';
 
-    const categoryLabels = {
-        animal: { jp: '種類', en: 'Animal' },
-        age: { jp: '年齢', en: 'Age' },
-        cond: { jp: 'こだわり・お悩み', en: 'Preference' }
-    };
-
     for (const [category, tags] of Object.entries(tagMaster)) {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'filter-group';
         
-        const isMulti = !singleSelectCats.includes(category);
-        if (isMulti) groupDiv.setAttribute('data-multiselect', 'true');
+        const catInfo = categoryMaster[category] || { jp: category, en: category.toUpperCase(), multi: true };
+        if (catInfo.multi) groupDiv.setAttribute('data-multiselect', 'true');
         
-        const labels = categoryLabels[category] || { jp: category, en: category.toUpperCase() };
+        // 「すべて」ボタンがアクティブかどうかを現在の状態(activeFilters)から判定
+        const isAllActive = catInfo.multi 
+            ? (!activeFilters[category] || activeFilters[category].length === 0)
+            : (activeFilters[category] === 'all');
+        const allActiveClass = isAllActive ? 'active' : '';
+
         let html = `
-            <div class="group-header">
-                <span class="group-label-jp">${labels.jp}</span>
-                <span class="group-label-en">${labels.en}</span>
-                ${isMulti ? '<span class="multi-badge">複数選択可</span>' : ''}
+            <div class="group-header" onclick="toggleGroupCollapse(this)">
+                <span class="group-label-jp">${catInfo.jp}</span>
+                <span class="group-label-en">${catInfo.en}</span>
+                ${catInfo.multi ? '<span class="multi-badge">複数選択可</span>' : ''}
+                <span class="collapse-icon">▲</span>
             </div>
             <div class="filter-wrap-box" id="filter-${category}">
-                <button class="filter-btn active" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>
+                <button class="filter-btn ${allActiveClass}" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>
         `;
         
         for (const [tagKey, tagName] of Object.entries(tags)) {
@@ -305,6 +357,44 @@ function renderFilters() {
         groupDiv.innerHTML = html;
         navContainer.appendChild(groupDiv);
     }
+}
+
+function renderActiveChips() {
+    const container = document.getElementById('active-chips-container');
+    const searchVal = document.getElementById('search-input').value.trim();
+    
+    // 表示用にタグ名を取得するためのマップ作成
+    const tagLookup = {};
+    Object.values(tagMaster).forEach(group => Object.assign(tagLookup, group));
+
+    let chipsHtml = '';
+    let hasActive = false;
+
+    // 検索ワード
+    if (searchVal) {
+        chipsHtml += `<div class="chip" onclick="document.getElementById('search-input').value='';render(true);">${searchVal} <span class="chip-close">×</span></div>`;
+        hasActive = true;
+    }
+
+    // フィルタータグ
+    for (const [cat, val] of Object.entries(activeFilters)) {
+        const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
+        values.forEach(v => {
+            chipsHtml += `<div class="chip" onclick="removeSingleFilter('${cat}', '${v}')">${tagLookup[v] || v} <span class="chip-close">×</span></div>`;
+            hasActive = true;
+        });
+    }
+
+    if (hasActive) {
+        container.innerHTML = `<span class="active-chips-label">ACTIVE:</span>` + chipsHtml + `<button class="clear-all" onclick="clearAllFilters()">CLEAR ALL</button>`;
+    } else {
+        container.innerHTML = '';
+    }
+}
+
+function removeSingleFilter(cat, val) {
+    const btn = document.querySelector(`.filter-btn[data-cat="${cat}"][data-val="${val}"]`);
+    if (btn) toggleFilter(btn);
 }
 
 // 各サイトの最安値検索URLを生成するヘルパー
@@ -325,6 +415,8 @@ function render(isTyping = false) {
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     
+    renderActiveChips(); // チップスの更新
+
     list.innerHTML = "";
     let matchCount = 0;
 
@@ -347,10 +439,13 @@ function render(isTyping = false) {
     }, 800);
 
     productData.forEach(item => {
-        // すべてのカテゴリの条件に合致するかチェック
-        const matchFilters = Object.keys(tagMaster).every(cat => {
+
+        // すべてのカテゴリ（categoryMasterに定義されたもの）の条件に合致するかチェック
+        const catsToCheck = (typeof categoryMaster !== 'undefined') ? Object.keys(categoryMaster) : Object.keys(tagMaster);
+        const matchFilters = catsToCheck.every(cat => {
+            if (!tagMaster || !tagMaster[cat]) return true; // そのカテゴリにタグが一つもない場合はスルー
             const filterVal = activeFilters[cat];
-            if (singleSelectCats.includes(cat)) {
+            if (!isMulti(cat)) {
                 return filterVal === 'all' || item.tags.includes(filterVal);
             }
             return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
@@ -390,11 +485,21 @@ function render(isTyping = false) {
                     <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async">
                 </div>
                 <div class="card-content">
-                    <span class="brand-badge">${item.brand}</span>
+                    <div>
+                        <span class="brand-badge">${item.brand}</span>
+                    </div>
                     <div class="product-name">${item.name}</div>
                     <p class="description">${item.desc || ""}</p>
                     <div class="tag-list">${item.tags
-                        .filter(t => !(tagMaster.animal && tagMaster.animal[t]) && !(tagMaster.age && tagMaster.age[t]))
+                        .filter(t => {
+                            // 単一選択カテゴリ（種類・年齢等）のタグは、冗長なのでカード内では非表示にする。安全のため存在チェックを入れる。
+                            if (typeof categoryMaster === 'undefined' || !categoryMaster) return true;
+                            return !Object.keys(categoryMaster).some(cat => {
+                                const multi = isMulti(cat);
+                                const isMemberOfCat = tagMaster[cat] && tagMaster[cat][t];
+                                return !multi && isMemberOfCat;
+                            });
+                        })
                         .map(t => `<span class="tag">${tagLookup[t] || t}</span>`)
                         .join('')}</div>
                     <div class="shop-links">

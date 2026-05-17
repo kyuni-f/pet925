@@ -5,6 +5,7 @@ const {
     clearValidationErrors, 
     TAG_MASTER, 
     BRAND_MASTER, 
+    CATEGORY_MASTER,
     AUTO_TAG_RULES,
     updateAllowedTags 
 } = require('./convert');
@@ -17,6 +18,7 @@ describe('CSV Parser Tests', () => {
         // マスターデータを空にする
         Object.keys(TAG_MASTER).forEach(k => delete TAG_MASTER[k]);
         Object.keys(BRAND_MASTER).forEach(k => delete BRAND_MASTER[k]);
+        Object.keys(CATEGORY_MASTER).forEach(k => delete CATEGORY_MASTER[k]);
         AUTO_TAG_RULES.length = 0;
         
         // 基本的なテスト用データをセット
@@ -47,6 +49,7 @@ describe('CSV Parser Tests', () => {
         expect(result).toHaveLength(1);
         expect(result[0].name).toBe('テスト商品');
         expect(result[0].brand).toBe('nutro'); // 入力の値が維持されること
+        expect(result[0].size).toBe('2kg');
         expect(result[0].tags).toEqual(['dog', 'adult']);
         expect(getValidationErrors()).toHaveLength(0);
     });
@@ -118,7 +121,12 @@ describe('CSV Parser Tests', () => {
     });
 
     test('商品ごとのタグが「種類 -> 年齢 -> こだわり」の順に自動で並び替えられること', () => {
-        // カテゴリの準備
+        // カテゴリの定義順序をセット（これが並び順のマスターになる）
+        CATEGORY_MASTER['animal'] = { jp: '種類', multi: false };
+        CATEGORY_MASTER['age'] = { jp: '年齢', multi: false };
+        CATEGORY_MASTER['cond'] = { jp: 'こだわり', multi: true };
+
+        // 各カテゴリに属するタグの準備
         TAG_MASTER['animal'] = { 'dog': '犬' };
         TAG_MASTER['age'] = { 'adult': '成犬' };
         TAG_MASTER['cond'] = { 'gf': '穀物不使用' };

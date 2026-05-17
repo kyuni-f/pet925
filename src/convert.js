@@ -18,6 +18,7 @@ function normalizeText(str) {
 
 // タグのマスター定義（表示名とカテゴリを管理）
 let TAG_MASTER = {};
+let CATEGORY_MASTER = {};
 let BRAND_MASTER = {};
 // 許可タグリストを動的に更新する関数
 let ALLOWED_TAGS = [];
@@ -47,6 +48,22 @@ async function loadSettingsCSV(fileName, callback) {
     }
 }
 
+async function loadCategoriesFromCSV() {
+    await loadSettingsCSV('categories.csv', (rows) => {
+        const newCats = {};
+        rows.forEach(row => {
+            if (row.length < 4 || /key|キー/i.test(row[0])) return;
+            const [key, jp, en, type] = row.map(s => s.trim());
+            if (key) {
+                newCats[key] = { jp, en, multi: type === 'multi' };
+            }
+        });
+        if (Object.keys(newCats).length > 0) {
+            CATEGORY_MASTER = newCats;
+        }
+    });
+}
+
 async function loadTagsFromCSV() {
     await loadSettingsCSV('tags.csv', (rows) => {
         const newMaster = {};
@@ -62,7 +79,7 @@ async function loadTagsFromCSV() {
         });
         if (Object.keys(newMaster).length > 0) {
             // カテゴリ名とタグキーを正規化・並び替えて保存
-            const categoryOrder = ['animal', 'age', 'cond'];
+            const categoryOrder = Object.keys(CATEGORY_MASTER).length > 0 ? Object.keys(CATEGORY_MASTER) : ['type', 'animal', 'age', 'cond'];
             const sortedMaster = {};
 
             // 1. 指定された順序（種類 -> 年齢 -> こだわり）に従って配置
@@ -227,11 +244,12 @@ function parseCSV(content, useHeaderMap = true) {
                 // 商品カード内のタグの並び順も「種類 -> 年齢 -> お悩み・こだわり」に固定する
                 tags.sort((a, b) => {
                     const getOrder = (tag) => {
-                        // TAG_MASTERの定義順序に従って重みを付ける
-                        if (TAG_MASTER.animal && TAG_MASTER.animal[tag]) return 1;
-                        if (TAG_MASTER.age && TAG_MASTER.age[tag]) return 2;
-                        if (TAG_MASTER.cond && TAG_MASTER.cond[tag]) return 3;
-                        return 4;
+                        // CATEGORY_MASTERの定義順序に従って動的に重みを付ける
+                        const categories = Object.keys(CATEGORY_MASTER);
+                        for (let i = 0; i < categories.length; i++) {
+                            if (TAG_MASTER[categories[i]] && TAG_MASTER[categories[i]][tag]) return i + 1;
+                        }
+                        return categories.length + 1;
                     };
                     return getOrder(a) - getOrder(b);
                 });
@@ -337,6 +355,7 @@ async function run() {
         }
 
         // 設定ファイルと商品データを読み込む
+        await loadCategoriesFromCSV();
         await loadTagsFromCSV();
         await loadBrandsFromCSV();
         await loadRulesFromCSV();
@@ -353,6 +372,7 @@ async function run() {
         });
         
         const output = `const tagMaster = ${JSON.stringify(TAG_MASTER, null, 4)};\n` +
+                       `const categoryMaster = ${JSON.stringify(CATEGORY_MASTER, null, 4)};\n` +
                        `const brandMaster = ${JSON.stringify(BRAND_MASTER, null, 4)};\n` +
                        `const tagKeywords = ${JSON.stringify(tagKeywordsMap, null, 4)};\n` +
                        `const productData = ${JSON.stringify(products, null, 4)};\n`;
@@ -422,6 +442,7 @@ module.exports = {
     normalizeText,
     TAG_MASTER,
     BRAND_MASTER,
+    CATEGORY_MASTER,
     AUTO_TAG_RULES,
     updateAllowedTags,
     getValidationErrors: () => validationErrors, 

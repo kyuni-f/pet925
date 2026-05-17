@@ -146,7 +146,7 @@ Sub ExportAllSheetsToCSV
     args(2).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
 
     Dim sheetNames As Variant
-    sheetNames = Array("products", "tags", "brands", "rules")
+    sheetNames = Array("products", "tags", "brands", "rules", "categories")
 
     For Each sName In sheetNames
         If oSheets.hasByName(sName) Then
@@ -181,6 +181,8 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
         mandatoryCols = Array(0, 1, 2) ' category, key, name
     ElseIf sNameLower = "brands" Then
         mandatoryCols = Array(0, 1)    ' key, name
+    ElseIf sNameLower = "categories" Then
+        mandatoryCols = Array(0, 1, 2, 3) ' key, jp, en, type
     Else
         mandatoryCols = Array()
     End If
