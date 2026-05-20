@@ -4,10 +4,9 @@
   "description": "科学的な根拠に基づいたプレミアムペットフードの選定ガイドシステム (Premium Pet Nutrition Guide)",
   "main": "src/convert.js",
   "scripts": {
-    "start": "node src/convert.js --watch",
-    "test": "jest src",
-    "build": "node src/convert.js",
-    "deploy": "npm test && npm run build && git add . && git commit -m \"deploy: update logic and data\" && git push"
+    "start": "python3 csv_to_json.py",
+    "build": "python3 csv_to_json.py",
+    "deploy": "npm run build && git add . && git commit -m \"deploy: update logic and data via python\" && git push"
   },
   "repository": {
     "type": "git",

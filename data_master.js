@@ -51,27 +51,8 @@ const brandMaster = {
     "supremo": "シュプレモ"
 };
 const tagKeywords = {
-    "gf": [
-        "grain_free",
-        "grainfree",
-        "グレインフリー",
-        "穀物不使用"
-    ],
-    "digestive": [
-        "胃腸",
-        "消化",
-        "オナカ",
-        "digestive",
-        "オ腹"
-    ],
-    "diet": [
-        "体重",
-        "肥満",
-        "ダイエット",
-        "減量"
-    ],
-    "lamb": [
-        "ラム肉",
-        "lamb"
-    ]
+    "gf": ["grain_free", "grainfree", "グレインフリー", "穀物不使用"],
+    "digestive": ["胃腸", "消化", "オナカ", "digestive", "オ腹"],
+    "diet": ["体重", "肥満", "ダイエット", "減量"],
+    "lamb": ["ラム肉", "lamb"]
 };

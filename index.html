@@ -18,8 +18,8 @@
     </script>
     <title>pet925 | Premium Pet Nutrition</title>
     <meta name="description" content="愛犬・愛猫へのこだわりから最適なプレミアムフードを見つける選定ガイド。グレインフリー、特定のタンパク源、低カロリーなど、飼い主様のこだわりから最高の一皿を提案します。">
-    <!-- データの読み込み -->
-    <script src="data.js"></script>
+    <!-- マスタデータの読み込み -->
+    <script src="data_master.js"></script>
 
     <style>
         :root { --gold: #c5a059; --dark: #1a1a1a; --gray: #f4f4f4; }
@@ -52,22 +52,6 @@
         body.state-results .sub-copy,
         body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
-        /* 検索・フィルター実行時の「切り替え」スタイル (旧is-searching互換) */
-        body.is-searching header { 
-            top: 0; 
-            z-index: 1000; 
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-        }
-        body.is-searching h1 { font-size: 1.2rem; letter-spacing: 4px; }
-        body.is-searching .sub-copy,
-        body.is-searching .site-intro { 
-            opacity: 0; 
-            max-height: 0; 
-            margin-top: 0; 
-            pointer-events: none; 
-        }
-        body.is-searching .search-container { margin: 5px 0 10px; }
-
         .container { width: 92%; max-width: 1100px; margin: 0 auto; }
 
         /* 実行ボタンと戻るボタン */
@@ -88,13 +72,12 @@
         .btn-back-to-search:hover { color: var(--dark); }
 
         /* 検索バー：ミニマルデザイン */
-        .search-container { margin: 20px auto; max-width: 600px; } /* Default state: Centered below intro */
+        .search-container { margin: 20px auto; max-width: 600px; }
         #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
         #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
         /* こだわり条件フィルターナビゲーション */
-        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; transition: top 0.6s; }
-        body.is-searching .filter-nav { top: 70px; } /* Adjusted top for new compact header height */
+        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; }
         .filter-group { margin-bottom: 25px; }
         
         /* カテゴリヘッダーの改善 */
@@ -247,18 +230,17 @@
 <script>
 // --- 状態管理 ---
 
-// data.jsが未更新（categories.csv未反映）の場合のフォールバック安全装置
-if (typeof categoryMaster === 'undefined') {
-    window.categoryMaster = {
-        type: { jp: 'カテゴリー', en: 'Category', multi: false },
-        animal: { jp: '種類', en: 'Animal', multi: false },
-        age: { jp: '年齢', en: 'Age', multi: false },
-        cond: { jp: 'こだわり・お悩み', en: 'Preference', multi: true }
-    };
-}
+// マスターデータが存在しない場合の空オブジェクト初期化（エラー防止）
+if (typeof categoryMaster === 'undefined') window.categoryMaster = {};
+if (typeof tagMaster === 'undefined') window.tagMaster = {};
+if (typeof brandMaster === 'undefined') window.brandMaster = {};
+if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
 
 let activeFilters = {}; // 内部で cat: value(or array) を保持
 let searchTrackTimer = null;
+let tagLookupMap = {}; // 事前生成したタグ辞書を保持
+let searchWorker = null; // Web Worker インスタンス
+let isWorkerReady = false;
 
 // --- ページネーション（1万件対応用） ---
 let visibleCount = 30; // 最初に見せる件数
@@ -338,16 +320,6 @@ function updateURL() {
     }
 }
 
-// --- ユーティリティ (convert.jsと共通の正規化ロジック) ---
-const normalize = (str) => {
-    if (!str) return "";
-    return str
-        .normalize('NFKC') // Unicode正規化 (全角英数・記号の半角化を含む)
-        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
-        .toLowerCase()
-        .trim();
-};
-
 // --- フィルター関連 ---
 function initFilters() {
     if (typeof tagMaster === 'undefined') return;
@@ -358,9 +330,9 @@ function initFilters() {
     if (params.has('q')) {
         document.getElementById('search-input').value = params.get('q');
     }
-
-    // 商品の有無に関わらず、定義されている全てのカテゴリを初期化する
-    const cats = (typeof categoryMaster !== 'undefined') ? Object.keys(categoryMaster) : Object.keys(tagMaster);
+    
+    // 存在する全てのカテゴリ（tagMasterのキー）を初期化する
+    const cats = Object.keys(tagMaster);
     for (const cat of cats) {
         if (params.has(cat)) {
             const val = params.get(cat);
@@ -425,8 +397,9 @@ function toggleGroupCollapse(header) {
 }
 
 function clearAllFilters() {
-    for (const cat in categoryMaster) {
-        activeFilters[cat] = getDefaultFilterValue(cat);
+    // activeFilters に存在する全てのキーに対してリセットをかける
+    for (const cat in activeFilters) {
+        activeFilters[cat] = (typeof tagMaster !== 'undefined' && tagMaster[cat]) ? getDefaultFilterValue(cat) : "all";
     }
     document.getElementById('search-input').value = '';
     
@@ -489,7 +462,6 @@ function renderFilters() {
 function renderActiveChips() {
     const container = document.getElementById('active-chips-container');
     const searchVal = document.getElementById('search-input').value.trim();
-    const tagLookup = getTagLookup();
 
     let chipsHtml = '';
     let hasActive = false;
@@ -504,7 +476,7 @@ function renderActiveChips() {
     for (const [cat, val] of Object.entries(activeFilters)) {
         const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
         values.forEach(v => {
-            chipsHtml += `<div class="chip" onclick="removeSingleFilter('${cat}', '${v}')">${tagLookup[v] || v} <span class="chip-close">×</span></div>`;
+            chipsHtml += `<div class="chip" onclick="removeSingleFilter('${cat}', '${v}')">${tagLookupMap[v] || v} <span class="chip-close">×</span></div>`;
             hasActive = true;
         });
     }
@@ -531,14 +503,11 @@ function getSearchUrl(shop, brand, name, fallbackUrl) {
     return '#';
 }
 
-// --- メイン描画処理 ---
+// --- ワーカーへ検索を依頼 ---
 function render(isTyping = false) {
-    if (typeof productData === 'undefined' || !productData) return;
-    const submitBtn = document.getElementById('main-submit-btn');
+    if (!searchWorker || !isWorkerReady) return;
     if (isTyping) visibleCount = PAGE_SIZE; // 検索入力時はリセット
 
-    const list = document.getElementById('product-list');
-    const loadMoreArea = document.getElementById('load-more-area');
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
 
@@ -549,130 +518,88 @@ function render(isTyping = false) {
     
     renderActiveChips(); // チップスの更新
 
-    list.innerHTML = "";
-    loadMoreArea.innerHTML = "";
-    let matchCount = 0;
-    const tagLookup = getTagLookup();
-
-    // デバウンス：入力が止まってからURLを更新（GA4イベントの連打を防ぐ）
-    clearTimeout(searchTrackTimer);
-    const currentMatchCount = () => matchCount; // クロージャで現在のカウントを取得可能にする
-    searchTrackTimer = setTimeout(() => {
-        if (isTyping) updateURL(); // タイピング時のみURLを遅延更新して計測
-        if (searchWords.length > 0 && currentMatchCount() === 0) {
-            trackEvent('Search', 'no_match', searchWords.join(' '));
-        }
-    }, 800);
-
-    productData.forEach(item => {
-
-        // すべてのカテゴリ（categoryMasterに定義されたもの）の条件に合致するかチェック
-        const catsToCheck = (typeof categoryMaster !== 'undefined') ? Object.keys(categoryMaster) : Object.keys(tagMaster);
-        const matchFilters = catsToCheck.every(cat => {
-            if (!tagMaster || !tagMaster[cat]) return true; // そのカテゴリにタグが一つもない場合はスルー
-            const filterVal = activeFilters[cat];
-            if (!isMulti(cat)) {
-                return filterVal === 'all' || item.tags.includes(filterVal);
-            }
-            return filterVal.length === 0 || filterVal.every(t => item.tags.includes(t));
-        });
-
-        // 検索対象：名前、ブランド(表示名)、ブランドID(英語等)、マスターの日本語名、説明文、タグ
-        const brandJP = (typeof brandMaster !== 'undefined' && item.brand_id) ? brandMaster[item.brand_id] : "";
-        const matchSearch = searchWords.every(word => 
-            normalize(item.name).includes(word) || 
-            normalize(item.brand).includes(word) ||
-            normalize(item.brand_id || "").includes(word) ||
-            normalize(brandJP || "").includes(word) ||
-            normalize(item.desc).includes(word) ||
-            normalize(item.size || "").includes(word) || // この行を追加
-            item.tags.some(t => {
-                if (normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word)) return true;
-                const aliases = (typeof tagKeywords !== 'undefined') ? tagKeywords[t] : null;
-                return aliases && aliases.some(a => normalize(a).includes(word));
-            })
-        );
-
-        if (matchFilters && matchSearch) {
-            matchCount++;
-            
-            // 描画上限（visibleCount）を超えたらDOMは作らずカウントだけ続ける
-            if (matchCount > visibleCount) {
-                return;
-            }
-
-            const card = document.createElement('div');
-            card.className = 'product-card';
-
-            // 画像がない、または既知の非画像URLの場合は、軽量なプレースホルダー画像を指定
-            const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23f4f4f4'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
-            let imageSource = item.img;
-            if (!item.img || item.img === "#" || item.img === "https://unsplash.com") {
-                imageSource = defaultImg;
-            }
-
-            card.innerHTML = `
-                <div class="img-container">
-                    ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
-                    <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async">
-                </div>
-                <div class="card-content">
-                    <div>
-                        <span class="brand-badge">${item.brand}</span>
-                    </div>
-                    <div class="product-name">${item.name}</div>
-                    <p class="description">${item.desc || ""}</p>
-                    <div class="tag-list">${item.tags
-                        .filter(t => {
-                            // 単一選択カテゴリ（種類・年齢等）のタグは、冗長なのでカード内では非表示にする。安全のため存在チェックを入れる。
-                            if (typeof categoryMaster === 'undefined' || !categoryMaster) return true;
-                            return !Object.keys(categoryMaster).some(cat => {
-                                const multi = isMulti(cat);
-                                const isMemberOfCat = tagMaster[cat] && tagMaster[cat][t];
-                                return !multi && isMemberOfCat;
-                            });
-                        })
-                        .map(t => `<span class="tag">${tagLookup[t] || t}</span>`)
-                        .join('')}</div>
-                    <div class="shop-links">
-                        ${item.promo ? `<span class="promo-text">${item.promo}</span>` : ''}
-                        ${item.a8 && item.a8 !== '#' ? `
-                            <a href="${item.a8}" target="_blank" rel="nofollow" class="btn-shop btn-a8" onclick="trackEvent('Affiliate', 'click_a8', '${item.name}')">
-                                公式サイトで詳細を見る
-                            </a>
-                        ` : ''}
-                        <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Amazon', '${item.name}')">Amazonで詳細を見る</a>
-                        <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Rakuten', '${item.name}')">楽天で詳細を見る</a>
-                        <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" rel="nofollow" onclick="trackEvent('Affiliate', 'Yahoo', '${item.name}')">Yahoo!で詳細を見る</a>
-                    </div>
-                </div>
-            `;
-            list.appendChild(card);
-        }
+    // ワーカーにデータを送信して計算を依頼
+    searchWorker.postMessage({
+        searchWords,
+        activeFilters,
+        visibleCount
     });
 
-    // 実行ボタンのテキスト更新
-    if (submitBtn) submitBtn.textContent = `${matchCount}件を表示`;
+    // GA4計測用のタイマー（既存通り）
+    clearTimeout(searchTrackTimer);
+    searchTrackTimer = setTimeout(() => {
+        if (isTyping) updateURL();
+    }, 800);
+}
 
-    // 「もっと見る」ボタンの制御
-    if (matchCount > visibleCount) {
-        loadMoreArea.innerHTML = `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${matchCount - visibleCount}件)</button>`;
+// --- ワーカーからの結果を受け取って描画 ---
+function handleWorkerResults(data) {
+    if (data.type === 'READY') {
+        isWorkerReady = true;
+        if (document.getElementById('main-submit-btn')) {
+            document.getElementById('main-submit-btn').textContent = `準備完了（${data.total}件）`;
+        }
+        return;
     }
 
-    if (matchCount === 0) {
-        list.innerHTML = `
-            <div class="no-results">
-                NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした
+    const { matchedItems, totalMatchCount, visibleCount: currentVisibleCount } = data;
+    const list = document.getElementById('product-list');
+    const loadMoreArea = document.getElementById('load-more-area');
+    const submitBtn = document.getElementById('main-submit-btn');
+
+    list.innerHTML = "";
+    loadMoreArea.innerHTML = "";
+
+    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23f4f4f4'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
+
+    matchedItems.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        let imageSource = (!item.img || item.img === "#" || item.img === "https://unsplash.com") ? defaultImg : item.img;
+
+        card.innerHTML = `
+            <div class="img-container">
+                ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
+                <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async">
+            </div>
+            <div class="card-content">
+                <span class="brand-badge">${item.brand}</span>
+                <div class="product-name">${item.name}</div>
+                <p class="description">${item.desc || ""}</p>
+                <div class="tag-list">${item.tags.map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div>
+                <div class="shop-links">
+                    <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank">Amazon</a>
+                    <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank">楽天</a>
+                </div>
             </div>`;
+        list.appendChild(card);
+    });
+
+    if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
+    if (totalMatchCount > currentVisibleCount) {
+        loadMoreArea.innerHTML = `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
+    }
+    if (totalMatchCount === 0) {
+        list.innerHTML = `
+            <div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
     }
 }
 // ページ読み込み時に描画を開始
 window.addEventListener('DOMContentLoaded', () => {
-    if (typeof productData !== 'undefined') {
-        initFilters();
-        renderFilters();
-        render();
-    }
+    // マスタ（tagMaster等）が読み込まれているか確認
+    if (typeof tagMaster === 'undefined') return;
+
+    tagLookupMap = getTagLookup();
+
+    const submitBtn = document.getElementById('main-submit-btn');
+    if (submitBtn) submitBtn.textContent = "データを読み込み中...";
+
+    // ワーカーの初期化（Worker内部で product_data.json を取得しにいく）
+    searchWorker = new Worker('search_worker.js');
+    searchWorker.onmessage = (e) => handleWorkerResults(e.data);
+
+    initFilters();
+    renderFilters();
 });
 </script>
 </body>
