@@ -86,13 +86,20 @@ def convert():
             desc = row.get('desc', '').strip()
             check_text = normalize_text(name + desc)
 
-            # ブランドの自動判定
-            if not row.get('brand'):
+            # ブランド情報の処理
+            brand_val = row.get('brand', '').strip()
+            if brand_val:
+                # CSVにブランド名がある場合は、そこからIDを生成
+                row['brand_id'] = normalize_text(brand_val)
+            else:
+                # 空の場合は名前や説明文からマスタを検索して自動判定
                 for b_id, b_name in brand_master.items():
                     if b_id in check_text or normalize_text(b_name) in check_text:
+                        row['brand_id'] = b_id
                         row['brand'] = b_name
                         break
-            
+            if 'brand_id' not in row: row['brand_id'] = ""
+
             # タグの処理
             tags = row.get('tags', '').replace(',', ' ').split()
             tags = [normalize_text(t) for t in tags if t]
