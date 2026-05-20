@@ -1,25 +1,25 @@
 const tagMaster = {
     "animal": {
-        "cat": "猫 (CAT)",
-        "dog": "犬 (DOG)"
+        "dog": "犬 (DOG)",
+        "cat": "猫 (CAT)"
     },
     "age": {
-        "adult": "成犬・成猫 (ADULT)",
         "all_ages": "全年齢用 (ALL AGES)",
         "puppy": "子犬・子猫 (PUPPY)",
+        "adult": "成犬・成猫 (ADULT)",
         "senior": "シニア (SENIOR)"
     },
     "cond": {
-        "appetite": "食いつき (APPETITE)",
-        "diet": "体重管理 (WEIGHT)",
-        "digestive": "消化器ケア (DIGESTIVE)",
-        "gf": "穀物不使用 (GF)",
-        "joint": "関節ケア (JOINT)",
-        "kidney": "腎臓・尿路 (KIDNEY)",
-        "lamb": "ラム肉 (LAMB)",
-        "skin": "皮膚ケア (SKIN)",
         "tear": "涙やけ (TEAR)",
-        "tooth": "歯の健康 (TOOTH)"
+        "diet": "体重管理 (WEIGHT)",
+        "kidney": "腎臓・尿路 (KIDNEY)",
+        "skin": "皮膚ケア (SKIN)",
+        "joint": "関節ケア (JOINT)",
+        "tooth": "歯の健康 (TOOTH)",
+        "appetite": "食いつき (APPETITE)",
+        "gf": "穀物不使用 (GF)",
+        "digestive": "消化器ケア (DIGESTIVE)",
+        "lamb": "ラム肉 (LAMB)"
     }
 };
 const categoryMaster = {
@@ -46,13 +46,32 @@ const categoryMaster = {
 };
 const brandMaster = {
     "nutro": "ニュートロ",
+    "supremo": "シュプレモ",
     "royal canin": "ロイヤルカナン",
-    "sheba": "シーバ",
-    "supremo": "シュプレモ"
+    "sheba": "シーバ"
 };
 const tagKeywords = {
-    "gf": ["grain_free", "grainfree", "グレインフリー", "穀物不使用"],
-    "digestive": ["胃腸", "消化", "オナカ", "digestive", "オ腹"],
-    "diet": ["体重", "肥満", "ダイエット", "減量"],
-    "lamb": ["ラム肉", "lamb"]
+    "gf": [
+        "grain_free",
+        "grainfree",
+        "グレインフリー",
+        "穀物不使用"
+    ],
+    "digestive": [
+        "胃腸",
+        "消化",
+        "オナカ",
+        "digestive",
+        "オ腹"
+    ],
+    "diet": [
+        "体重",
+        "肥満",
+        "ダイエット",
+        "減量"
+    ],
+    "lamb": [
+        "ラム肉",
+        "lamb"
+    ]
 };
