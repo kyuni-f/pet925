@@ -26,20 +26,75 @@
         body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #fff; color: var(--dark); margin: 0; padding-bottom: 60px; line-height: 1.6; }
         
         /* ヘッダー：スタイリッシュな小文字デザイン */
-        header { padding: 60px 20px; text-align: center; border-bottom: 1px solid #eee; }
-        h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; }
-        .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--gold); margin-top: 10px; text-transform: uppercase; }
-        .site-intro { max-width: 600px; margin: 30px auto 0; font-size: 0.85rem; color: #666; line-height: 1.8; }
+        header { 
+            padding: 60px 20px; 
+            text-align: center; 
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            background: #fff;
+        }
+        h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+        .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--gold); margin-top: 10px; text-transform: uppercase; transition: opacity 0.3s; }
+        .site-intro { max-width: 600px; margin: 30px auto 0; font-size: 0.85rem; color: #666; line-height: 1.8; transition: all 0.4s ease; opacity: 1; overflow: hidden; max-height: 200px; }
+
+        /* --- View切り替えロジック --- */
+        #view-results { display: none; }
+        
+        /* 結果表示モード (state-results) */
+        body.state-results #view-search { display: none; }
+        body.state-results #view-results { display: block; }
+        
+        /* 結果表示中のヘッダー（コンパクト） */
+        body.state-results header { 
+            padding: 15px 20px; 
+            border-bottom: 1px solid #eee;
+        }
+        body.state-results h1 { font-size: 1.2rem; letter-spacing: 4px; }
+        body.state-results .sub-copy,
+        body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
+
+        /* 検索・フィルター実行時の「切り替え」スタイル (旧is-searching互換) */
+        body.is-searching header { 
+            top: 0; 
+            z-index: 1000; 
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        }
+        body.is-searching h1 { font-size: 1.2rem; letter-spacing: 4px; }
+        body.is-searching .sub-copy,
+        body.is-searching .site-intro { 
+            opacity: 0; 
+            max-height: 0; 
+            margin-top: 0; 
+            pointer-events: none; 
+        }
+        body.is-searching .search-container { margin: 5px 0 10px; }
 
         .container { width: 92%; max-width: 1100px; margin: 0 auto; }
 
+        /* 実行ボタンと戻るボタン */
+        .floating-action-area { 
+            position: sticky; bottom: 30px; left: 0; right: 0; 
+            display: flex; justify-content: center; z-index: 1001;
+            pointer-events: none;
+        }
+        .btn-primary-action { 
+            background: var(--dark); color: #fff; border: none; padding: 20px 60px; 
+            font-size: 0.8rem; font-weight: bold; letter-spacing: 2px; cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); pointer-events: auto;
+            transition: 0.3s;
+        }
+        .btn-primary-action:hover { background: var(--gold); transform: translateY(-3px); }
+        
+        .btn-back-to-search { background: none; border: none; color: #999; font-size: 0.7rem; letter-spacing: 2px; cursor: pointer; padding: 20px 0; text-decoration: underline; text-underline-offset: 4px; }
+        .btn-back-to-search:hover { color: var(--dark); }
+
         /* 検索バー：ミニマルデザイン */
-        .search-container { margin: 30px 0; }
+        .search-container { margin: 20px auto; max-width: 600px; } /* Default state: Centered below intro */
         #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
         #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
         /* こだわり条件フィルターナビゲーション */
-        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; }
+        .filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; transition: top 0.6s; }
+        body.is-searching .filter-nav { top: 70px; } /* Adjusted top for new compact header height */
         .filter-group { margin-bottom: 25px; }
         
         /* カテゴリヘッダーの改善 */
@@ -99,13 +154,25 @@
         .chip { background: var(--gold); color: #fff; font-size: 0.65rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.3s; letter-spacing: 1px; }
         .chip:hover { opacity: 0.8; transform: scale(0.95); }
         .chip-close { font-size: 0.8rem; line-height: 1; }
-        .clear-all { font-size: 0.65rem; color: #999; text-decoration: underline; cursor: pointer; margin-left: 10px; border: none; background: none; padding: 5px; }
-        .clear-all:hover { color: var(--dark); }
+        .clear-all { font-size: 0.6rem; color: #666; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; cursor: pointer; margin-left: 12px; background: #fff; transition: 0.3s; letter-spacing: 1px; font-weight: bold; text-transform: uppercase; }
+        .clear-all:hover { background: #f0f0f0; color: var(--dark); border-color: #999; }
         .active-chips-label { font-size: 0.6rem; color: #bbb; font-weight: bold; margin-right: 5px; }
 
         /* 商品カード：カタログのような美しさ */
         #product-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 50px; margin-top: 40px; }
-        .product-card { display: flex; flex-direction: column; }
+        
+        /* リストの登場アニメーション */
+        .product-card { 
+            display: flex; 
+            flex-direction: column; 
+            animation: fadeInUp 0.6s ease forwards;
+            opacity: 0;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .img-container { width: 100%; height: 380px; overflow: hidden; background: var(--gray); position: relative; }
         .img-container img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
         .product-card:hover img { transform: scale(1.05); }
@@ -113,9 +180,9 @@
         .card-content { padding: 20px 0; flex-grow: 1; display: flex; flex-direction: column; }
         .brand-badge { font-size: 0.65rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
         /* 商品名：3行分の高さを確保し、超える場合は省略（ガタつき防止） */
-        .product-name { font-size: 1.05rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; min-height: 4.5em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .product-name { font-size: 1.05rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; min-height: 4.5em; display: -webkit-box; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
         /* 説明文：3行分の高さを確保し、超える場合は省略 */
-        .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 4.5em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 4.5em; display: -webkit-box; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
         
         /* タグリスト：高さの揺れを抑える */
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; min-height: 2.5em; align-content: flex-start; }
@@ -123,6 +190,11 @@
         
         /* 特典情報のテキスト */
         .promo-text { font-size: 0.75rem; color: #e67e22; font-weight: bold; margin-bottom: 10px; display: block; }
+
+        /* もっと見るボタン */
+        .load-more-container { grid-column: 1 / -1; text-align: center; margin-top: 40px; padding-bottom: 40px; }
+        .btn-load-more { background: #fff; border: 1px solid var(--dark); color: var(--dark); padding: 16px 50px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.3s; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px; }
+        .btn-load-more:hover { background: var(--dark); color: #fff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         /* おすすめバッジ（ラベル用） */
         .featured-badge { position: absolute; top: 10px; left: 10px; background: var(--gold); color: #fff; padding: 4px 12px; font-size: 0.7rem; font-weight: bold; z-index: 10; }
 
@@ -150,16 +222,26 @@
 </header>
 
 <div class="container">
-    <div class="search-container">
-        <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
-        <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render(true)">
+    <!-- 検索・フィルターView -->
+    <div id="view-search">
+        <div class="search-container">
+            <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
+            <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render(true)">
+        </div>
+        <div class="filter-nav" id="filter-nav-container"></div>
+        
+        <div class="floating-action-area">
+            <button id="main-submit-btn" class="btn-primary-action" onclick="showResults()">SHOW RESULTS</button>
+        </div>
     </div>
 
-    <div id="active-chips-container" class="active-chips-area"></div>
-
-    <div class="filter-nav" id="filter-nav-container"></div>
-
-    <div id="product-list"></div>
+    <!-- 結果一覧View -->
+    <div id="view-results">
+        <button class="btn-back-to-search" onclick="backToSearch()">← 検索条件に戻る</button>
+        <div id="active-chips-container" class="active-chips-area"></div>
+        <div id="product-list"></div>
+        <div id="load-more-area" class="load-more-container"></div>
+    </div>
 </div>
 
 <script>
@@ -178,8 +260,40 @@ if (typeof categoryMaster === 'undefined') {
 let activeFilters = {}; // 内部で cat: value(or array) を保持
 let searchTrackTimer = null;
 
+// --- ページネーション（1万件対応用） ---
+let visibleCount = 30; // 最初に見せる件数
+const PAGE_SIZE = 30;  // 追加する件数
+
+function loadMore() {
+    visibleCount += PAGE_SIZE;
+    render(false); // スクロール継続なのでリセットしない
+}
+
+function showResults() {
+    document.body.classList.add('state-results');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    trackEvent('Navigation', 'show_results', 'click');
+}
+
+function backToSearch() {
+    document.body.classList.remove('state-results');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // カテゴリが単一選択かどうかを判定するヘルパー（categoryMasterを参照）
-const isMulti = (cat) => (typeof categoryMaster !== 'undefined' && categoryMaster[cat]) ? categoryMaster[cat].multi : false;
+const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
+
+// カテゴリごとのデフォルト値を返すヘルパー
+const getDefaultFilterValue = (cat) => isMulti(cat) ? [] : "all";
+
+// 全タグの ID -> 日本語名 の変換マップを作成
+const getTagLookup = () => {
+    const lookup = {};
+    if (typeof tagMaster !== 'undefined') {
+        Object.values(tagMaster).forEach(group => Object.assign(lookup, group));
+    }
+    return lookup;
+};
 
 function trackEvent(category, action, label) {
     // 開発環境（localhostなど）でのみログを表示し、本番での負荷をゼロに近づける
@@ -245,12 +359,14 @@ function initFilters() {
         document.getElementById('search-input').value = params.get('q');
     }
 
-    for (const cat in tagMaster) {
+    // 商品の有無に関わらず、定義されている全てのカテゴリを初期化する
+    const cats = (typeof categoryMaster !== 'undefined') ? Object.keys(categoryMaster) : Object.keys(tagMaster);
+    for (const cat of cats) {
         if (params.has(cat)) {
             const val = params.get(cat);
             activeFilters[cat] = isMulti(cat) ? val.split(',') : val;
         } else {
-            activeFilters[cat] = isMulti(cat) ? [] : "all";
+            activeFilters[cat] = getDefaultFilterValue(cat);
         }
     }
 }
@@ -261,9 +377,18 @@ function toggleFilter(btn) {
 
     if (!isMulti(category)) {
         // 単一選択
-        btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        activeFilters[category] = value;
+        const isActive = btn.classList.contains('active');
+        const allBtn = btn.parentElement.querySelector('[data-val="all"]');
+
+        if (isActive && value !== 'all') { // 選択済みのボタン（「すべて」以外）を再度押したら解除
+            btn.classList.remove('active');
+            activeFilters[category] = getDefaultFilterValue(category);
+            allBtn.classList.add('active');
+        } else { // 未選択のボタンを押した、または「すべて」を押した
+            btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeFilters[category] = value;
+        }
     } else {
         // 複数選択
         if (value === 'all') {
@@ -290,6 +415,7 @@ function toggleFilter(btn) {
 
     trackEvent('Filter', 'select_tag', `${category}:${value}`);
     updateURL();
+    visibleCount = PAGE_SIZE; // フィルター変更時はリセット
     render(false); // フィルター時は即時描画（URL更新は済んでいるのでタイマー側では行わない）
 }
 
@@ -300,7 +426,7 @@ function toggleGroupCollapse(header) {
 
 function clearAllFilters() {
     for (const cat in categoryMaster) {
-        activeFilters[cat] = isMulti(cat) ? [] : "all";
+        activeFilters[cat] = getDefaultFilterValue(cat);
     }
     document.getElementById('search-input').value = '';
     
@@ -311,6 +437,7 @@ function clearAllFilters() {
     });
     
     trackEvent('Filter', 'clear_all', 'all');
+    visibleCount = PAGE_SIZE; // リセット
     updateURL();
     render(false);
 }
@@ -325,7 +452,7 @@ function renderFilters() {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'filter-group';
         
-        const catInfo = categoryMaster[category] || { jp: category, en: category.toUpperCase(), multi: true };
+        const catInfo = categoryMaster[category] || { jp: category, en: category.toUpperCase(), multi: false };
         if (catInfo.multi) groupDiv.setAttribute('data-multiselect', 'true');
         
         // 「すべて」ボタンがアクティブかどうかを現在の状態(activeFilters)から判定
@@ -362,10 +489,7 @@ function renderFilters() {
 function renderActiveChips() {
     const container = document.getElementById('active-chips-container');
     const searchVal = document.getElementById('search-input').value.trim();
-    
-    // 表示用にタグ名を取得するためのマップ作成
-    const tagLookup = {};
-    Object.values(tagMaster).forEach(group => Object.assign(tagLookup, group));
+    const tagLookup = getTagLookup();
 
     let chipsHtml = '';
     let hasActive = false;
@@ -386,7 +510,7 @@ function renderActiveChips() {
     }
 
     if (hasActive) {
-        container.innerHTML = `<span class="active-chips-label">ACTIVE:</span>` + chipsHtml + `<button class="clear-all" onclick="clearAllFilters()">CLEAR ALL</button>`;
+        container.innerHTML = `<span class="active-chips-label">ACTIVE:</span>` + chipsHtml + `<button class="clear-all" onclick="clearAllFilters()">CLEAR ALL ×</button>`;
     } else {
         container.innerHTML = '';
     }
@@ -410,23 +534,25 @@ function getSearchUrl(shop, brand, name, fallbackUrl) {
 // --- メイン描画処理 ---
 function render(isTyping = false) {
     if (typeof productData === 'undefined' || !productData) return;
+    const submitBtn = document.getElementById('main-submit-btn');
+    if (isTyping) visibleCount = PAGE_SIZE; // 検索入力時はリセット
 
     const list = document.getElementById('product-list');
+    const loadMoreArea = document.getElementById('load-more-area');
     const searchVal = document.getElementById('search-input').value.replace(/　/g, ' ').trim();
     const searchWords = searchVal.split(/\s+/).filter(w => w !== '').map(w => normalize(w));
+
+    // 何らかの検索またはフィルターがアクティブか判定
+    const isFiltering = searchWords.length > 0 || Object.values(activeFilters).some(val => {
+        return Array.isArray(val) ? val.length > 0 : val !== 'all';
+    });
     
     renderActiveChips(); // チップスの更新
 
     list.innerHTML = "";
+    loadMoreArea.innerHTML = "";
     let matchCount = 0;
-
-    // 表示用にタグのキーを日本語名に変換するマップ
-    const tagLookup = {};
-    if (typeof tagMaster !== 'undefined') {
-        Object.values(tagMaster).forEach(group => {
-            Object.assign(tagLookup, group);
-        });
-    }
+    const tagLookup = getTagLookup();
 
     // デバウンス：入力が止まってからURLを更新（GA4イベントの連打を防ぐ）
     clearTimeout(searchTrackTimer);
@@ -459,6 +585,7 @@ function render(isTyping = false) {
             normalize(item.brand_id || "").includes(word) ||
             normalize(brandJP || "").includes(word) ||
             normalize(item.desc).includes(word) ||
+            normalize(item.size || "").includes(word) || // この行を追加
             item.tags.some(t => {
                 if (normalize(t).includes(word) || normalize(tagLookup[t] || "").includes(word)) return true;
                 const aliases = (typeof tagKeywords !== 'undefined') ? tagKeywords[t] : null;
@@ -468,6 +595,11 @@ function render(isTyping = false) {
 
         if (matchFilters && matchSearch) {
             matchCount++;
+            
+            // 描画上限（visibleCount）を超えたらDOMは作らずカウントだけ続ける
+            if (matchCount > visibleCount) {
+                return;
+            }
 
             const card = document.createElement('div');
             card.className = 'product-card';
@@ -518,6 +650,14 @@ function render(isTyping = false) {
             list.appendChild(card);
         }
     });
+
+    // 実行ボタンのテキスト更新
+    if (submitBtn) submitBtn.textContent = `${matchCount}件を表示`;
+
+    // 「もっと見る」ボタンの制御
+    if (matchCount > visibleCount) {
+        loadMoreArea.innerHTML = `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${matchCount - visibleCount}件)</button>`;
+    }
 
     if (matchCount === 0) {
         list.innerHTML = `
