@@ -1,10 +1,11 @@
 // マスタデータを読み込む
-importScripts('data_master.js'); 
+importScripts('data_master.js?v=' + Date.now()); 
 
 // 正規化ロジック (index.htmlと共通)
 const normalize = (str) => {
     if (!str) return "";
-    return str
+    return String(str)
+        .replace(/　/g, ' ')
         .normalize('NFKC')
         .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
         .toLowerCase()
@@ -24,12 +25,17 @@ if (typeof tagMaster !== 'undefined') {
 // チャンク（分割ファイル）を処理する関数
 function processChunk(data) {
     data.forEach(item => {
-        const brandJP = (typeof brandMaster !== 'undefined' && item.brand_id) ? brandMaster[item.brand_id] : "";
+        // ブランドの日本語名をマスタから取得 (brand_id を正規化して引く)
+        let brandJP = "";
+        if (typeof brandMaster !== 'undefined' && item.brand_id) {
+            brandJP = brandMaster[normalize(item.brand_id)] || "";
+        }
+
         const searchParts = [
             normalize(item.name),
             normalize(item.brand),
             normalize(item.brand_id || ""),
-            normalize(brandJP || ""),
+            normalize(brandJP),
             normalize(item.desc),
             normalize(item.size || "")
         ];

@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import unicodedata
+import sys
 
 # 設定
 DATA_DIR = 'data'  # CSVファイルが格納されているディレクトリ
@@ -96,6 +97,7 @@ def convert():
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
         return
 
+    seen_names = {}
     with open(PRODUCT_CSV, 'r', encoding='utf-8-sig', errors='replace') as f:
         reader = csv.DictReader(f)
         for line_num, row in enumerate(reader, start=2):
@@ -104,23 +106,40 @@ def convert():
                 validation_errors.append(f"行 {line_num}: 商品名(name)が空です。")
                 continue
 
+            if name in seen_names:
+                validation_errors.append(f"行 {line_num}: 商品名 '{name}' が重複しています。(既出: 行 {seen_names[name]})")
+            else:
+                seen_names[name] = line_num
+
             desc = row.get('desc', '').strip()
             check_text = normalize_text(name + desc)
 
             # ブランド情報の処理
-            brand_val = row.get('brand', '').strip()
-            if brand_val:
-                # CSVにブランド名がある場合は、そこからIDを生成
-                row['brand_id'] = normalize_text(brand_val)
+            brand_raw = row.get('brand', '').strip()
+            found_id = ""
+            
+            if brand_raw:
+                norm_brand = normalize_text(brand_raw)
+                # 直接IDとして存在するか、または日本語名からIDを逆引き
+                if norm_brand in brand_master:
+                    found_id = norm_brand
+                else:
+                    for b_id, b_name in brand_master.items():
+                        if norm_brand == normalize_text(b_name):
+                            found_id = b_id
+                            row['brand'] = b_name # 表示名をマスタに合わせる
+                            break
+                if not found_id: found_id = norm_brand
             else:
                 # 空の場合は名前や説明文からマスタを検索して自動判定
                 for b_id, b_name in brand_master.items():
                     if b_id in check_text or normalize_text(b_name) in check_text:
-                        row['brand_id'] = b_id
+                        found_id = b_id
                         row['brand'] = b_name
                         break
-            if 'brand_id' not in row: row['brand_id'] = ""
-            if row['brand_id'] and row['brand_id'] not in brand_master:
+            
+            row['brand_id'] = found_id
+            if found_id and found_id not in brand_master:
                 validation_errors.append(f"行 {line_num}: ブランド '{row['brand']}' は brands.csv に未登録です。")
 
             # タグの処理
@@ -165,6 +184,8 @@ def convert():
         for err in validation_errors[:10]: # 最初の10件を表示
             print(f"   - {err}")
         if len(validation_errors) > 10: print(f"   ...他 {len(validation_errors)-10} 件")
+        # 致命的なミス（商品名空など）がある場合にデプロイを止めるなら以下を有効にする
+        sys.exit(1)
     else:
         print(f"✅ すべてのデータが正常に処理されました。")
 

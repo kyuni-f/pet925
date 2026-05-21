@@ -13,7 +13,8 @@
       gtag('js', new Date());
 
       gtag('config', 'G-XR7TWP7ZJ0', {
-        'send_page_view': true
+        'send_page_view': true,
+        'cookie_domain': 'none'
       });
     </script>
     <title>pet925 | Premium Pet Nutrition</title>
@@ -320,6 +321,17 @@ function updateURL() {
     }
 }
 
+// --- ユーティリティ (正規化ロジック) ---
+const normalize = (str) => {
+    if (!str) return "";
+    return String(str)
+        .replace(/　/g, ' ') // 全角スペースを半角へ
+        .normalize('NFKC') // Unicode正規化 (全角英数・記号の半角化を含む)
+        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60)) // ひらがな -> カタカナ
+        .toLowerCase()
+        .trim();
+};
+
 // --- フィルター関連 ---
 function initFilters() {
     if (typeof tagMaster === 'undefined') return;
@@ -539,7 +551,6 @@ function handleWorkerResults(data) {
         if (document.getElementById('main-submit-btn')) {
             document.getElementById('main-submit-btn').textContent = `準備完了（${data.total}件）`;
         }
-        render(); // データが準備できたら即座に現在の条件で検索を実行
         return;
     }
 
@@ -571,6 +582,7 @@ function handleWorkerResults(data) {
                 <div class="shop-links">
                     <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank">Amazon</a>
                     <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank">楽天</a>
+                    <a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank">Yahoo!</a>
                 </div>
             </div>`;
         list.appendChild(card);
@@ -595,14 +607,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const submitBtn = document.getElementById('main-submit-btn');
     if (submitBtn) submitBtn.textContent = "データを読み込み中...";
 
-    // ワーカーの初期化（Worker内部で product_data.json を取得しにいく）
-    searchWorker = new Worker('search_worker.js');
+    // ワーカーの初期化（キャッシュ回避のためタイムスタンプを付与）
+    searchWorker = new Worker('search_worker.js?v=' + Date.now());
     searchWorker.onmessage = (e) => handleWorkerResults(e.data);
 
     initFilters();
     renderFilters();
-    
-    // WorkerがREADYになるのを待ってから handleWorkerResults 内で render() が呼ばれます
 });
 </script>
 </body>
