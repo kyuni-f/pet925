@@ -14,6 +14,8 @@ RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 OUTPUT_JSON = 'product_data.json'
 OUTPUT_MASTER_JS = 'data_master.js'
 
+validation_errors = []
+
 def normalize_text(s):
     """JS版のnormalizeと動作を合わせる（NFKC正規化 + ひらがなをカタカナへ）"""
     if not s: return ""
@@ -35,23 +37,37 @@ def load_csv_simple(path):
 
 def convert():
     print(f"--- 変換処理を開始します ---")
-    
+    global validation_errors
+    validation_errors = []
+
     # 1. カテゴリマスタの読み込み
     category_master = {}
+    category_order = []
     cat_rows = load_csv_simple(CAT_CSV)
     for row in cat_rows:
         if len(row) < 4 or row[0].lower() in ['key', 'キー']: continue
         key, jp, en, m_type = [s.strip() for s in row[:4]]
         category_master[key] = {"jp": jp, "en": en, "multi": m_type == 'multi'}
+        category_order.append(key)
 
     # 2. タグマスタの読み込み
     tag_master = {}
+    allowed_tags = set()
     tag_rows = load_csv_simple(TAG_CSV)
     for row in tag_rows:
         if len(row) < 3 or row[0].lower() in ['category', 'カテゴリ']: continue
         cat, key, name = [s.strip() for s in row[:3]]
         if cat not in tag_master: tag_master[cat] = {}
-        tag_master[cat][normalize_text(key)] = name
+        norm_key = normalize_text(key)
+        tag_master[cat][norm_key] = name
+        allowed_tags.add(norm_key)
+
+    # タグのカテゴリ所属マップを作成（ソート用）
+    tag_to_cat_index = {}
+    for idx, cat_key in enumerate(category_order):
+        if cat_key in tag_master:
+            for t_key in tag_master[cat_key]:
+                tag_to_cat_index[t_key] = idx
 
     # 3. ブランドマスタの読み込み
     brand_master = {}
@@ -72,6 +88,7 @@ def convert():
             kws = [normalize_text(k) for k in kw_str.replace(',', ' ').split() if k]
             if tag not in tag_keywords: tag_keywords[tag] = []
             tag_keywords[tag].extend(kws)
+            allowed_tags.add(normalize_text(tag))
 
     # 5. 商品データの読み込みと加工
     products = []
@@ -79,10 +96,14 @@ def convert():
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
         return
 
-    with open(PRODUCT_CSV, 'r', encoding='utf-8-sig') as f:
+    with open(PRODUCT_CSV, 'r', encoding='utf-8-sig', errors='replace') as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for line_num, row in enumerate(reader, start=2):
             name = row.get('name', '').strip()
+            if not name:
+                validation_errors.append(f"行 {line_num}: 商品名(name)が空です。")
+                continue
+
             desc = row.get('desc', '').strip()
             check_text = normalize_text(name + desc)
 
@@ -99,10 +120,17 @@ def convert():
                         row['brand'] = b_name
                         break
             if 'brand_id' not in row: row['brand_id'] = ""
+            if row['brand_id'] and row['brand_id'] not in brand_master:
+                validation_errors.append(f"行 {line_num}: ブランド '{row['brand']}' は brands.csv に未登録です。")
 
             # タグの処理
             tags = row.get('tags', '').replace(',', ' ').split()
             tags = [normalize_text(t) for t in tags if t]
+
+            # 未登録タグのチェック
+            for t in tags:
+                if t not in allowed_tags:
+                    validation_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
 
             # 自動タグ付けルールの適用
             for tag_id, keywords in tag_keywords.items():
@@ -110,6 +138,9 @@ def convert():
                     if any(kw in check_text for kw in keywords):
                         tags.append(tag_id)
             
+            # タグをカテゴリ順に並べ替え（index.htmlでの表示を綺麗にするため）
+            tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
+
             row['tags'] = tags
             products.append(row)
 
@@ -125,10 +156,17 @@ def convert():
         f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
         f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
 
-    print(f"✅ 完了:")
+    print(f"--- 変換完了 ---")
     print(f"   - {OUTPUT_JSON} ({len(products)}件)")
     print(f"   - {OUTPUT_MASTER_JS} (マスタ設定)")
-    print(f"   (ソースCSV: {DATA_DIR} フォルダ内)")
+
+    if validation_errors:
+        print(f"\n⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:")
+        for err in validation_errors[:10]: # 最初の10件を表示
+            print(f"   - {err}")
+        if len(validation_errors) > 10: print(f"   ...他 {len(validation_errors)-10} 件")
+    else:
+        print(f"✅ すべてのデータが正常に処理されました。")
 
 if __name__ == '__main__':
     try:
