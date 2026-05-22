@@ -286,9 +286,10 @@ function trackEvent(category, action, label) {
 
     // Google Analytics (GA4) にイベントを送信
     if (window.gtag) {
-        gtag('event', action, {
-            'event_category': category,
-            'event_label': label
+        // イベント名を小文字のスネークケースに統一し、計測の欠落を防ぐ
+        const eventName = (category + '_' + action).toLowerCase();
+        gtag('event', eventName, {
+            'item_label': label
         });
     }
 }
@@ -311,8 +312,17 @@ function updateURL() {
     const newRelativePathQuery = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
     history.replaceState(null, '', newRelativePathQuery);
     
-    // GA4に仮想的なページビューを送信（クエリパラメータを認識させる）
+    // Google Analytics (GA4) へのデータ送信
     if (window.gtag) {
+        // 1. 検索ワードがある場合、GA4推奨の 'search' イベントを送信
+        // これにより GA4 管理画面の「検索キーワード」レポートに自動で集計されます
+        if (searchVal) {
+            gtag('event', 'search', {
+                'search_term': searchVal
+            });
+        }
+
+        // 2. 仮想的なページビューを送信（URLのパラメータを含めた計測のため）
         gtag('event', 'page_view', {
             page_location: window.location.href,
             page_path: window.location.pathname + window.location.search,
@@ -551,6 +561,7 @@ function handleWorkerResults(data) {
         if (document.getElementById('main-submit-btn')) {
             document.getElementById('main-submit-btn').textContent = `準備完了（${data.total}件）`;
         }
+        render(); // 追加：Workerの準備ができたら、現在の条件で即座に計測と描画を実行
         return;
     }
 
@@ -595,6 +606,13 @@ function handleWorkerResults(data) {
     if (totalMatchCount === 0) {
         list.innerHTML = `
             <div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
+
+        // 検索ワードを入力したのに結果が0件だった場合を計測
+        // これを参考にすることで、次に導入すべきフードの傾向が見えてきます
+        const searchVal = document.getElementById('search-input').value.trim();
+        if (searchVal) {
+            trackEvent('Search', 'no_results', searchVal);
+        }
     }
 }
 // ページ読み込み時に描画を開始

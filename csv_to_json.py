@@ -98,7 +98,7 @@ def convert():
         return
 
     seen_names = {}
-    with open(PRODUCT_CSV, 'r', encoding='utf-8-sig', errors='replace') as f:
+    with open(PRODUCT_CSV, 'r', encoding='utf-8-sig', errors='replace', newline='') as f:
         reader = csv.DictReader(f)
         for line_num, row in enumerate(reader, start=2):
             name = row.get('name', '').strip()
