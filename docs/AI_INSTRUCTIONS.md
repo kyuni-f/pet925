@@ -4,8 +4,8 @@
 以下のルールを厳守して、商品のCSVデータを作成してください。
 
 ## 1. 出力形式 (CSV 15列)
-**ヘッダーなし**、カンマ区切り、値にカンマを含む場合は必ず `"` で囲んでください。
-**必ず1行につき15個のデータ（カンマが14個）を出力してください。**
+**必ず1行目に以下の見出し行（ヘッダー）を含めてください。**
+`name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p`
 
 【列の順番】
 1.name, 2.brand, 3.tags, 4.desc, 5.size, 6.img, 7.amz, 8.rak, 9.yah, 10.a8, 11.label, 12.promo, 13.amz_p, 14.rak_p, 15.yah_p

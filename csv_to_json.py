@@ -3,9 +3,11 @@ import json
 import os
 import unicodedata
 import sys
+import re
 import datetime
 import time
 import concurrent.futures
+import difflib
 
 # 設定
 DATA_DIR = 'data'  # CSVファイルが格納されているディレクトリ
@@ -22,10 +24,12 @@ OUTPUT_MASTER_JS = 'data_master.js'
 COLOR_RED = '\033[31m'
 COLOR_GREEN = '\033[32m'
 COLOR_YELLOW = '\033[33m'
+COLOR_CYAN = '\033[36m'
 COLOR_BOLD = '\033[1m'
 COLOR_RESET = '\033[0m'
 
 validation_errors = []
+validation_warnings = []
 
 def normalize_text(s):
     """JS版のnormalizeと動作を合わせる（NFKC正規化 + ひらがなをカタカナへ）"""
@@ -39,7 +43,8 @@ def normalize_text(s):
             chars.append(chr(cp + 0x60))
         else:
             chars.append(char)
-    return "".join(chars).lower().strip()
+    s = "".join(chars).lower()
+    return re.sub(r'\s+', ' ', s).strip() # 連続する空白を1つに統合
 
 def load_csv_simple(path):
     if not os.path.exists(path): return []
@@ -97,8 +102,9 @@ def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index
 def convert(exit_on_error=True):
     print(f"--- 変換処理を開始します ---")
     start_time = time.perf_counter()
-    global validation_errors
+    global validation_errors, validation_warnings
     validation_errors = []
+    validation_warnings = []
 
     # 1. カテゴリマスタの読み込み
     category_master = {}
@@ -166,10 +172,12 @@ def convert(exit_on_error=True):
     print(f"   - {len(all_rows_input)}件を並列処理中...")
     processed_results = []
     seen_names = {}
+    names_by_brand = {} # 類似チェック用：ブランドごとの名前リスト
 
     # max_workers を指定することで使用するCPUコア数を制限できます
     # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
-    max_workers = os.cpu_count()
+    num_cores = os.cpu_count() or 1
+    max_workers = min(num_cores, 8) # 最大でも8プロセス程度に抑える（負荷対策）
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_row_task, ln, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags) 
                    for ln, row in all_rows_input]
@@ -178,36 +186,58 @@ def convert(exit_on_error=True):
             res_row, res_errs, norm_name, ln = future.result()
             validation_errors.extend(res_errs)
             if res_row:
-                # 重複チェックは全プロセスの結果が揃う過程でメインプロセスで行う
-                if norm_name in seen_names:
-                    validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[norm_name]})")
+                # 重複チェック用のキー（ブランドID + 空白を完全に除去した正規化名）
+                dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
+                brand_id = res_row['brand_id']
+
+                if dup_key in seen_names:
+                    validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
                 else:
-                    seen_names[norm_name] = ln
-                processed_results.append((ln, res_row))
+                    # 類似商品チェック（同じブランド内で 85% 以上一致するものがあるか）
+                    if brand_id not in names_by_brand:
+                        names_by_brand[brand_id] = []
+                    
+                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.85)
+                    if close_matches:
+                        validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
+
+                    seen_names[dup_key] = ln
+                    names_by_brand[brand_id].append(norm_name)
+                    processed_results.append((ln, res_row))
 
     # 行番号で並び替えて元の順序を復元
     processed_results.sort(key=lambda x: x[0])
     products = [r[1] for r in processed_results]
 
-    # 6. ファイル書き出し
-    # product_data.json
-    with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
-        json.dump(products, f, ensure_ascii=False, indent=4)
+    if not validation_errors:
+        # 6. エラーが一つもない場合のみファイル書き出しを実行
+        with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
+            json.dump(products, f, ensure_ascii=False, indent=4)
 
-    # data_master.js (JavaScript変数として書き出し)
-    with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
-        f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
-        f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
-        f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
-        f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
+        with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
+            f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
+            f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
+            f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
+            f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
 
     print(f"--- 変換完了 ---")
-    print(f"   - {OUTPUT_JSON} ({len(products)}件)")
-    print(f"   - {OUTPUT_MASTER_JS} (マスタ設定)")
+    if not validation_errors:
+        print(f"   - {OUTPUT_JSON} ({len(products)}件)")
+        print(f"   - {OUTPUT_MASTER_JS} (マスタ設定)")
+    else:
+        print(f"   - ファイル出力は中断されました (不備があるため)")
+
     exec_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
     print(f"   ⏰ 実行時刻: {exec_time}")
     duration = time.perf_counter() - start_time
     print(f"   - 処理時間: {duration:.2f}秒")
+
+    # 警告（確認を促すだけでデプロイは止めない）を表示
+    if validation_warnings:
+        print(f"\n{COLOR_CYAN}{COLOR_BOLD}💡 {len(validation_warnings)} 個の確認推奨項目があります:{COLOR_RESET}")
+        for warn in validation_warnings[:10]:
+            print(f"{COLOR_CYAN}   - {warn}{COLOR_RESET}")
+        if len(validation_warnings) > 10: print(f"   ...他 {len(validation_warnings)-10} 件")
 
     if validation_errors:
         print(f"\n{COLOR_RED}{COLOR_BOLD}⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:{COLOR_RESET}")
