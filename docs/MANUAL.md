@@ -144,24 +144,23 @@ Sub ExportAllSheetsToCSV
     args(2).Name = "FilterOptions"
     args(2).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
 
-    Dim sheetNames As Variant
-    sheetNames = Array("products", "tags", "brands", "rules", "categories")
+    Dim i As Long
+    For i = 0 To oSheets.Count - 1
+        oSheet = oSheets.getByIndex(i)
+        sName = oSheet.Name
 
-    For Each sName In sheetNames
-        If oSheets.hasByName(sName) Then
-            oSheet = oSheets.getByName(sName)
-            
-            ' 書き出し前に必須項目の空欄チェックを実行
-            If Not CheckMandatoryFields(oSheet, sName) Then
-                MsgBox sName & " シートに不備があるため、書き出しを中断しました。", 48, "エラー"
-                Exit Sub
-            End If
-            
+        ' 書き出し前に必須項目の空欄チェックを実行
+        If Not CheckMandatoryFields(oSheet, sName) Then
+            MsgBox sName & " シートに不備があるため、書き出しを中断しました。", 48, "エラー"
+            Exit Sub
+        End If
+
+        If oSheet.IsVisible Then ' 非表示のシートは出力から除外
             oDoc.CurrentController.setActiveSheet(oSheet)
             sURL = sPath & sName & ".csv"
             oDoc.storeToURL(sURL, args)
         End If
-    Next sName
+    Next i
     
     MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
 End Sub

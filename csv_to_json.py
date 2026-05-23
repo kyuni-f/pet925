@@ -20,6 +20,13 @@ RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 OUTPUT_JSON = 'product_data.json'
 OUTPUT_MASTER_JS = 'data_master.js'
 
+# CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
+# products.csv は特別扱いなのでここには含めない
+SPECIFIC_MASTER_CSVS = {
+    'categories.csv', 'tags.csv', 'brands.csv', 'rules.csv'
+}
+
+
 # ターミナル出力用の色設定
 COLOR_RED = '\033[31m'
 COLOR_GREEN = '\033[32m'
@@ -51,12 +58,26 @@ def load_csv_simple(path):
     with open(path, 'r', encoding='utf-8-sig') as f:
         return list(csv.reader(f))
 
+def load_csv_dict_list(path):
+    """ヘッダーを持つCSVを読み込み、辞書のリストとして返す"""
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r', encoding='utf-8-sig', errors='replace', newline='') as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
 def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     name = row.get('name', '').strip()
     if not name:
         return None, [f"行 {line_num}: 商品名(name)が空です。"], None, line_num
+
+    # 列の欠落チェック（15列あるか）
+    expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
+    missing_keys = [k for k in expected_keys if k not in row or row[k] is None]
+    if missing_keys:
+        row_errors.append(f"行 {line_num}: 列が足りません。欠落: {', '.join(missing_keys)}")
 
     norm_name = normalize_text(name)
     desc = row.get('desc', '').strip()
@@ -95,6 +116,20 @@ def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index
     for tag_id, keywords in tag_keywords.items():
         if tag_id not in tags and any(kw in check_text for kw in keywords):
             tags.append(tag_id)
+
+    # 価格の数値形式チェック
+    for p_col in ['amz_p', 'rak_p', 'yah_p']:
+        p_val = str(row.get(p_col, '0')).strip()
+        if p_val and p_val != '0' and p_val != '#':
+            if not p_val.isdigit():
+                row_errors.append(f"行 {line_num}: 価格 {p_col} は半角数字のみで入力してください（カンマや単位は禁止）: '{p_val}'")
+
+    # リンク/画像URLの簡易形式チェック
+    for l_col in ['img', 'amz', 'rak', 'yah', 'a8']:
+        l_val = str(row.get(l_col, '#')).strip()
+        if l_val != '#' and not l_val.startswith('http'):
+            row_errors.append(f"行 {line_num}: {l_col} のURL形式が正しくありません（httpから開始するか # にしてください）")
+
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
     row['tags'] = tags
     return row, row_errors, norm_name, line_num
@@ -156,6 +191,23 @@ def convert(exit_on_error=True):
             tag_keywords[tag].extend(kws)
             allowed_tags.add(normalize_text(tag))
 
+    # --- ここが抜けていました：動的に他のマスターCSVを検索して読み込む ---
+    other_masters_data = {}
+    if os.path.exists(DATA_DIR):
+        for filename in os.listdir(DATA_DIR):
+            # 特定の用途が決まっているCSV以外、かつ隠しファイルでないものを対象にする
+            if filename.endswith('.csv') and filename != 'products.csv' and filename not in SPECIFIC_MASTER_CSVS:
+                filepath = os.path.join(DATA_DIR, filename)
+                # ファイル名をJSの変数名として安全な形式（英数字・アンダースコア）に変換
+                var_name = os.path.splitext(filename)[0]
+                var_name = re.sub(r'[^a-zA-Z0-9_]', '_', var_name)
+                
+                data = load_csv_dict_list(filepath)
+                if data:
+                    other_masters_data[var_name] = data
+                    print(f"   - 追加マスター検出: {filename} -> const {var_name}")
+                else:
+                    validation_warnings.append(f"追加マスター '{filename}' は中身が空か、形式が正しくないためスキップされました。")
     # 5. 商品データの読み込みと加工
     if not os.path.exists(PRODUCT_CSV):
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
@@ -219,6 +271,9 @@ def convert(exit_on_error=True):
             f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
+            # 動的に読み込んだマスターデータを追記
+            for var_name, data in other_masters_data.items():
+                f.write(f"const {var_name} = {json.dumps(data, ensure_ascii=False, indent=4)};\n")
 
     print(f"--- 変換完了 ---")
     if not validation_errors:
