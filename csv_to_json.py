@@ -3,6 +3,9 @@ import json
 import os
 import unicodedata
 import sys
+import datetime
+import time
+import concurrent.futures
 
 # 設定
 DATA_DIR = 'data'  # CSVファイルが格納されているディレクトリ
@@ -14,6 +17,13 @@ RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 
 OUTPUT_JSON = 'product_data.json'
 OUTPUT_MASTER_JS = 'data_master.js'
+
+# ターミナル出力用の色設定
+COLOR_RED = '\033[31m'
+COLOR_GREEN = '\033[32m'
+COLOR_YELLOW = '\033[33m'
+COLOR_BOLD = '\033[1m'
+COLOR_RESET = '\033[0m'
 
 validation_errors = []
 
@@ -36,8 +46,57 @@ def load_csv_simple(path):
     with open(path, 'r', encoding='utf-8-sig') as f:
         return list(csv.reader(f))
 
-def convert():
+def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags):
+    """1行分の重い処理を担当するワーカー関数"""
+    row_errors = []
+    name = row.get('name', '').strip()
+    if not name:
+        return None, [f"行 {line_num}: 商品名(name)が空です。"], None, line_num
+
+    norm_name = normalize_text(name)
+    desc = row.get('desc', '').strip()
+    check_text = normalize_text(name + desc)
+
+    # ブランド情報の処理
+    brand_raw = row.get('brand', '').strip()
+    found_id = ""
+    if brand_raw:
+        norm_brand = normalize_text(brand_raw)
+        if norm_brand in brand_master:
+            found_id = norm_brand
+        else:
+            for b_id, b_name in brand_master.items():
+                if norm_brand == normalize_text(b_name):
+                    found_id = b_id
+                    row['brand'] = b_name
+                    break
+        if not found_id: found_id = norm_brand
+    else:
+        for b_id, b_name in brand_master.items():
+            if b_id in check_text or normalize_text(b_name) in check_text:
+                found_id = b_id
+                row['brand'] = b_name
+                break
+    
+    row['brand_id'] = found_id
+    if found_id and found_id not in brand_master:
+        row_errors.append(f"行 {line_num}: ブランド '{row['brand']}' は brands.csv に未登録です。")
+
+    tags = row.get('tags', '').replace(',', ' ').split()
+    tags = [normalize_text(t) for t in tags if t]
+    for t in tags:
+        if t not in allowed_tags:
+            row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
+    for tag_id, keywords in tag_keywords.items():
+        if tag_id not in tags and any(kw in check_text for kw in keywords):
+            tags.append(tag_id)
+    tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
+    row['tags'] = tags
+    return row, row_errors, norm_name, line_num
+
+def convert(exit_on_error=True):
     print(f"--- 変換処理を開始します ---")
+    start_time = time.perf_counter()
     global validation_errors
     validation_errors = []
 
@@ -92,76 +151,43 @@ def convert():
             allowed_tags.add(normalize_text(tag))
 
     # 5. 商品データの読み込みと加工
-    products = []
     if not os.path.exists(PRODUCT_CSV):
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
         return
 
-    seen_names = {}
+    # データの読み込み
+    all_rows_input = []
     with open(PRODUCT_CSV, 'r', encoding='utf-8-sig', errors='replace', newline='') as f:
         reader = csv.DictReader(f)
-        for line_num, row in enumerate(reader, start=2):
-            name = row.get('name', '').strip()
-            if not name:
-                validation_errors.append(f"行 {line_num}: 商品名(name)が空です。")
-                continue
+        for i, r in enumerate(reader, start=2):
+            all_rows_input.append((i, r))
 
-            if name in seen_names:
-                validation_errors.append(f"行 {line_num}: 商品名 '{name}' が重複しています。(既出: 行 {seen_names[name]})")
-            else:
-                seen_names[name] = line_num
+    # 並列処理の実行
+    print(f"   - {len(all_rows_input)}件を並列処理中...")
+    processed_results = []
+    seen_names = {}
 
-            desc = row.get('desc', '').strip()
-            check_text = normalize_text(name + desc)
-
-            # ブランド情報の処理
-            brand_raw = row.get('brand', '').strip()
-            found_id = ""
-            
-            if brand_raw:
-                norm_brand = normalize_text(brand_raw)
-                # 直接IDとして存在するか、または日本語名からIDを逆引き
-                if norm_brand in brand_master:
-                    found_id = norm_brand
+    # max_workers を指定することで使用するCPUコア数を制限できます
+    # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
+    max_workers = os.cpu_count()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(process_row_task, ln, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags) 
+                   for ln, row in all_rows_input]
+        
+        for future in concurrent.futures.as_completed(futures):
+            res_row, res_errs, norm_name, ln = future.result()
+            validation_errors.extend(res_errs)
+            if res_row:
+                # 重複チェックは全プロセスの結果が揃う過程でメインプロセスで行う
+                if norm_name in seen_names:
+                    validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[norm_name]})")
                 else:
-                    for b_id, b_name in brand_master.items():
-                        if norm_brand == normalize_text(b_name):
-                            found_id = b_id
-                            row['brand'] = b_name # 表示名をマスタに合わせる
-                            break
-                if not found_id: found_id = norm_brand
-            else:
-                # 空の場合は名前や説明文からマスタを検索して自動判定
-                for b_id, b_name in brand_master.items():
-                    if b_id in check_text or normalize_text(b_name) in check_text:
-                        found_id = b_id
-                        row['brand'] = b_name
-                        break
-            
-            row['brand_id'] = found_id
-            if found_id and found_id not in brand_master:
-                validation_errors.append(f"行 {line_num}: ブランド '{row['brand']}' は brands.csv に未登録です。")
+                    seen_names[norm_name] = ln
+                processed_results.append((ln, res_row))
 
-            # タグの処理
-            tags = row.get('tags', '').replace(',', ' ').split()
-            tags = [normalize_text(t) for t in tags if t]
-
-            # 未登録タグのチェック
-            for t in tags:
-                if t not in allowed_tags:
-                    validation_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
-
-            # 自動タグ付けルールの適用
-            for tag_id, keywords in tag_keywords.items():
-                if tag_id not in tags:
-                    if any(kw in check_text for kw in keywords):
-                        tags.append(tag_id)
-            
-            # タグをカテゴリ順に並べ替え（index.htmlでの表示を綺麗にするため）
-            tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
-
-            row['tags'] = tags
-            products.append(row)
+    # 行番号で並び替えて元の順序を復元
+    processed_results.sort(key=lambda x: x[0])
+    products = [r[1] for r in processed_results]
 
     # 6. ファイル書き出し
     # product_data.json
@@ -178,19 +204,61 @@ def convert():
     print(f"--- 変換完了 ---")
     print(f"   - {OUTPUT_JSON} ({len(products)}件)")
     print(f"   - {OUTPUT_MASTER_JS} (マスタ設定)")
+    exec_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+    print(f"   ⏰ 実行時刻: {exec_time}")
+    duration = time.perf_counter() - start_time
+    print(f"   - 処理時間: {duration:.2f}秒")
 
     if validation_errors:
-        print(f"\n⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:")
+        print(f"\n{COLOR_RED}{COLOR_BOLD}⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:{COLOR_RESET}")
         for err in validation_errors[:10]: # 最初の10件を表示
-            print(f"   - {err}")
+            print(f"{COLOR_RED}   - {err}{COLOR_RESET}")
         if len(validation_errors) > 10: print(f"   ...他 {len(validation_errors)-10} 件")
         # 致命的なミス（商品名空など）がある場合にデプロイを止めるなら以下を有効にする
-        sys.exit(1)
+        if exit_on_error:
+            sys.exit(1)
     else:
-        print(f"✅ すべてのデータが正常に処理されました。")
+        print(f"{COLOR_GREEN}{COLOR_BOLD}✅ すべてのデータが正常に処理されました。{COLOR_RESET}")
 
 if __name__ == '__main__':
-    try:
-        convert()
-    except Exception as e:
-        print(f"❌ 変換失敗: {e}")
+    if "--watch" in sys.argv:
+        print(f"{COLOR_BOLD}👀 監視モードを起動しました。CSVの変更を待機中... (Ctrl+C で終了){COLOR_RESET}")
+        try:
+            convert(exit_on_error=False) # 初回実行
+        except Exception as e:
+            print(f"{COLOR_RED}初回ビルド失敗: {e}{COLOR_RESET}")
+        
+        # 初期状態のファイル時間を記録
+        last_mtimes = {}
+        if os.path.exists(DATA_DIR):
+            for f in os.listdir(DATA_DIR):
+                if f.endswith('.csv') and not f.startswith('.'):
+                    path = os.path.join(DATA_DIR, f)
+                    last_mtimes[path] = os.path.getmtime(path)
+
+        while True:
+            try:
+                time.sleep(1) # 1秒間隔でチェック
+                changed = False
+                for f in os.listdir(DATA_DIR):
+                    if f.endswith('.csv') and not f.startswith('.'):
+                        path = os.path.join(DATA_DIR, f)
+                        mtime = os.path.getmtime(path)
+                        if path not in last_mtimes or mtime > last_mtimes[path]:
+                            last_mtimes[path] = mtime
+                            changed = True
+                if changed:
+                    print(f"\n{COLOR_YELLOW}🔄 変更を検知しました。再ビルドします...{COLOR_RESET}")
+                    time.sleep(0.2) # ファイルの書き込み完了を少し待つ
+                    convert(exit_on_error=False)
+            except KeyboardInterrupt:
+                print(f"\n{COLOR_YELLOW}監視モードを終了します。{COLOR_RESET}")
+                break
+            except Exception as e:
+                print(f"{COLOR_RED}監視中にエラーが発生しました: {e}{COLOR_RESET}")
+    else:
+        try:
+            convert()
+        except Exception as e:
+            print(f"{COLOR_RED}{COLOR_BOLD}❌ 変換失敗: {e}{COLOR_RESET}")
+            sys.exit(1)

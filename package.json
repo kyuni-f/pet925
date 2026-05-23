@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "description": "科学的な根拠に基づいたプレミアムペットフードの選定ガイドシステム (Premium Pet Nutrition Guide)",
   "scripts": {
-    "start": "python3 csv_to_json.py",
+    "start": "python3 csv_to_json.py --watch",
     "build": "python3 csv_to_json.py",
     "deploy": "npm run build && git add . && git commit -m \"deploy: update logic and data via python\" && git push"
   },

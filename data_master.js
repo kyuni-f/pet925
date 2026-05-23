@@ -74,5 +74,8 @@ const tagKeywords = {
     "lamb": [
         "ラム肉",
         "lamb"
+    ],
+    "tooth": [
+        "歯"
     ]
 };
