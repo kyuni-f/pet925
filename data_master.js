@@ -48,7 +48,8 @@ const brandMaster = {
     "nutro": "ニュートロ",
     "supremo": "シュプレモ",
     "royal canin": "ロイヤルカナン",
-    "sheba": "シーバ"
+    "sheba": "シーバ",
+    "petline": "ペットライン"
 };
 const tagKeywords = {
     "gf": [
