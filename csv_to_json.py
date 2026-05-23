@@ -245,11 +245,11 @@ def convert(exit_on_error=True):
                 if dup_key in seen_names:
                     validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
                 else:
-                    # 類似商品チェック（同じブランド内で 90% 以上一致するものがあるか）
+                    # 類似商品チェック（同じブランド内で 95% 以上一致するものがあるか）
                     if brand_id not in names_by_brand:
                         names_by_brand[brand_id] = []
                     
-                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.90)
+                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.95)
                     if close_matches:
                         validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
 
