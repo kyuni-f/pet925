@@ -90,6 +90,8 @@ def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index
         norm_brand = normalize_text(brand_raw)
         if norm_brand in brand_master:
             found_id = norm_brand
+            # 追加: Key(ID)で入力されても、表示は常にマスタの正式名(name列)に置き換える
+            row['brand'] = brand_master[found_id]
         else:
             for b_id, b_name in brand_master.items():
                 if norm_brand == normalize_text(b_name):
@@ -191,23 +193,24 @@ def convert(exit_on_error=True):
             tag_keywords[tag].extend(kws)
             allowed_tags.add(normalize_text(tag))
 
-    # --- ここが抜けていました：動的に他のマスターCSVを検索して読み込む ---
+    # 6. 動的に他のマスターCSV（shops.csvなど）を読み込む
     other_masters_data = {}
     if os.path.exists(DATA_DIR):
         for filename in os.listdir(DATA_DIR):
-            # 特定の用途が決まっているCSV以外、かつ隠しファイルでないものを対象にする
-            if filename.endswith('.csv') and filename != 'products.csv' and filename not in SPECIFIC_MASTER_CSVS:
+            # 特定のマスター以外のCSVを自動取得
+            is_other_csv = filename.endswith('.csv') and filename != 'products.csv' and filename not in SPECIFIC_MASTER_CSVS
+            if is_other_csv:
                 filepath = os.path.join(DATA_DIR, filename)
-                # ファイル名をJSの変数名として安全な形式（英数字・アンダースコア）に変換
                 var_name = os.path.splitext(filename)[0]
                 var_name = re.sub(r'[^a-zA-Z0-9_]', '_', var_name)
                 
                 data = load_csv_dict_list(filepath)
-                if data:
+                if data is not None:
                     other_masters_data[var_name] = data
                     print(f"   - 追加マスター検出: {filename} -> const {var_name}")
                 else:
                     validation_warnings.append(f"追加マスター '{filename}' は中身が空か、形式が正しくないためスキップされました。")
+
     # 5. 商品データの読み込みと加工
     if not os.path.exists(PRODUCT_CSV):
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
@@ -245,11 +248,11 @@ def convert(exit_on_error=True):
                 if dup_key in seen_names:
                     validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
                 else:
-                    # 類似商品チェック（同じブランド内で 95% 以上一致するものがあるか）
+                    # 類似商品チェック（同じブランド内で 85% 以上一致するものがあるか）
                     if brand_id not in names_by_brand:
                         names_by_brand[brand_id] = []
                     
-                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.95)
+                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.85)
                     if close_matches:
                         validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
 
@@ -264,7 +267,7 @@ def convert(exit_on_error=True):
     if not validation_errors:
         # 6. エラーが一つもない場合のみファイル書き出しを実行
         with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
-            json.dump(products, f, ensure_ascii=False, indent=4)
+            json.dump(products, f, ensure_ascii=False, indent=2) # インデントを少し詰めて軽量化
 
         with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
             f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")

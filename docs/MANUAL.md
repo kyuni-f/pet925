@@ -203,6 +203,84 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     Loop
     CheckMandatoryFields = True
 End Function
+
+'''
+''' 7. 高度な自動化：ブランド名の自動同期
+''' products シートに入力したブランド名やタグが各マスターにない場合、自動で追加します。
+'''
+Sub SyncBrandToMaster(oEvent As Object)
+    Dim oDoc As Object, oSheets As Object, oTargetSheet As Object
+    Dim sValue As String, oCell As Object
+    Dim i As Long, bExists As Boolean
+    Dim nCol As Integer
+
+    ' セル単体の変更のみ対象
+    If Not oEvent.supportsService("com.sun.star.table.Cell") Then Exit Sub
+
+    oDoc = ThisComponent
+    oSheets = oDoc.Sheets
+    nCol = oEvent.CellAddress.Column
+
+    ' --- B列 (ブランド) の処理 ---
+    If nCol = 1 Then
+        sValue = Trim(oEvent.String)
+        If sValue = "" Or sValue = "brand" Or sValue = "ブランド" Then Exit Sub
+        oTargetSheet = oSheets.getByName("brands")
+        i = 1 : bExists = False
+        Do
+            oCell = oTargetSheet.getCellByPosition(0, i) ' Key列
+            If oCell.String = "" Then Exit Do
+            If LCase(oCell.String) = LCase(sValue) Or LCase(oTargetSheet.getCellByPosition(1, i).String) = LCase(sValue) Then
+                bExists = True : Exit Do
+            End If
+            i = i + 1
+        Loop
+        If Not bExists Then
+            If MsgBox("ブランド '" & sValue & "' は brands シートに未登録です。追加しますか？", 4 + 32, "ブランド自動登録") = 6 Then
+                oTargetSheet.getCellByPosition(0, i).String = LCase(sValue)
+                oTargetSheet.getCellByPosition(1, i).String = sValue
+                MsgBox "brands シートに登録しました。", 64
+            End If
+        End If
+
+    ' --- C列 (タグ) の処理 ---
+    ElseIf nCol = 2 Then
+        Dim aTags() As String, sTag As String
+        sValue = oEvent.String
+        If sValue = "" Or sValue = "tags" Or sValue = "タグ" Then Exit Sub
+        ' スペースやカンマで分割
+        aTags = Split(Replace(sValue, ",", " "), " ")
+        oTargetSheet = oSheets.getByName("tags")
+        
+        For Each sTag In aTags
+            sTag = Trim(sTag)
+            If Len(sTag) > 1 Then ' 1文字以下は無視
+                i = 1 : bExists = False
+                Do
+                    oCell = oTargetSheet.getCellByPosition(1, i) ' Key列 (B列)
+                    If oCell.String = "" Then Exit Do
+                    If LCase(oCell.String) = LCase(sTag) Then
+                        bExists = True : Exit Do
+                    End If
+                    i = i + 1
+                Loop
+                
+                If Not bExists Then
+                    If MsgBox("タグ '" & sTag & "' は tags シートに未登録です。追加しますか？", 4 + 32, "タグ自動登録") = 6 Then
+                        Dim sCat As String, sDisp As String
+                        sCat = InputBox("カテゴリを入力してください (animal, age, cond):", "タグ追加", "cond")
+                        If sCat <> "" Then
+                            sDisp = InputBox("表示名を入力してください:", "タグ追加", sTag)
+                            oTargetSheet.getCellByPosition(0, i).String = sCat ' カテゴリ (A列)
+                            oTargetSheet.getCellByPosition(1, i).String = sTag ' キー (B列)
+                            oTargetSheet.getCellByPosition(2, i).String = sDisp ' 表示名 (C列)
+                        End If
+                    End If
+                End If
+            End If
+        Next sTag
+    End If
+End Sub
 ```
 
     3. **ボタンの配置**:
@@ -221,6 +299,15 @@ End Function
     4. Calc（マスター）の新しい行に貼り付けるか、直接 `products.csv` に追記してください。
 - **入力規則の設定**: [データ] > [入力規則] > [入力値の種類] で **「ユーザー定義」** を選択します。これが Google スプレッドシートの「カスタム数式」と同じ機能です。
 - **ロックファイル**: `.~lock.products.csv#` は無視してOKです。
+- **CSVデータを貼り付ける場合（GitHubやGeminiから）**:
+    1. CSV形式のテキストをすべてコピーする。
+
+### 💡 Calc内でのデータ連動テクニック
+マスターファイル（.ods）の編集を楽にする設定です。
+1. **ブランドのドロップダウン**: `brands`シートのキー範囲に名前を付け、`products`シートのブランド列で **[データ] > [入力規則] > [セル範囲]** を設定すると、リストから選択可能になります。
+2. **未登録タグのハイライト**: **[条件付き書式]** で `COUNTIF` 関数を使えば、`tags`シートに存在しない単語を `products`シート上で赤く光らせることができます。
+3. **自動集計シートの作成**: 新しいシートを作り `=COUNTIF(products.C2:C1000, ".*gf.*")` のような数式を入れれば、現在何件のグレインフリー商品があるかリアルタイムで把握できます。
+
 - **CSVデータを貼り付ける場合（GitHubやGeminiから）**:
     1. CSV形式のテキストをすべてコピーする。
     2. Calcの **A1セル** を選択して貼り付ける (`Ctrl + V`)。
