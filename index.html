@@ -143,15 +143,6 @@
         .chip-close { font-size: 0.8rem; line-height: 1; }
         .clear-all { font-size: 0.6rem; color: #666; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; cursor: pointer; margin-left: 12px; background: #fff; transition: 0.3s; letter-spacing: 1px; font-weight: bold; text-transform: uppercase; }
         .clear-all:hover { background: #f0f0f0; color: var(--dark); border-color: #999; }
-
-        /* パクリ防止：テキスト選択とドラッグを制限 */
-        img { 
-            -webkit-user-drag: none; 
-            pointer-events: none; 
-        }
-        .product-card, .site-intro, h1, .sub-copy, body {
-            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
-        }
         
         /* お気に入りボタンのスタイル */
         .fav-toggle-btn { background: #fff; border: 1px solid #eee; color: var(--dark); padding: 8px 18px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-weight: bold; border-radius: 25px; letter-spacing: 1px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); outline: none; }
@@ -766,22 +757,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- パクリ防止ロジック ---
     
-    // 1. 右クリックを制限
-    document.addEventListener('contextmenu', (e) => {
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-        }
-    });
-
     console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black;");
     console.log("このサイトのコンテンツおよびデータの無断転載・複製を固く禁じます。");
-
-    // 2. コピー時にクレジットを強制付加
-    document.addEventListener('copy', (e) => {
-        const selection = window.getSelection();
-        e.clipboardData.setData('text/plain', selection.toString() + '\n\nSource: pet925 | Premium Pet Nutrition\nhttps://kyuni-f.github.io/pet925/');
-        e.preventDefault();
-    });
 
     if (submitBtn) submitBtn.textContent = "データを読み込み中...";
 
