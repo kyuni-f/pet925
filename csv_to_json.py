@@ -312,8 +312,9 @@ def convert(exit_on_error=True):
 
     if not validation_errors:
         # 7. エラーが一つもない場合のみファイル書き出しを実行
+        # 読み込み速度を優先し、スペースを最小化したJSONで保存
         with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
-            json.dump(products, f, ensure_ascii=False, indent=2) # インデントを少し詰めて軽量化
+            json.dump(products, f, ensure_ascii=False, separators=(',', ':'))
 
         with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
             f.write(f"const siteVersion = '{build_version}';\n")

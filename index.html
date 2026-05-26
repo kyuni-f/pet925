@@ -19,8 +19,11 @@
     </script>
     <title>pet925 | Premium Pet Nutrition</title>
     <meta name="description" content="愛犬・愛猫へのこだわりから最適なプレミアムフードを見つける選定ガイド。グレインフリー、特定のタンパク源、低カロリーなど、飼い主様のこだわりから最高の一皿を提案します。">
-    <!-- マスタデータの読み込み -->
-    <script src="data_master.js"></script>
+
+    <script>
+        // 入り口のマスタデータだけは常に最新を取得（ここから siteVersion を受け取る）
+        document.write('<script src="data_master.js?v=' + Date.now() + '"><\/script>');
+    </script>
 
     <style>
         :root { --gold: #c5a059; --dark: #1a1a1a; --gray: #f4f4f4; }
@@ -140,6 +143,45 @@
         .chip-close { font-size: 0.8rem; line-height: 1; }
         .clear-all { font-size: 0.6rem; color: #666; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; cursor: pointer; margin-left: 12px; background: #fff; transition: 0.3s; letter-spacing: 1px; font-weight: bold; text-transform: uppercase; }
         .clear-all:hover { background: #f0f0f0; color: var(--dark); border-color: #999; }
+
+        /* パクリ防止：テキスト選択とドラッグを制限 */
+        img { 
+            -webkit-user-drag: none; 
+            pointer-events: none; 
+        }
+        .product-card, .site-intro, h1, .sub-copy, body {
+            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+        }
+        
+        /* お気に入りボタンのスタイル */
+        .fav-toggle-btn { background: #fff; border: 1px solid #eee; color: var(--dark); padding: 8px 18px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-weight: bold; border-radius: 25px; letter-spacing: 1px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); outline: none; }
+        .fav-toggle-btn:hover { background: #f9f9f9; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .fav-toggle-btn:active { transform: translateY(0) scale(0.98); }
+        .fav-toggle-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+
+        .card-fav-btn { 
+            position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); 
+            border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; 
+            z-index: 11; display: flex; align-items: center; justify-content: center; 
+            font-size: 1.2rem; color: #ccc; transition: 0.3s; 
+        }
+
+        /* カスタム確認モーダル */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; animation: fadeIn 0.3s ease; }
+        .modal-content { background: #fff; padding: 40px; border-radius: 20px; text-align: center; max-width: 320px; width: 85%; box-shadow: 0 20px 50px rgba(0,0,0,0.1); transform: scale(0.9); animation: modalPop 0.3s cubic-bezier(0.17, 0.89, 0.32, 1.28) forwards; }
+        @keyframes modalPop { to { transform: scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-icon { font-size: 2.5rem; color: #ff4757; margin-bottom: 15px; line-height: 1; }
+        .modal-text { font-size: 0.95rem; font-weight: bold; color: var(--dark); margin-bottom: 25px; letter-spacing: 1px; }
+        .modal-btns { display: flex; gap: 12px; justify-content: center; }
+        .modal-btn { padding: 12px 24px; border-radius: 25px; border: none; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; letter-spacing: 1px; }
+        .modal-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+        .modal-btn:active { transform: translateY(0); }
+        .btn-cancel { background: #f4f4f4; color: #666; }
+        .btn-confirm { background: var(--dark); color: #fff; }
+        .modal-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+        .modal-btn:active { transform: translateY(0); }
+        .card-fav-btn.active { color: #ff4757; }
         .active-chips-label { font-size: 0.6rem; color: #bbb; font-weight: bold; margin-right: 5px; }
 
         /* 商品カード：カタログのような美しさ */
@@ -203,6 +245,10 @@
         .btn-yah { background: #ff0033; color: #fff; }
         .btn-shop:hover { opacity: 0.8; transform: translateY(-2px); }
 
+        /* フッターのスタイル */
+        footer { text-align: center; padding: 60px 20px; color: #bbb; font-size: 0.7rem; letter-spacing: 2px; }
+        footer a { color: var(--gold); text-decoration: none; }
+
     </style>
 </head>
 <body>
@@ -223,7 +269,7 @@
             <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render(true)">
         </div>
         <div class="filter-nav" id="filter-nav-container"></div>
-        
+
         <div class="floating-action-area">
             <button id="main-submit-btn" class="btn-primary-action" onclick="showResults()">SHOW RESULTS</button>
         </div>
@@ -231,11 +277,34 @@
 
     <!-- 結果一覧View -->
     <div id="view-results">
-        <button class="btn-back-to-search" onclick="backToSearch()">← 検索条件に戻る</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; margin-bottom: 15px; padding-bottom: 5px;">
+            <button class="btn-back-to-search" onclick="backToSearch()">← 検索条件に戻る</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="clear-fav-btn" class="clear-all" style="display: none; margin: 0;" onclick="clearAllFavorites()">CLEAR ❤ ×</button>
+                <button id="fav-filter-btn" class="fav-toggle-btn" onclick="toggleFavFilter()">お気に入り <span style="color:#ff4757">❤</span></button>
+            </div>
+        </div>
         <div id="active-chips-container" class="active-chips-area"></div>
         <div id="product-list"></div>
         <div id="load-more-area" class="load-more-container"></div>
     </div>
+
+    <!-- カスタム確認モーダルHTML -->
+    <div id="fav-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-icon">❤</div>
+            <div class="modal-text">お気に入りをすべて<br>解除しますか？</div>
+            <div class="modal-btns">
+                <button class="modal-btn btn-cancel" onclick="closeFavModal()">やめる</button>
+                <button class="modal-btn btn-confirm" onclick="executeClearAllFavorites()">解除する</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2024-2026 pet925. All Rights Reserved. <br>
+        Reproduction of content is strictly prohibited.
+    </footer>
 </div>
 
 <script>
@@ -250,6 +319,8 @@ if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
 let activeFilters = {}; // 内部で cat: value(or array) を保持
 let searchTrackTimer = null;
 let tagLookupMap = {}; // 事前生成したタグ辞書を保持
+let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
+let showFavoritesOnly = false;
 let searchWorker = null; // Web Worker インスタンス
 let isWorkerReady = false;
 
@@ -287,6 +358,40 @@ const getTagLookup = () => {
     }
     return lookup;
 };
+
+function toggleFavorite(name) {
+    const index = favorites.indexOf(name);
+    if (index > -1) {
+        favorites.splice(index, 1);
+    } else {
+        favorites.push(name);
+    }
+    localStorage.setItem('pet925_favs', JSON.stringify(favorites));
+    render(false);
+}
+
+function clearAllFavorites() {
+    if (favorites.length === 0) return;
+    document.getElementById('fav-modal-overlay').style.display = 'flex';
+}
+
+function closeFavModal() {
+    document.getElementById('fav-modal-overlay').style.display = 'none';
+}
+
+function executeClearAllFavorites() {
+    favorites = [];
+    localStorage.setItem('pet925_favs', JSON.stringify(favorites));
+    trackEvent('Favorites', 'clear_all', 'all');
+    closeFavModal();
+    render(false);
+}
+
+function toggleFavFilter() {
+    showFavoritesOnly = !showFavoritesOnly;
+    document.getElementById('fav-filter-btn').classList.toggle('active', showFavoritesOnly);
+    render(false);
+}
 
 function trackEvent(category, action, label) {
     // 開発環境（localhostなど）でのみログを表示し、本番での負荷をゼロに近づける
@@ -504,6 +609,18 @@ function renderActiveChips() {
         hasActive = true;
     }
 
+    // お気に入り一括解除ボタンの表示制御
+    const clearFavBtn = document.getElementById('clear-fav-btn');
+    if (clearFavBtn) {
+        clearFavBtn.style.display = (favorites.length > 0) ? 'block' : 'none';
+    }
+
+    // お気に入りボタンのラベルを更新（件数を表示）
+    const favBtn = document.getElementById('fav-filter-btn');
+    if (favBtn) {
+        favBtn.innerHTML = `お気に入り <span style="color:#ff4757">❤</span> <span style="margin-left:5px; opacity:0.8; font-size:0.9em;">(${favorites.length})</span>`;
+    }
+
     // フィルタータグ
     for (const [cat, val] of Object.entries(activeFilters)) {
         const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
@@ -554,7 +671,9 @@ function render(isTyping = false) {
     searchWorker.postMessage({
         searchWords,
         activeFilters,
-        visibleCount
+        visibleCount,
+        showFavoritesOnly,
+        favorites
     });
 
     // GA4計測用のタイマー（既存通り）
@@ -596,10 +715,15 @@ function handleWorkerResults(data) {
         // 説明文も同様に、100文字を超える場合はフォントサイズを小さくする
         const descClass = (item.desc || "").length > 100 ? 'description is-long' : 'description';
 
+        const isFav = favorites.includes(item.name);
+
         card.innerHTML = `
             <div class="img-container">
                 ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
                 <img src="${imageSource}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async">
+                <button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')">
+                    ${isFav ? '❤' : '♡'}
+                </button>
             </div>
             <div class="card-content">
                 <span class="brand-badge">${item.brand}</span>
@@ -639,6 +763,26 @@ window.addEventListener('DOMContentLoaded', () => {
     tagLookupMap = getTagLookup();
 
     const submitBtn = document.getElementById('main-submit-btn');
+
+    // --- パクリ防止ロジック ---
+    
+    // 1. 右クリックを制限
+    document.addEventListener('contextmenu', (e) => {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+        }
+    });
+
+    console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black;");
+    console.log("このサイトのコンテンツおよびデータの無断転載・複製を固く禁じます。");
+
+    // 2. コピー時にクレジットを強制付加
+    document.addEventListener('copy', (e) => {
+        const selection = window.getSelection();
+        e.clipboardData.setData('text/plain', selection.toString() + '\n\nSource: pet925 | Premium Pet Nutrition\nhttps://kyuni-f.github.io/pet925/');
+        e.preventDefault();
+    });
+
     if (submitBtn) submitBtn.textContent = "データを読み込み中...";
 
     // ビルド時のバージョンを使用してWorkerを初期化

@@ -36,8 +36,8 @@ function processChunk(data) {
         const keywordsNorm = normalize(item._keywords || "");
         
         let tagsNorm = "";
-        item._tagSet = new Set(item.tags);
-        item._tagSet.forEach(t => {
+        // セットを毎回作らず、検索時も配列のincludesを使用（タグ数が少なければこちらの方が速い）
+        item.tags.forEach(t => {
             tagsNorm += normalize(t) + " ";
             if (tagLookupMap[t]) tagsNorm += normalize(tagLookupMap[t]) + " ";
             const aliases = (typeof tagKeywords !== 'undefined') ? tagKeywords[t] : null;
@@ -74,7 +74,7 @@ async function initWorker() {
         // ビルド時のバージョンを使用してJSONを取得
         const response = await fetch('product_data.json?v=' + version);
         const productData = await response.json();
-        
+
         processChunk(productData);
 
         // 初期ロード完了を通知
@@ -93,22 +93,27 @@ self.onmessage = function(e) {
         return;
     }
 
-    const { searchWords, activeFilters, visibleCount } = e.data;
+    const { searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites } = e.data;
     const catsToCheck = Object.keys(tagMaster);
     
     let matchCount = 0;
     let allMatches = [];
+    // 検索ごとに1回だけSetを作成（ループ内での生成を避ける）
+    const favSet = new Set(favorites);
 
     for (const item of allProducts) {
+        // お気に入りフィルターの適用
+        if (showFavoritesOnly && !favSet.has(item.name)) continue;
+
         // フィルタリング
         const matchFilters = catsToCheck.every(cat => {
             if (!tagMaster[cat]) return true;
             const filterVal = activeFilters[cat];
-            const itemTags = item._tagSet;
+            const itemTags = item.tags;
             if (!isMulti(cat)) {
-                return filterVal === 'all' || itemTags.has(filterVal);
+                return filterVal === 'all' || itemTags.includes(filterVal);
             }
-            return filterVal.length === 0 || filterVal.every(t => itemTags.has(t));
+            return filterVal.length === 0 || filterVal.every(t => itemTags.includes(t));
         });
 
         if (!matchFilters) continue;
