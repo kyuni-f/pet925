@@ -1,3 +1,4 @@
+const siteVersion = '20260526230522';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -19,7 +20,8 @@ const tagMaster = {
         "appetite": "食いつき (APPETITE)",
         "gf": "穀物不使用 (GF)",
         "digestive": "消化器ケア (DIGESTIVE)",
-        "lamb": "ラム肉 (LAMB)"
+        "lamb": "ラム肉 (LAMB)",
+        "high_protein": "ｈigh_protein"
     }
 };
 const categoryMaster = {
@@ -46,10 +48,12 @@ const categoryMaster = {
 };
 const brandMaster = {
     "nutro": "ニュートロ",
-    "supremo": "シュプレモ",
+    "supremo": "ニュートロ",
+    "wildrecipe": "ニュートロ",
     "royal canin": "ロイヤルカナン",
     "sheba": "シーバ",
-    "petline": "ペットライン"
+    "orijin": "オリジン",
+    "medicoat": "ペットライン"
 };
 const tagKeywords = {
     "gf": [

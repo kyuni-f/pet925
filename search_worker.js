@@ -1,5 +1,9 @@
+// Worker起動時のURLからバージョンを取得
+const urlParams = new URLSearchParams(self.location.search);
+const version = urlParams.get('v') || Date.now();
+
 // マスタデータを読み込む
-importScripts('data_master.js?v=' + Date.now()); 
+importScripts('data_master.js?v=' + version); 
 
 // 正規化ロジック (index.htmlと共通)
 const normalize = (str) => {
@@ -25,28 +29,41 @@ if (typeof tagMaster !== 'undefined') {
 // チャンク（分割ファイル）を処理する関数
 function processChunk(data) {
     data.forEach(item => {
-        // ブランドの日本語名をマスタから取得 (brand_id を正規化して引く)
-        let brandJP = "";
-        if (typeof brandMaster !== 'undefined' && item.brand_id) {
-            brandJP = brandMaster[normalize(item.brand_id)] || "";
-        }
-
-        const searchParts = [
-            normalize(item.name),
-            normalize(item.brand),
-            normalize(item.brand_id || ""),
-            normalize(brandJP),
-            normalize(item.desc),
-            normalize(item.size || "")
-        ];
+        // スコアリング用に各フィールドを個別に正規化して保持
+        const nameNorm = normalize(item.name);
+        const brandNorm = normalize(item.brand) + " " + normalize(item.brand_id || "");
+        const descNorm = normalize(item.desc);
+        const keywordsNorm = normalize(item._keywords || "");
+        
+        let tagsNorm = "";
         item._tagSet = new Set(item.tags);
         item._tagSet.forEach(t => {
-            searchParts.push(normalize(t));
-            if (tagLookupMap[t]) searchParts.push(normalize(tagLookupMap[t]));
+            tagsNorm += normalize(t) + " ";
+            if (tagLookupMap[t]) tagsNorm += normalize(tagLookupMap[t]) + " ";
             const aliases = (typeof tagKeywords !== 'undefined') ? tagKeywords[t] : null;
-            if (aliases) aliases.forEach(a => searchParts.push(normalize(a)));
+            if (aliases) aliases.forEach(a => tagsNorm += normalize(a) + " ");
         });
-        item._searchFullText = searchParts.filter(part => part !== "").join(' ');
+
+        // 検索用の重み付けフィールド
+        item._weightedFields = {
+            name: nameNorm,
+            brand: brandNorm,
+            tags: tagsNorm.trim(),
+            keywords: keywordsNorm,
+            desc: descNorm
+        };
+
+        // 高速フィルタリング用の全文テキスト（AND検索用）
+        item._searchFullText = [
+            nameNorm, 
+            brandNorm, 
+            tagsNorm, 
+            descNorm, 
+            normalize(item.size || ""), 
+            keywordsNorm
+        ].join(' ');
+
+        item._originalIndex = allProducts.length; // 元の順序を保持
         allProducts.push(item);
     });
 }
@@ -54,7 +71,8 @@ function processChunk(data) {
 // JSONデータを非同期で取得
 async function initWorker() {
     try {
-        const response = await fetch('product_data.json');
+        // ビルド時のバージョンを使用してJSONを取得
+        const response = await fetch('product_data.json?v=' + version);
         const productData = await response.json();
         
         processChunk(productData);
@@ -79,7 +97,7 @@ self.onmessage = function(e) {
     const catsToCheck = Object.keys(tagMaster);
     
     let matchCount = 0;
-    const matchedItems = [];
+    let allMatches = [];
 
     for (const item of allProducts) {
         // フィルタリング
@@ -99,18 +117,39 @@ self.onmessage = function(e) {
         const matchSearch = searchWords.every(word => item._searchFullText.includes(word));
 
         if (matchSearch) {
-            matchCount++;
-            // 描画に必要な分だけ（visibleCountまで）を返すことで通信量を削減
-            if (matchCount <= visibleCount) {
-                matchedItems.push(item);
-            }
+            let score = 0;
+            // 検索ワードが含まれている場所によって加点
+            searchWords.forEach(word => {
+                if (item._weightedFields.name.includes(word)) score += 100;
+                // 商品名と完全に一致する場合はさらにボーナス
+                if (item._weightedFields.name === word) score += 500;
+                if (item._weightedFields.brand.includes(word)) score += 50;
+                if (item._weightedFields.tags.includes(word)) score += 20;
+                if (item._weightedFields.keywords.includes(word)) score += 10;
+                if (item._weightedFields.desc.includes(word)) score += 5;
+            });
+            item._tempScore = score;
+            allMatches.push(item);
         }
     }
+
+    matchCount = allMatches.length;
+
+    // スコア順にソート（スコアが同じなら元のCSV順）
+    if (searchWords.length > 0) {
+        allMatches.sort((a, b) => {
+            if (b._tempScore !== a._tempScore) return b._tempScore - a._tempScore;
+            return a._originalIndex - b._originalIndex;
+        });
+    }
+
+    // 必要な件数分だけ切り出す
+    const matchedItems = allMatches.slice(0, visibleCount);
 
     // 結果をメインスレッドに返却
     self.postMessage({
         matchedItems: matchedItems,
         totalMatchCount: matchCount,
-        visibleCount: visibleCount
+        visibleCount: visibleCount // フロントエンド側での管理用
     });
 };

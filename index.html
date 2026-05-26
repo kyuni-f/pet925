@@ -165,9 +165,19 @@
         .brand-badge { font-size: 0.65rem; color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
         /* 商品名：3行分の高さを確保し、超える場合は省略（ガタつき防止） */
         .product-name { font-size: 1.05rem; font-weight: 500; margin: 10px 0; color: #000; line-height: 1.4; min-height: 4.5em; display: -webkit-box; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        /* 長い商品名の調整：フォントサイズを少し小さくして、3行以内に収まりやすくする */
+        .product-name.is-long {
+            font-size: 0.9rem;
+            line-height: 1.3;
+         }
         /* 説明文：3行分の高さを確保し、超える場合は省略 */
         .description { font-size: 0.85rem; color: #666; margin-bottom: 15px; min-height: 4.5em; display: -webkit-box; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        
+        /* 長い説明文の調整：フォントサイズと行間を微調整して、3行以内に収まりやすくする */
+        .description.is-long {
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+
         /* タグリスト：高さの揺れを抑える */
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; min-height: 2.5em; align-content: flex-start; }
         .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 3px 8px; text-transform: uppercase; }
@@ -580,6 +590,12 @@ function handleWorkerResults(data) {
         card.className = 'product-card';
         let imageSource = (!item.img || item.img === "#" || item.img === "https://unsplash.com") ? defaultImg : item.img;
 
+        // 文字数が長い場合（目安45文字以上）は専用のクラスを付与してフォントを小さくする
+        const nameClass = item.name.length > 45 ? 'product-name is-long' : 'product-name';
+        
+        // 説明文も同様に、100文字を超える場合はフォントサイズを小さくする
+        const descClass = (item.desc || "").length > 100 ? 'description is-long' : 'description';
+
         card.innerHTML = `
             <div class="img-container">
                 ${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}
@@ -587,9 +603,9 @@ function handleWorkerResults(data) {
             </div>
             <div class="card-content">
                 <span class="brand-badge">${item.brand}</span>
-                <div class="product-name">${item.name}</div>
-                <p class="description">${item.desc || ""}</p>
-                <div class="tag-list">${item.tags.map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div>
+                <div class="${nameClass}">${item.name}</div>
+                <p class="${descClass}">${item.desc || ""}</p>
+                <div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div>
                 <div class="shop-links">
                     <a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank">Amazon</a>
                     <a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank">楽天</a>
@@ -625,8 +641,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const submitBtn = document.getElementById('main-submit-btn');
     if (submitBtn) submitBtn.textContent = "データを読み込み中...";
 
-    // ワーカーの初期化（キャッシュ回避のためタイムスタンプを付与）
-    searchWorker = new Worker('search_worker.js?v=' + Date.now());
+    // ビルド時のバージョンを使用してWorkerを初期化
+    const version = (typeof siteVersion !== 'undefined') ? siteVersion : Date.now();
+    searchWorker = new Worker('search_worker.js?v=' + version);
     searchWorker.onmessage = (e) => handleWorkerResults(e.data);
 
     initFilters();

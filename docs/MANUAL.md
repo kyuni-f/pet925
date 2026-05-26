@@ -48,6 +48,11 @@
 **💡 賢い名寄せ機能**:
 `products.csv` の `brand` 列に英語名（nutro等）を入力しても、`brands.csv` に登録があれば自動的に正式名称（ニュートロ）に変換してサイトに表示します。また、英語名でも日本語名でも検索にヒットするよう `brand_id` が内部で自動保持されます。
 
+**💡 ブランド名（Key）がわからない時は？**:
+- **海外ブランド**: Gemini に「公式の英語スペルを教えて」と聞く。
+- **国内ブランド**: 読み方をローマ字にする（例: `uchinogohan`）。
+- **どうしても不明**: 日本語のまま登録しても動作はします（半角英数の方が将来的に安全です）。
+
 **✅ ベストプラクティス**:
 サイト上の表示は `products.csv` に入力した文字がそのまま使われます（例: `Nutro`）。バリデーションエラーを防ぎ、日本語検索を最も安定させるため、`products.csv` のブランド名は、可能な限り `brands.csv` の `key` 列と（大文字小文字を含めて）表記を揃えることを推奨します。
 
@@ -231,15 +236,20 @@ Sub SyncBrandToMaster(oEvent As Object)
             oCell = oTargetSheet.getCellByPosition(0, i) ' Key列
             If oCell.String = "" Then Exit Do
             If LCase(oCell.String) = LCase(sValue) Or LCase(oTargetSheet.getCellByPosition(1, i).String) = LCase(sValue) Then
-                bExists = True : Exit Do
+                bExists = True : Exit Do ' すでに存在する場合はループを抜ける
             End If
             i = i + 1
         Loop
         If Not bExists Then
             If MsgBox("ブランド '" & sValue & "' は brands シートに未登録です。追加しますか？", 4 + 32, "ブランド自動登録") = 6 Then
-                oTargetSheet.getCellByPosition(0, i).String = LCase(sValue)
-                oTargetSheet.getCellByPosition(1, i).String = sValue
-                MsgBox "brands シートに登録しました。", 64
+                Dim sKey As String, sBrandName As String
+                sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: nutro）を入力してください:", "ブランドID登録", sValue))
+                If sKey <> "" Then
+                    sBrandName = InputBox("サイトに表示する正式名称を入力してください:", "ブランド名登録", sValue)
+                    oTargetSheet.getCellByPosition(0, i).String = sKey
+                    oTargetSheet.getCellByPosition(1, i).String = sBrandName
+                    MsgBox "brands シートに登録しました。", 64
+                End If
             End If
         End If
 
@@ -260,7 +270,7 @@ Sub SyncBrandToMaster(oEvent As Object)
                     oCell = oTargetSheet.getCellByPosition(1, i) ' Key列 (B列)
                     If oCell.String = "" Then Exit Do
                     If LCase(oCell.String) = LCase(sTag) Then
-                        bExists = True : Exit Do
+                        bExists = True : Exit Do ' すでに存在する場合はループを抜ける
                     End If
                     i = i + 1
                 Loop
@@ -283,7 +293,7 @@ Sub SyncBrandToMaster(oEvent As Object)
 End Sub
 ```
 
-    3. **ボタンの配置**:
+    **3. ボタンの配置**:
         - [ツール] > [カスタマイズ] > [ツールバー] タブを開く。
         - カテゴリから [LibreOffice マクロ] > [マイマクロ] > [Standard] > [Module1] を選択。
         - `ExportAllSheetsToCSV` を「割り当てられたコマンド」に追加。

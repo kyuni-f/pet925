@@ -66,12 +66,13 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
-def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags):
+def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
+    row_warnings = []
     name = row.get('name', '').strip()
     if not name:
-        return None, [f"行 {line_num}: 商品名(name)が空です。"], None, line_num
+        return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
     # 列の欠落チェック（15列あるか）
     expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
@@ -86,38 +87,66 @@ def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index
     # ブランド情報の処理
     brand_raw = row.get('brand', '').strip()
     found_id = ""
+    found_name = brand_raw
+
     if brand_raw:
         norm_brand = normalize_text(brand_raw)
+        # 1. まずKey(ID)で直接検索
         if norm_brand in brand_master:
-            found_id = norm_brand
-            # 追加: Key(ID)で入力されても、表示は常にマスタの正式名(name列)に置き換える
-            row['brand'] = brand_master[found_id]
+            # Keyでヒットしても、正式名称(found_name)を取得し、その名称に紐付く代表IDに統一する
+            found_name = brand_master[norm_brand]
+            found_id = brand_id_map.get(found_name, norm_brand)
         else:
+            # 2. 次にName(正式名称)で検索
             for b_id, b_name in brand_master.items():
                 if norm_brand == normalize_text(b_name):
-                    found_id = b_id
-                    row['brand'] = b_name
+                    found_name = b_name
+                    found_id = brand_id_map.get(found_name, b_id)
                     break
-        if not found_id: found_id = norm_brand
+        
+        # 見つからなかった場合、入力値をIDの仮候補にする
+        if not found_id:
+            found_id = norm_brand
     else:
+        # 3. 未入力の場合のみテキストスキャン（商品名＋説明文から）
         for b_id, b_name in brand_master.items():
             if b_id in check_text or normalize_text(b_name) in check_text:
-                found_id = b_id
-                row['brand'] = b_name
+                found_name = b_name
+                found_id = brand_id_map.get(found_name, b_id)
+                found_name = b_name
                 break
     
     row['brand_id'] = found_id
+    row['brand'] = found_name # 常にマスタの正式名称（または入力値）で上書き
+
+    # 検索強化：商品名や説明文にないブランドの別名（Key）を隠しフィールド（_keywords）に付与
+    if found_id in brand_aliases:
+        # 既に商品名や説明文に含まれていないキーワードのみ追加
+        extra_kws = [a for a in brand_aliases[found_id] if a not in check_text]
+        if extra_kws:
+            row['_keywords'] = " ".join(extra_kws)
+
     if found_id and found_id not in brand_master:
-        row_errors.append(f"行 {line_num}: ブランド '{row['brand']}' は brands.csv に未登録です。")
+        row_errors.append(f"行 {line_num}: ブランド '{found_name}' は brands.csv に未登録です。")
 
     tags = row.get('tags', '').replace(',', ' ').split()
     tags = [normalize_text(t) for t in tags if t]
     for t in tags:
         if t not in allowed_tags:
             row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
+            
+    # 1. rules.csv に基づく自動付与と通知
     for tag_id, keywords in tag_keywords.items():
-        if tag_id not in tags and any(kw in check_text for kw in keywords):
-            tags.append(tag_id)
+        if tag_id not in tags:
+            found_kw = next((kw for kw in keywords if kw in check_text), None)
+            if found_kw:
+                tags.append(tag_id)
+                row_warnings.append(f"行 {line_num}: 説明文に '{found_kw}' を検出。タグ '{tag_id}' を自動付与しました。")
+
+    # 2. タグ名そのものが説明文に含まれている場合の提案
+    for t_name_norm, t_id in tag_lookup_for_suggest.items():
+        if t_id not in tags and t_name_norm in check_text:
+            row_warnings.append(f"行 {line_num}: 説明文に '{t_name_norm}' が含まれています。タグ '{t_id}' の付与を検討してください。")
 
     # 価格の数値形式チェック
     for p_col in ['amz_p', 'rak_p', 'yah_p']:
@@ -134,7 +163,7 @@ def process_row_task(line_num, row, brand_master, tag_keywords, tag_to_cat_index
 
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
     row['tags'] = tags
-    return row, row_errors, norm_name, line_num
+    return row, row_errors, row_warnings, norm_name, line_num
 
 def convert(exit_on_error=True):
     print(f"--- 変換処理を開始します ---")
@@ -156,6 +185,7 @@ def convert(exit_on_error=True):
     # 2. タグマスタの読み込み
     tag_master = {}
     allowed_tags = set()
+    tag_lookup_for_suggest = {} # 提案用：正規化名 -> タグID
     tag_rows = load_csv_simple(TAG_CSV)
     for row in tag_rows:
         if len(row) < 3 or row[0].lower() in ['category', 'カテゴリ']: continue
@@ -164,6 +194,7 @@ def convert(exit_on_error=True):
         norm_key = normalize_text(key)
         tag_master[cat][norm_key] = name
         allowed_tags.add(norm_key)
+        tag_lookup_for_suggest[normalize_text(name)] = norm_key
 
     # タグのカテゴリ所属マップを作成（ソート用）
     tag_to_cat_index = {}
@@ -174,11 +205,25 @@ def convert(exit_on_error=True):
 
     # 3. ブランドマスタの読み込み
     brand_master = {}
+    brand_id_map = {} # 正式名称から代表IDを引くためのマップ
+    # ビルド時間をバージョンとして記録
+    build_version = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+    brand_aliases = {} # 代表IDから検索用キーワード（Key群）を引くためのマップ
     brand_rows = load_csv_simple(BRAND_CSV)
     for row in brand_rows:
         if len(row) < 2 or row[0].lower() in ['key', 'キー']: continue
         key, name = [s.strip() for s in row[:2]]
-        brand_master[normalize_text(key)] = name
+        norm_key = normalize_text(key)
+        brand_master[norm_key] = name
+        
+        # 同じ名前（例：ニュートロ）が複数あれば、最初のID（例：nutro）を代表とする
+        if name not in brand_id_map:
+            brand_id_map[name] = norm_key
+            
+        rep_id = brand_id_map[name]
+        if rep_id not in brand_aliases: brand_aliases[rep_id] = set()
+        brand_aliases[rep_id].add(norm_key)
 
     # 4. 自動ルール（キーワード）の読み込み
     tag_keywords = {}
@@ -193,7 +238,7 @@ def convert(exit_on_error=True):
             tag_keywords[tag].extend(kws)
             allowed_tags.add(normalize_text(tag))
 
-    # 6. 動的に他のマスターCSV（shops.csvなど）を読み込む
+    # 5. 動的に他の未認識マスターCSVを読み込む
     other_masters_data = {}
     if os.path.exists(DATA_DIR):
         for filename in os.listdir(DATA_DIR):
@@ -211,7 +256,7 @@ def convert(exit_on_error=True):
                 else:
                     validation_warnings.append(f"追加マスター '{filename}' は中身が空か、形式が正しくないためスキップされました。")
 
-    # 5. 商品データの読み込みと加工
+    # 6. 商品データの読み込みと加工
     if not os.path.exists(PRODUCT_CSV):
         print(f"エラー: {PRODUCT_CSV} が見つかりません。")
         return
@@ -234,12 +279,13 @@ def convert(exit_on_error=True):
     num_cores = os.cpu_count() or 1
     max_workers = min(num_cores, 8) # 最大でも8プロセス程度に抑える（負荷対策）
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, brand_master, tag_keywords, tag_to_cat_index, allowed_tags) 
+        futures = [executor.submit(process_row_task, ln, row, brand_master, brand_id_map, brand_aliases, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest) 
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
-            res_row, res_errs, norm_name, ln = future.result()
+            res_row, res_errs, res_warns, norm_name, ln = future.result()
             validation_errors.extend(res_errs)
+            validation_warnings.extend(res_warns)
             if res_row:
                 # 重複チェック用のキー（ブランドID + 空白を完全に除去した正規化名）
                 dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
@@ -252,7 +298,7 @@ def convert(exit_on_error=True):
                     if brand_id not in names_by_brand:
                         names_by_brand[brand_id] = []
                     
-                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.85)
+                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.95)
                     if close_matches:
                         validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
 
@@ -265,11 +311,12 @@ def convert(exit_on_error=True):
     products = [r[1] for r in processed_results]
 
     if not validation_errors:
-        # 6. エラーが一つもない場合のみファイル書き出しを実行
+        # 7. エラーが一つもない場合のみファイル書き出しを実行
         with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
             json.dump(products, f, ensure_ascii=False, indent=2) # インデントを少し詰めて軽量化
 
         with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
+            f.write(f"const siteVersion = '{build_version}';\n")
             f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
