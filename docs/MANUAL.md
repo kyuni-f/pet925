@@ -128,6 +128,11 @@ Sub ExportAllSheetsToCSV
     
     oDoc = ThisComponent
 
+    ' 変更が保存されていない場合は警告
+    If oDoc.isModified Then
+        If MsgBox("ファイルに変更があります。保存してから実行しますか？", 4 + 32, "確認") = 6 Then oDoc.store()
+    End If
+
     ' ファイルが保存されているか（URLがあるか）チェック
     If (oDoc.URL = "") Then
         MsgBox "エラー: ファイルが保存されていません。" & Chr(13) & _
@@ -142,6 +147,16 @@ Sub ExportAllSheetsToCSV
 
     oSheets = oDoc.Sheets
     
+    ' 必要なシートが存在するか一括チェック
+    Dim requiredSheets As Variant, sNameCheck As String
+    requiredSheets = Array("products", "tags", "brands", "categories", "rules")
+    For Each sNameCheck In requiredSheets
+        If Not oSheets.hasByName(sNameCheck) Then
+            MsgBox "エラー: シート '" & sNameCheck & "' が見つかりません。", 16, "実行失敗"
+            Exit Sub
+        End If
+    Next sNameCheck
+
     ' CSV出力の設定
     args(0).Name = "Overwrite"
     args(0).Value = True
@@ -215,82 +230,97 @@ End Function
 ''' products シートに入力したブランド名やタグが各マスターにない場合、自動で追加します。
 '''
 Sub SyncBrandToMaster(oEvent As Object)
-    Dim oDoc As Object, oSheets As Object, oTargetSheet As Object
+    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
     Dim sValue As String, oCell As Object
-    Dim i As Long, bExists As Boolean
-    Dim nCol As Integer
-
-    ' セル単体の変更のみ対象
-    If Not oEvent.supportsService("com.sun.star.table.Cell") Then Exit Sub
+    Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
+    Dim iRow As Long, i As Long, bExists As Boolean
 
     oDoc = ThisComponent
+    oSheet = oDoc.CurrentController.ActiveSheet
+    If oSheet.Name <> "products" Then Exit Sub
+
+    If oEvent.supportsService("com.sun.star.table.Cell") Then
+        startRow = oEvent.CellAddress.Row : endRow = startRow
+        startCol = oEvent.CellAddress.Column : endCol = startCol
+    ElseIf oEvent.supportsService("com.sun.star.table.CellRange") Then
+        startRow = oEvent.RangeAddress.StartRow : endRow = oEvent.RangeAddress.EndRow
+        startCol = oEvent.RangeAddress.StartColumn : endCol = oEvent.RangeAddress.EndColumn
+    Else
+        Exit Sub
+    End If
+
     oSheets = oDoc.Sheets
-    nCol = oEvent.CellAddress.Column
 
-    ' --- B列 (ブランド) の処理 ---
-    If nCol = 1 Then
-        sValue = Trim(oEvent.String)
-        If sValue = "" Or sValue = "brand" Or sValue = "ブランド" Then Exit Sub
-        oTargetSheet = oSheets.getByName("brands")
-        i = 1 : bExists = False
-        Do
-            oCell = oTargetSheet.getCellByPosition(0, i) ' Key列
-            If oCell.String = "" Then Exit Do
-            If LCase(oCell.String) = LCase(sValue) Or LCase(oTargetSheet.getCellByPosition(1, i).String) = LCase(sValue) Then
-                bExists = True : Exit Do ' すでに存在する場合はループを抜ける
-            End If
-            i = i + 1
-        Loop
-        If Not bExists Then
-            If MsgBox("ブランド '" & sValue & "' は brands シートに未登録です。追加しますか？", 4 + 32, "ブランド自動登録") = 6 Then
-                Dim sKey As String, sBrandName As String
-                sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: nutro）を入力してください:", "ブランドID登録", sValue))
-                If sKey <> "" Then
-                    sBrandName = InputBox("サイトに表示する正式名称を入力してください:", "ブランド名登録", sValue)
-                    oTargetSheet.getCellByPosition(0, i).String = sKey
-                    oTargetSheet.getCellByPosition(1, i).String = sBrandName
-                    MsgBox "brands シートに登録しました。", 64
-                End If
-            End If
-        End If
+    ' 変更された全行をループ処理
+    For iRow = startRow To endRow
+        If iRow = 0 Then GoTo NextRow ' ヘッダー行はスキップ
 
-    ' --- C列 (タグ) の処理 ---
-    ElseIf nCol = 2 Then
-        Dim aTags() As String, sTag As String
-        sValue = oEvent.String
-        If sValue = "" Or sValue = "tags" Or sValue = "タグ" Then Exit Sub
-        ' スペースやカンマで分割
-        aTags = Split(Replace(sValue, ",", " "), " ")
-        oTargetSheet = oSheets.getByName("tags")
-        
-        For Each sTag In aTags
-            sTag = Trim(sTag)
-            If Len(sTag) > 1 Then ' 1文字以下は無視
+        ' --- B列 (ブランド / Col 1) のチェック ---
+        If startCol <= 1 And endCol >= 1 Then
+            sValue = Trim(oSheet.getCellByPosition(1, iRow).String)
+            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" Then
+                oTargetSheet = oSheets.getByName("brands")
                 i = 1 : bExists = False
                 Do
-                    oCell = oTargetSheet.getCellByPosition(1, i) ' Key列 (B列)
+                    oCell = oTargetSheet.getCellByPosition(0, i)
                     If oCell.String = "" Then Exit Do
-                    If LCase(oCell.String) = LCase(sTag) Then
-                        bExists = True : Exit Do ' すでに存在する場合はループを抜ける
+                    If LCase(oCell.String) = LCase(sValue) Or LCase(oTargetSheet.getCellByPosition(1, i).String) = LCase(sValue) Then
+                        bExists = True : Exit Do
                     End If
                     i = i + 1
                 Loop
-                
                 If Not bExists Then
-                    If MsgBox("タグ '" & sTag & "' は tags シートに未登録です。追加しますか？", 4 + 32, "タグ自動登録") = 6 Then
-                        Dim sCat As String, sDisp As String
-                        sCat = InputBox("カテゴリを入力してください (animal, age, cond):", "タグ追加", "cond")
-                        If sCat <> "" Then
-                            sDisp = InputBox("表示名を入力してください:", "タグ追加", sTag)
-                            oTargetSheet.getCellByPosition(0, i).String = sCat ' カテゴリ (A列)
-                            oTargetSheet.getCellByPosition(1, i).String = sTag ' キー (B列)
-                            oTargetSheet.getCellByPosition(2, i).String = sDisp ' 表示名 (C列)
+                    If MsgBox("ブランド '" & sValue & "' は brands シートに未登録です。追加しますか？", 4 + 32, "ブランド自動登録") = 6 Then
+                        Dim sKey As String, sBrandName As String
+                        sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: nutro）を入力してください:", "ブランドID登録", sValue))
+                        If sKey <> "" Then
+                            sBrandName = InputBox("サイトに表示する正式名称を入力してください:", "ブランド名登録", sValue)
+                            oTargetSheet.getCellByPosition(0, i).String = sKey
+                            oTargetSheet.getCellByPosition(1, i).String = sBrandName
+                            MsgBox "brands シートに登録しました。", 64
                         End If
                     End If
                 End If
             End If
-        Next sTag
-    End If
+        End If
+
+        ' --- C列 (タグ / Col 2) のチェック ---
+        If startCol <= 2 And endCol >= 2 Then
+            sValue = Trim(oSheet.getCellByPosition(2, iRow).String)
+            If sValue <> "" And sValue <> "tags" And sValue <> "タグ" Then
+                Dim aTags() As String, sTag As String
+                aTags = Split(Replace(sValue, ",", " "), " ")
+                oTargetSheet = oSheets.getByName("tags")
+                For Each sTag In aTags
+                    sTag = Trim(sTag)
+                    If Len(sTag) > 1 Then
+                        i = 1 : bExists = False
+                        Do
+                            oCell = oTargetSheet.getCellByPosition(1, i)
+                            If oCell.String = "" Then Exit Do
+                            If LCase(oCell.String) = LCase(sTag) Then
+                                bExists = True : Exit Do
+                            End If
+                            i = i + 1
+                        Loop
+                        If Not bExists Then
+                            If MsgBox("タグ '" & sTag & "' は tags シートに未登録です。追加しますか？", 4 + 32, "タグ自動登録") = 6 Then
+                                Dim sCat As String, sDisp As String
+                                sCat = InputBox("カテゴリを入力してください (animal, age, cond):", "タグ追加", "cond")
+                                If sCat <> "" Then
+                                    sDisp = InputBox("表示名を入力してください:", "タグ追加", sTag)
+                                    oTargetSheet.getCellByPosition(0, i).String = sCat
+                                    oTargetSheet.getCellByPosition(1, i).String = sTag
+                                    oTargetSheet.getCellByPosition(2, i).String = sDisp
+                                End If
+                            End If
+                        End If
+                    End If
+                Next sTag
+            End If
+        End If
+NextRow:
+    Next iRow
 End Sub
 ```
 
