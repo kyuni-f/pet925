@@ -1,10 +1,24 @@
 # pet925 管理マニュアル
 
 ## 1. 運用ワークフロー（黄金のサイクル）
-データの更新は、すべての情報を一つのマスターファイルで管理し、一括で書き出すのが効率的です。
+データの更新は、すべての情報を一つのマスターファイルで管理するか、自動収集スクリプトを使用するのが効率的です。
 
+### A. 自動収集（推奨）
+1.  **URLを準備**: 登録したい商品のURLをコピー。
+2.  **スクリプト実行**: `python3 auto_data_collector.py [URL]` を実行。
+3.  **確認と追記**: 生成された内容を確認し、`y` を押して `products.csv` へ直接追記。
+
+> **💡 Gemini API キーの設定**: 
+> 1. Google AI Studio の左サイドバーで **「Get API key」** をクリック。
+> 2. 画面内の **「Create API key」** ボタンをクリックし、**「Create API key in new project」** を選択して発行します。
+> 3. 発行された `AIza...` キーをコピーし、プロジェクト直下の **`.env`** ファイルに以下のように保存してください。
+>    `GEMINI_API_KEY=コピーしたキー`
+> 
+> ※ `NOT_FOUND` エラーが解決しない場合、この「新しいプロジェクトでのキー作成」が最も有効な解決策です。
+
+### B. 手動管理（大量更新時）
 1.  **Geminiに依頼**: 商品情報を依頼する。
-2.  **マスターへ貼り付け**: `data/pet925_master.ods` 内の該当シート（products/tags/brands/rules/categories）を更新。
+2.  **マスターへ貼り付け**: `data/pet925_master.ods` 内を更新。
 3.  **一括CSV出力**: Calcのマクロを使用して、5つのCSVを一気に書き出す。
 4.  **ビルドとデプロイ**: ターミナルで `npm run deploy` を実行。
 5.  **確認**: 公開されたサイトを開き、**Ctrl + F5**。実行ボタンに「準備完了（◯◯件）」と表示されるのを確認。
@@ -114,7 +128,7 @@
 ---
 
 ## 6. マスターファイルの一元管理（LibreOffice Calc）
-- **マルチシート運用**: `pet925_master.ods` 内に `products`, `tags`, `brands`, `rules` の4シートを作成してください。
+- **マルチシート運用**: `pet925_master.ods` 内に `products`, `tags`, `brands`, `rules`, `categories` の5シートを作成してください。
 - **一括出力・バリデーションマクロ**: 
     1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic] を開く。
     2. 以下の `ExportAllSheetsToCSV` と `CheckMandatoryFields` マクロを登録する。
@@ -230,24 +244,32 @@ End Function
 ''' products シートに入力したブランド名やタグが各マスターにない場合、自動で追加します。
 '''
 Sub SyncBrandToMaster(oEvent As Object)
-    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
+    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object, oRange As Object
     Dim sValue As String, oCell As Object
     Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
     Dim iRow As Long, i As Long, bExists As Boolean
 
     oDoc = ThisComponent
-    oSheet = oDoc.CurrentController.ActiveSheet
-    If oSheet.Name <> "products" Then Exit Sub
 
-    If oEvent.supportsService("com.sun.star.table.Cell") Then
+    ' イベントの発生した範囲を特定（単一セルまたは範囲）
+    If oEvent.supportsService("com.sun.star.sheet.SheetCell") Then
+        ' 単一セルの変更
         startRow = oEvent.CellAddress.Row : endRow = startRow
         startCol = oEvent.CellAddress.Column : endCol = startCol
-    ElseIf oEvent.supportsService("com.sun.star.table.CellRange") Then
+        oSheet = oDoc.Sheets.getByIndex(oEvent.CellAddress.Sheet)
+    ElseIf oEvent.supportsService("com.sun.star.sheet.SheetCellRange") Or _
+           oEvent.supportsService("com.sun.star.table.CellRange") Then
+        ' 範囲（貼り付け等）の変更
         startRow = oEvent.RangeAddress.StartRow : endRow = oEvent.RangeAddress.EndRow
         startCol = oEvent.RangeAddress.StartColumn : endCol = oEvent.RangeAddress.EndColumn
+        oSheet = oDoc.Sheets.getByIndex(oEvent.RangeAddress.Sheet)
     Else
+        ' それ以外の変更（列削除など）は無視
         Exit Sub
     End If
+
+    ' products シート以外での変更なら終了
+    If oSheet.Name <> "products" Then Exit Sub
 
     oSheets = oDoc.Sheets
 
@@ -395,13 +417,12 @@ Gemini に商品データ作成を依頼する際は、以下のルールを厳�
 ---
 
 ## 8. 開発環境のセットアップ
-作業環境を構築する場合は、**Node.js** と **Python 3** をインストールしてから以下を実行します：
+作業環境を構築する場合、**追加のライブラリインストールは不要**です。Node.js と Python 3 があれば動きます。
 
 0.  **Node.jsインストール**: `sudo apt install nodejs npm`
-1.  **準備**: `npm install`
-2.  **Python環境**: `python3 --version` で Python 3 が入っていることを確認。
-3.  **ビルドテスト**: `npm run build` で `product_data.json` が生成されるか確認。
-4.  **公開**: `npm run deploy`
+1.  **Python環境**: `python3 --version` で Python 3 が入っていることを確認。
+2.  **ビルドテスト**: `npm run build` で `product_data.json` が生成されるか確認。
+3.  **公開**: `npm run deploy`
 
 ---
 

@@ -294,7 +294,7 @@ def convert(exit_on_error=True):
                 if dup_key in seen_names:
                     validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
                 else:
-                    # 類似商品チェック（同じブランド内で 85% 以上一致するものがあるか）
+                    # 類似商品チェック（同じブランド内で 95% 以上一致するものがあるか）
                     if brand_id not in names_by_brand:
                         names_by_brand[brand_id] = []
                     

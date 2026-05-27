@@ -1,0 +1,8 @@
+# 秘密情報
+.env
+
+# 実行環境・一時ファイル
+node_modules/
+__pycache__/
+.~lock.*
+.DS_Store
