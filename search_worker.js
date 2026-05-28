@@ -103,7 +103,14 @@ self.onmessage = function(e) {
 
     for (const item of allProducts) {
         // お気に入りフィルターの適用
-        if (showFavoritesOnly && !favSet.has(item.name)) continue;
+        if (showFavoritesOnly) {
+            if (favSet.has(item.name)) {
+                // お気に入りモード時は他のフィルタやスコアを無視してリストに追加
+                item._tempScore = 0;
+                allMatches.push(item);
+            }
+            continue; // お気に入り表示時は以下の標準検索ロジックをスキップ
+        }
 
         // フィルタリング
         const matchFilters = catsToCheck.every(cat => {
