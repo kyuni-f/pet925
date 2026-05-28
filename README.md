@@ -46,6 +46,9 @@ git push origin main --force
 
 # 6. VS Code 本体の更新 (Linux環境)
 sudo apt update && sudo apt install code
+
+# 7. APIで商品データを自動生成
+python3 auto_data_collector.py "[商品のURL]"
 ```
 
 ## 🌐 カスタムドメインの導入手順

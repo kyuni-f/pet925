@@ -4,7 +4,7 @@
 
 ### A. 自動収集（新規追加時）
 1.  **URL準備・実行**: `python3 auto_data_collector.py [URL]` を実行。
-2.  **追記**: `y` を押して `products.csv` へ追記。
+2.  **マスター反映**: ターミナルに表示されたタブ区切り形式のCSV行をコピーし、`pet925_master.ods` の `products` シート末尾に直接貼り付ける。
     *   ※初回のみ `.env` に `GEMINI_API_KEY` の設定が必要です。詳細はセクション7参照。
 
 ### B. 手動一括管理（メンテナンス時）

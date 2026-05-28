@@ -1,4 +1,4 @@
-const siteVersion = '20260528205016';
+const siteVersion = '20260529020610';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -51,7 +51,8 @@ const brandMaster = {
     "wildrecipe": "ニュートロ",
     "royal canin": "ロイヤルカナン",
     "sheba": "シーバ",
-    "medycoat": "ペットライン"
+    "medycoat": "ペットライン",
+    "medyfas": "ペットライン"
 };
 const tagKeywords = {
     "gf": [

@@ -6,6 +6,7 @@ import csv
 import io
 import urllib.request
 import urllib.error
+import time
 
 def load_env():
     """.envファイルから環境変数を手動で読み込む（標準ライブラリのみ）"""
@@ -61,7 +62,24 @@ def fetch_product_data(target_url):
     model_name = "gemini-2.5-flash"
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={API_KEY}"
     
-    prompt = f"{instructions}\n\n【解析対象URL】\n{target_url}"
+    # 補助データの読み込み（AIに判断基準を与える）
+    def load_context_csv(path):
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8-sig") as f:
+                return f.read()
+        return "ファイルが見つかりません"
+
+    tags_context = load_context_csv("data/tags.csv")
+    brands_context = load_context_csv("data/brands.csv")
+
+    csv_header = "name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p"
+    
+    prompt = f"""{instructions}
+
+【許可タグリスト (data/tags.csv)】\n{tags_context}
+【ブランドリスト (data/brands.csv)】\n{brands_context}
+
+【重要】必ず以下の15列のCSV形式で出力してください。ヘッダー行も必ず含めてください。\n{csv_header}\n\n【解析対象URL】\n{target_url}"""
     
     payload = {
         "contents": [{
@@ -76,79 +94,51 @@ def fetch_product_data(target_url):
     # デバッグ用：アクセス先を表示（キーの末尾4文字だけ表示して確認）
     safe_url = api_url.replace(API_KEY, "*" * (len(API_KEY)-4) + API_KEY[-4:])
     # print(f"DEBUG: Request to {safe_url}") 
+    
+    max_retries = 3
+    retry_delay_seconds = 5
 
-    try:
-        with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            
-            if "candidates" in res_data and len(res_data["candidates"]) > 0:
-                text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-                # コードブロックを除去
-                csv_line = text.replace("```csv", "").replace("```", "").strip()
-                return csv_line
-            else:
-                raise Exception("AIからの応答を解析できませんでした。")
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8")
+    for attempt in range(max_retries):
         try:
-            err_json = json.loads(error_body)
-            message = err_json.get("error", {}).get("message", "不明なエラー")
-            if "not found" in message.lower():
-                # エラーが起きたURLを特定しやすくするために詳細を表示
-                debug_info = f"\n   - 接続先: {api_url.split('?')[0]}"
-                debug_info += f"\n   - モデル: {model_name}"
-                custom_msg = f"\n\n💡 ヒント: Googleのサーバーが指定のモデルを受け付けていません。"
-                custom_msg += f"\n   → Google AI Studio で『Create API key in new project』から新しいキーを作成するか、"
-                custom_msg += f"\n     --list-models で利用可能なモデルを確認し、スクリプトの model_name を更新してください。"
-                raise Exception(f"APIエラー ({e.code}): {message}{debug_info}{custom_msg}")
-            elif e.code == 503:
-                raise Exception(f"APIエラー ({e.code}): サービスが一時的に利用できません。時間をおいて再試行してください。")
-            else:
-                raise Exception(f"APIエラー ({e.code}): {message}")
-        except:
-            raise Exception(f"HTTPエラー ({e.code}): {error_body}")
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                
+                if "candidates" in res_data and len(res_data["candidates"]) > 0:
+                    text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                    # コードブロックを除去
+                    csv_line = text.replace("```csv", "").replace("```", "").strip()
+                    return csv_line
+                else:
+                    raise Exception("AIからの応答を解析できませんでした。")
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            try:
+                err_json = json.loads(error_body)
+                message = err_json.get("error", {}).get("message", "不明なエラー")
+                if "not found" in message.lower():
+                    debug_info = f"\n   - 接続先: {api_url.split('?')[0]}"
+                    debug_info += f"\n   - モデル: {model_name}"
+                    custom_msg = f"\n\n💡 ヒント: Googleのサーバーが指定のモデルを受け付けていません。"
+                    custom_msg += f"\n   → Google AI Studio で『Create API key in new project』から新しいキーを作成するか、"
+                    custom_msg += f"\n     --list-models で利用可能なモデルを確認し、スクリプトの model_name を更新してください。"
+                    raise Exception(f"APIエラー ({e.code}): {message}{debug_info}{custom_msg}")
+                elif e.code == 503:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ 503エラー検出。{retry_delay_seconds}秒後に再試行します... (残り{max_retries - 1 - attempt}回)")
+                        time.sleep(retry_delay_seconds)
+                        retry_delay_seconds *= 2 # 指数関数的に遅延を増やす
+                        continue # 次の試行へ
+                    else:
+                        raise Exception(f"APIエラー ({e.code}): サービスが一時的に利用できません。複数回再試行しましたが失敗しました。")
+                else:
+                    raise Exception(f"APIエラー ({e.code}): {message}")
+            except:
+                raise Exception(f"HTTPエラー ({e.code}): {error_body}")
+    raise Exception(f"APIリクエストが最大試行回数 ({max_retries}回) を超えても成功しませんでした。")
 
-def append_to_csv(csv_line, file_path="data/products.csv"):
-    """
-    生成されたCSV行を既存のファイルに追記する
-    """
-    if not csv_line:
-        return
-    
-    # 正確なバリデーション (引用符内のカンマを考慮)
-    # 複数行（ヘッダー+データ）返ってくるケースに対応
-    f_input = io.StringIO(csv_line.strip())
-    reader = csv.reader(f_input)
-    rows = list(reader)
-    
-    # データ行のみを特定（"name"で始まるヘッダー行を除外）
-    data_rows = [r for r in rows if r and r[0].lower() != 'name' and r[0] != '商品名']
-    
-    if not data_rows:
-        print("⚠️ 有効なデータ行が見つかりませんでした。")
-        return
-
-    target_row = data_rows[0]
-    if len(target_row) < 15:
-        print(f"⚠️ 列数が足りません ({len(target_row)}列検出 / 15列必要)。追記をスキップしました。")
-        return
-
-    with open(file_path, "a", encoding="utf-8-sig") as f:
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            with open(file_path, "rb+") as f_check:
-                f_check.seek(-1, os.SEEK_END)
-                if f_check.read(1) != b'\n':
-                    f.write("\n")
-        
-        # 改めてCSV形式に変換して書き込み（クォート処理などを確実にするため）
-        output = io.StringIO()
-        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(target_row)
-        f.write(output.getvalue())
-
-    print(f"✅ 追記に成功しました！")
-    print(f"📍 保存先: {os.path.abspath(file_path)}")
-    print(f"💡 ヒント: LibreOfficeなどで開いている場合は、一度閉じて開き直すと反映されます。")
+def print_tsv_for_manual_copy(csv_line):
+    # この関数はもう使用しないため、空にするか削除します。
+    pass
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -163,9 +153,6 @@ if __name__ == "__main__":
         print("-" * 30)
         print(result_csv)
         print("-" * 30)
-        
-        confirm = input("このデータを追記しますか？ (y/n): ")
-        if confirm.lower() == 'y':
-            append_to_csv(result_csv)
+        print(f"✅ データ生成に成功しました！上記CSVをコピーして pet925_master.ods の products シートに貼り付けてください。")
     except Exception as e:
         print(f"❌ エラーが発生しました: {e}")
