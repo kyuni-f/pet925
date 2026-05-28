@@ -47,7 +47,18 @@ git push origin main --force
 # 6. VS Code 本体の更新 (Linux環境)
 sudo apt update && sudo apt install code
 ```
+## 🌐 カスタムドメインの導入手順 +将来的に独自ドメイン（例：www.pet925.com）を運用する際の手順です。 
+1. ドメインの取得: お名前.comやGoogle Domainsなどでドメインを購入。
 
+2. DNSの設定: ドメイン管理画面で、GitHub Pagesのサーバーを指定します。
+・A レコード: GitHubのIPアドレス（185.199.108.153 等）を設定。
+・CNAME レコード: kyuni-f.github.io を設定。 +3. GitHubの設定: リポジトリの [Settings] > [Pages] > [Custom domain] に購入したドメインを入力。 +4. プロジ・ェクトファイルの更新:
+・index.html: <link rel="canonical"> のURLを新しいドメインへ書き換え。
+・main.js: authorizedDomains 配列に新しいドメインを追加。 +5. 反映の確認:
+・npm run deploy で変更を反映。
+・数分〜数時間後に新しいドメインでサイトにアクセスできるか確認。
+・GitHub Pagesの設定画面で「Enforce HTTPS」にチェックが入っていることを確認。
+> 注意: ドメイン変更直後は、お気に入りデータ（localStorage）がリセットされます。旧ドメインと新ドメインはブラウザから見て「別の場所」と判断されるためです。
 ## 🤖 AIへの指示 (AI Instructions)
 
 ### 📦 商品データ作成プロンプト

@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 検索エンジンにオリジナルサイトを伝える（SEOコピー対策） -->
+    <link rel="canonical" href="https://kyuni-f.github.io/pet925/">
     <!-- faviconのエラー（404）をより確実に回避するための設定 -->
     <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
     <!-- Google tag (gtag.js) -->
@@ -21,23 +23,18 @@
     <meta name="description" content="愛犬・愛猫へのこだわりから最適なプレミアムフードを見つける選定ガイド。グレインフリー、特定のタンパク源、低カロリーなど、飼い主様のこだわりから最高の一皿を提案します。">
 
     <script>
-        // 入り口のマスタデータだけは常に最新を取得（ここから siteVersion を受け取る）
-        document.write('<script src="data_master.js?v=' + Date.now() + '"><\/script>');
-　　　　// 分割したスタイルとスクリプトを読み込む（siteVersionが確定してから）
-        document.addEventListener('DOMContentLoaded', () => {
-            const version = (typeof siteVersion !== 'undefined') ? siteVersion : Date.now();
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'style.css?v=' + version;
-            document.head.appendChild(link);
-            
-            const script = document.createElement('script');
-            script.src = 'main.js?v=' + version;
-            document.body.appendChild(script);
-        });            
+        // 1. 最初にマスタデータを読み込み siteVersion を確定させる
+        const timestamp = Date.now();
+        document.write('<script src="data_master.js?v=' + timestamp + '"><\/script>');
+    </script>
+    <script>
+        // 2. 確定した siteVersion を使い、スタイルとメインロジックを同期的に読み込む
+        // これにより ReferenceError (render is not defined 等) を防ぎます
+        const version = (typeof siteVersion !== 'undefined') ? siteVersion : timestamp;
+        document.write('<link rel="stylesheet" href="style.css?v=' + version + '">');
+        document.write('<script src="main.js?v=' + version + '"><\/script>');
     </script>
 </head>
-
 <body>
 <header>
     <h1>pet925</h1>
@@ -92,6 +89,5 @@
         Reproduction of content is strictly prohibited.
     </footer>
 </div>
-    const clearFavBtn = document.getElementById('clear-fav-btn');
 </body>
 </html>

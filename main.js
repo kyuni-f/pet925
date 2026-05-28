@@ -75,6 +75,10 @@ function executeClearAllFavorites() {
 function toggleFavFilter() {
     showFavoritesOnly = !showFavoritesOnly;
     document.getElementById('fav-filter-btn').classList.toggle('active', showFavoritesOnly);
+    // お気に入りボタンを押した時、もし検索画面にいたら結果画面へ切り替える
+    if (showFavoritesOnly && !document.body.classList.contains('state-results')) {
+        showResults();
+    }
     render(false);
 }
 
@@ -267,7 +271,7 @@ function getSearchUrl(shop, brand, name, fallbackUrl) {
     return '#';
 }
 
-function render(isTyping = false) {
+window.render = function(isTyping = false) {
     if (!searchWorker || !isWorkerReady) return;
     if (isTyping) visibleCount = PAGE_SIZE;
     const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
@@ -303,13 +307,37 @@ function handleWorkerResults(data) {
     if (totalMatchCount === 0) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+function initializeApp() {
+    // --- 簡易的なドメインロック（疑似サイト対策） ---
+    const authorizedDomains = ['kyuni-f.github.io', 'localhost', '127.0.0.1'];
+    const currentHostname = window.location.hostname;
+    
+    if (currentHostname && !authorizedDomains.includes(currentHostname)) {
+        console.warn("Unauthorized domain detected.");
+        // 警告を表示する、または本家へリダイレクトさせる（必要に応じて有効化）
+        // alert("このサイトは公式な pet925 ではありません。公式ページへ移動します。");
+        // window.location.href = "https://kyuni-f.github.io/pet925/";
+    }
+
     if (typeof tagMaster === 'undefined') return;
     tagLookupMap = getTagLookup();
-    console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold;");
+    console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black;");
+    console.log("このサイトのコンテンツおよびデータの無断転載・複製を固く禁じます。");
+    
     const version = (typeof siteVersion !== 'undefined') ? siteVersion : Date.now();
     searchWorker = new Worker('search_worker.js?v=' + version);
     searchWorker.onmessage = (e) => handleWorkerResults(e.data);
+    searchWorker.onerror = (err) => {
+        console.error("Worker Error:", err);
+        if (document.getElementById('main-submit-btn')) document.getElementById('main-submit-btn').textContent = "エラー: データの読み込みに失敗しました";
+    };
     initFilters();
     renderFilters();
-});
+}
+
+// すでに読み込みが終わっている場合は即実行、そうでなければイベントを待つ
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    initializeApp();
+}

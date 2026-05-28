@@ -116,23 +116,36 @@ def append_to_csv(csv_line, file_path="data/products.csv"):
         return
     
     # 正確なバリデーション (引用符内のカンマを考慮)
-    f_input = io.StringIO(csv_line)
+    # 複数行（ヘッダー+データ）返ってくるケースに対応
+    f_input = io.StringIO(csv_line.strip())
     reader = csv.reader(f_input)
-    row = next(reader, [])
+    rows = list(reader)
+    
+    # データ行のみを特定（"name"で始まるヘッダー行を除外）
+    data_rows = [r for r in rows if r and r[0].lower() != 'name' and r[0] != '商品名']
+    
+    if not data_rows:
+        print("⚠️ 有効なデータ行が見つかりませんでした。")
+        return
 
-    if len(row) < 15:
-        print(f"⚠️ 列数が足りません ({len(row)}列検出 / 15列必要)。追記をスキップしました。")
-        print(f"内容: {csv_line}")
+    target_row = data_rows[0]
+    if len(target_row) < 15:
+        print(f"⚠️ 列数が足りません ({len(target_row)}列検出 / 15列必要)。追記をスキップしました。")
         return
 
     with open(file_path, "a", encoding="utf-8-sig") as f:
-        # ファイルが空でない場合、末尾が改行で終わっているか確認して、必要なら改行を追加
         if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
             with open(file_path, "rb+") as f_check:
                 f_check.seek(-1, os.SEEK_END)
                 if f_check.read(1) != b'\n':
                     f.write("\n")
-        f.write(csv_line.strip() + "\n")
+        
+        # 改めてCSV形式に変換して書き込み（クォート処理などを確実にするため）
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(target_row)
+        f.write(output.getvalue())
+
     print(f"✅ 追記に成功しました！")
     print(f"📍 保存先: {os.path.abspath(file_path)}")
     print(f"💡 ヒント: LibreOfficeなどで開いている場合は、一度閉じて開き直すと反映されます。")

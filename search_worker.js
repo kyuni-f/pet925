@@ -96,6 +96,12 @@ self.onmessage = function(e) {
     const { searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites } = e.data;
     const catsToCheck = Object.keys(tagMaster);
     
+    // お気に入りが空で、かつお気に入りフィルターがONの場合は即座に空の結果を返す
+    if (showFavoritesOnly && (!favorites || favorites.length === 0)) {
+        self.postMessage({ matchedItems: [], totalMatchCount: 0, visibleCount: visibleCount });
+        return;
+    }
+
     let matchCount = 0;
     let allMatches = [];
     // 検索ごとに1回だけSetを作成（ループ内での生成を避ける）
@@ -148,9 +154,10 @@ self.onmessage = function(e) {
     matchCount = allMatches.length;
 
     // スコア順にソート（スコアが同じなら元のCSV順）
-    if (searchWords.length > 0) {
+    // お気に入りモードや検索ワードがない場合も、元の順序を維持するためにソートを通す
+    if (searchWords.length > 0 || showFavoritesOnly) {
         allMatches.sort((a, b) => {
-            if (b._tempScore !== a._tempScore) return b._tempScore - a._tempScore;
+            if ((b._tempScore || 0) !== (a._tempScore || 0)) return b._tempScore - a._tempScore;
             return a._originalIndex - b._originalIndex;
         });
     }

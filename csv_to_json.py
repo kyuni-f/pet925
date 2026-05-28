@@ -71,6 +71,11 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
     row_errors = []
     row_warnings = []
     name = row.get('name', '').strip()
+
+    # ヘッダー行そのものがデータとして混入している場合はスキップ
+    if name.lower() == 'name' or name == '商品名':
+        return None, [], [], None, line_num
+
     if not name:
         return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
@@ -106,7 +111,7 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
         
         # 見つからなかった場合、入力値をIDの仮候補にする
         if not found_id:
-            found_id = norm_brand
+            found_id = normalize_text(brand_raw)
     else:
         # 3. 未入力の場合のみテキストスキャン（商品名＋説明文から）
         for b_id, b_name in brand_master.items():
@@ -190,6 +195,8 @@ def convert(exit_on_error=True):
     for row in tag_rows:
         if len(row) < 3 or row[0].lower() in ['category', 'カテゴリ']: continue
         cat, key, name = [s.strip() for s in row[:3]]
+        if cat not in category_master:
+            validation_errors.append(f"tags.csv 行内: カテゴリ '{cat}' は categories.csv に定義されていません。")
         if cat not in tag_master: tag_master[cat] = {}
         norm_key = normalize_text(key)
         tag_master[cat][norm_key] = name
