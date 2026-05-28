@@ -51,6 +51,9 @@
             <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
             <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="render(true)">
         </div>
+        <div class="search-screen-fav-area">
+            <button id="fav-filter-btn-search-screen" class="fav-toggle-btn" onclick="toggleFavFilter()">お気に入り <span style="color:#ff4757">❤</span></button>
+        </div>
         <div class="filter-nav" id="filter-nav-container"></div>
 
         <div class="floating-action-area">

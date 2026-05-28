@@ -284,7 +284,7 @@ def convert(exit_on_error=True):
     # max_workers を指定することで使用するCPUコア数を制限できます
     # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
     num_cores = os.cpu_count() or 1
-    max_workers = min(num_cores, 8) # 最大でも8プロセス程度に抑える（負荷対策）
+    max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_row_task, ln, row, brand_master, brand_id_map, brand_aliases, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest) 
                    for ln, row in all_rows_input]

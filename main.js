@@ -12,14 +12,31 @@ let tagLookupMap = {};
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
 let showFavoritesOnly = false;
 let searchWorker = null; 
-let isWorkerReady = false;
+let isWorkerReady = false; 
 
-let visibleCount = 30; 
-const PAGE_SIZE = 30;  
+let visibleCount = 20; 
+const PAGE_SIZE = 20;  
 
 function loadMore() {
     visibleCount += PAGE_SIZE;
+    trackEvent('Navigation', 'load_more', visibleCount);
     render(false);
+}
+
+function updateFavoriteButtonUI() {
+    const favCount = favorites.length;
+    // 結果画面のお気に入りボタン
+    const favFilterBtnResults = document.getElementById('fav-filter-btn');
+    if (favFilterBtnResults) {
+        favFilterBtnResults.classList.toggle('active', showFavoritesOnly);
+        favFilterBtnResults.innerHTML = `お気に入り <span style="color:#ff4757">❤</span> <span style="margin-left:5px; opacity:0.8; font-size:0.9em;">(${favCount})</span>`;
+    }
+    // 検索画面のお気に入りボタン
+    const favFilterBtnSearch = document.getElementById('fav-filter-btn-search-screen');
+    if (favFilterBtnSearch) {
+        favFilterBtnSearch.classList.toggle('active', showFavoritesOnly);
+        favFilterBtnSearch.innerHTML = `お気に入り <span style="color:#ff4757">❤</span> <span style="margin-left:5px; opacity:0.8; font-size:0.9em;">(${favCount})</span>`;
+    }
 }
 
 function showResults() {
@@ -31,6 +48,20 @@ function showResults() {
 function backToSearch() {
     document.body.classList.remove('state-results');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // 検索画面に戻る際、お気に入りフィルターが有効であれば解除する
+    if (showFavoritesOnly) {
+        showFavoritesOnly = false;
+    }
+    // 検索入力欄が空でフィルターも適用されていない場合、URLからクエリパラメータをクリアする
+    const searchVal = document.getElementById('search-input').value.trim();
+    const hasActiveFilters = Object.values(activeFilters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'));
+    if (!searchVal && !hasActiveFilters) {
+        history.replaceState(null, '', window.location.pathname);
+    } else {
+        // 検索条件が残っている場合はURLを更新
+        updateURL();
+    }
+    render(false); // フィルター状態が変更されたので、UIを更新する
 }
 
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
@@ -48,10 +79,13 @@ function toggleFavorite(name) {
     const index = favorites.indexOf(name);
     if (index > -1) {
         favorites.splice(index, 1);
+        trackEvent('Favorites', 'remove', name);
     } else {
         favorites.push(name);
+        trackEvent('Favorites', 'add', name);
     }
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
+    updateFavoriteButtonUI();
     render(false);
 }
 
@@ -67,6 +101,7 @@ function closeFavModal() {
 function executeClearAllFavorites() {
     favorites = [];
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
+    updateFavoriteButtonUI();
     trackEvent('Favorites', 'clear_all', 'all');
     closeFavModal();
     render(false);
@@ -74,7 +109,7 @@ function executeClearAllFavorites() {
 
 function toggleFavFilter() {
     showFavoritesOnly = !showFavoritesOnly;
-    document.getElementById('fav-filter-btn').classList.toggle('active', showFavoritesOnly);
+    updateFavoriteButtonUI();
     // お気に入りボタンを押した時、もし検索画面にいたら結果画面へ切り替える
     if (showFavoritesOnly && !document.body.classList.contains('state-results')) {
         showResults();
@@ -242,11 +277,9 @@ function renderActiveChips() {
     if (searchVal) {
         chipsHtml += `<div class="chip" onclick="document.getElementById('search-input').value='';render(true);">${searchVal} <span class="chip-close">×</span></div>`;
         hasActive = true;
-    }
-    const clearFavBtn = document.getElementById('clear-fav-btn');
-    if (clearFavBtn) clearFavBtn.style.display = (favorites.length > 0) ? 'block' : 'none';
-    const favBtn = document.getElementById('fav-filter-btn');
-    if (favBtn) favBtn.innerHTML = `お気に入り <span style="color:#ff4757">❤</span> <span style="margin-left:5px; opacity:0.8; font-size:0.9em;">(${favorites.length})</span>`;
+    }    
+    const clearFavBtn = document.getElementById('clear-fav-btn'); // 結果画面のクリアボタン
+    if (clearFavBtn) clearFavBtn.style.display = (favorites.length > 0 && showFavoritesOnly) ? 'block' : 'none';
     for (const [cat, val] of Object.entries(activeFilters)) {
         const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
         values.forEach(v => {
@@ -276,6 +309,7 @@ window.render = function(isTyping = false) {
     if (isTyping) visibleCount = PAGE_SIZE;
     const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     renderActiveChips();
+    updateFavoriteButtonUI(); // お気に入りボタンの件数表示を更新
     searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
     clearTimeout(searchTrackTimer);
     searchTrackTimer = setTimeout(() => { if (isTyping) updateURL(); }, 800);
@@ -298,13 +332,28 @@ function handleWorkerResults(data) {
         const card = document.createElement('div');
         card.className = 'product-card';
         const isFav = favorites.includes(item.name);
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${(!item.img || item.img === "#") ? defaultImg : item.img}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async"><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')">${isFav ? '❤' : '♡'}</button></div><div class="card-content"><span class="brand-badge">${item.brand}</span><div class="${item.name.length > 45 ? 'product-name is-long' : 'product-name'}">${item.name}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links"><a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank">Amazon</a><a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank">楽天</a><a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank">Yahoo!</a></div></div>`;
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${(!item.img || item.img === "#") ? defaultImg : item.img}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async"><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')">${isFav ? '❤' : '♡'}</button></div><div class="card-content"><span class="brand-badge">${item.brand}</span><div class="${item.name.length > 45 ? 'product-name is-long' : 'product-name'}">${item.name}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazon</a>` +
+            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天</a>` +
+            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
+            `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Shop', 'click', 'A8:${item.name}')">公式/他</a>` : ''}` +
+            `</div></div>`;
         list.appendChild(card);
     });
     const submitBtn = document.getElementById('main-submit-btn');
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
     if (totalMatchCount > currentVisibleCount) loadMoreArea.innerHTML = `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
-    if (totalMatchCount === 0) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
+    if (totalMatchCount === 0) {
+        list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
+        // 0件ヒットの計測：お気に入りモード時は除外
+        if (!showFavoritesOnly) {
+            const searchVal = document.getElementById('search-input').value.trim();
+            const filterInfo = Object.entries(activeFilters)
+                .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
+                .map(([cat, val]) => `${cat}:${val}`).join(', ');
+            trackEvent('Search', 'no_results', `Words: "${searchVal}" | Filters: {${filterInfo}}`);
+        }
+    }
 }
 
 function initializeApp() {
@@ -333,6 +382,7 @@ function initializeApp() {
     };
     initFilters();
     renderFilters();
+    updateFavoriteButtonUI(); // 初期表示時のお気に入りボタンの状態を更新
 }
 
 // すでに読み込みが終わっている場合は即実行、そうでなければイベントを待つ
