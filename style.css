@@ -147,6 +147,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .product-card { 
     display: flex; 
     flex-direction: column; 
+    position: relative; /* ボタンの配置基準にする */
     animation: fadeInUp 0.6s ease forwards;
     opacity: 0;
 }
@@ -205,6 +206,31 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 }
 .btn-back-to-top:hover { color: var(--dark); }
 
+/* トップに戻るボタン（フローティング） */
+.btn-floating-top {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 44px;
+    height: 44px;
+    background: var(--dark);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 1002;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+.btn-floating-top.visible { opacity: 1; visibility: visible; }
+.btn-floating-top:hover { background: var(--gold); transform: translateY(-3px); }
+
 /* 画像拡大モーダル用 */
 .image-modal-content { 
     position: relative; 
@@ -243,4 +269,35 @@ footer a { color: var(--gold); text-decoration: none; }
     .filter-nav {
         padding-bottom: 100px !important;
     }
+}
+
+/* --- Custom Tooltip (Cards Only) --- */
+.card-fav-btn[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px); /* ボタンの真上に配置 */
+    left: 50%;
+    transform: translateX(-50%) translateY(5px);
+    background: #ffffff; /* 白背景 */
+    color: #000000;    /* 黒文字 */
+    padding: 5px 12px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    border-radius: 2px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* 背景が白なので影で視認性を確保 */
+}
+.card-fav-btn[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+@media (max-width: 768px) {
+    .card-fav-btn[data-tooltip]::after { display: none; }
 }
