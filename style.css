@@ -190,22 +190,6 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .btn-load-more { background: #fff; border: 1px solid var(--dark); color: var(--dark); padding: 16px 50px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.3s; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px; }
 .btn-load-more:hover { background: var(--dark); color: #fff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
 
-.btn-back-to-top { 
-    display: block; 
-    margin: 25px auto 0; 
-    background: none; 
-    border: none; 
-    color: #999; 
-    font-size: 0.7rem; 
-    letter-spacing: 2px; 
-    cursor: pointer; 
-    text-decoration: underline; 
-    text-underline-offset: 4px; 
-    text-transform: uppercase; 
-    transition: 0.3s; 
-}
-.btn-back-to-top:hover { color: var(--dark); }
-
 /* トップに戻るボタン（フローティング） */
 .btn-floating-top {
     position: fixed;

@@ -6,6 +6,17 @@ if (typeof tagMaster === 'undefined') window.tagMaster = {};
 if (typeof brandMaster === 'undefined') window.brandMaster = {};
 if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
 
+// --- アフィリエイト設定（ご自身のIDに書き換えてください） ---
+// もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
+const AFFILIATE_CONFIG = {
+    moshimoAccountId: "", // あなたのもしも会員ID (例: 1234567)
+    shopPid: {
+        amazon: "170",  // AmazonプロモーションID (もしもアフィリエイトのかんたんリンク用)
+        rakuten: "54",  // 楽天プロモーションID (もしもアフィリエイトのかんたんリンク用)
+        yahoo: "1225"   // Yahoo!ショッピングプロモーションID (もしもアフィリエイトのかんたんリンク用)
+    }
+};
+
 let activeFilters = {}; 
 let searchTrackTimer = null;
 let tagLookupMap = {}; 
@@ -119,6 +130,14 @@ function openImageModal(src, alt) {
 
 function closeImageModal() {
     document.getElementById('image-modal-overlay').style.display = 'none';
+}
+
+function getMoshimoUrl(shopKey, targetUrl) {
+    const aid = AFFILIATE_CONFIG.moshimoAccountId;
+    const pid = AFFILIATE_CONFIG.shopPid[shopKey];
+    if (!aid || !pid) return targetUrl; // IDが設定されていなければそのままのURLを返す
+    
+    return `https://af.moshimo.com/af/c/click?a_id=${aid}&p_id=${pid}&pc_id=1&url=${encodeURIComponent(targetUrl)}`;
 }
 
 function toggleFavFilter() {
@@ -312,9 +331,20 @@ function removeSingleFilter(cat, val) {
 function getSearchUrl(shop, brand, name, fallbackUrl) {
     if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
     const q = encodeURIComponent(`${brand} ${name}`);
-    if (shop === 'amz') return `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
-    if (shop === 'rak') return `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
-    if (shop === 'yah') return `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
+    let targetShopUrl = '';
+
+    if (shop === 'amz') {
+        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`; // Amazonの安い順ソート
+        return getMoshimoUrl('amazon', targetShopUrl);
+    }
+    if (shop === 'rak') {
+        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`; // 楽天の安い順ソート
+        return getMoshimoUrl('rakuten', targetShopUrl);
+    }
+    if (shop === 'yah') {
+        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`; // Yahoo!ショッピングの安い順ソート
+        return getMoshimoUrl('yahoo', targetShopUrl);
+    }
     return '#';
 }
 
@@ -361,10 +391,6 @@ function handleWorkerResults(data) {
     let footerHtml = '';
     if (totalMatchCount > currentVisibleCount) {
         footerHtml += `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
-    }
-    // 1件以上結果がある場合は「一番上に戻る」を表示
-    if (totalMatchCount > 0) {
-        footerHtml += `<button class="btn-back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">一番上に戻る ↑</button>`;
     }
     loadMoreArea.innerHTML = footerHtml;
 
