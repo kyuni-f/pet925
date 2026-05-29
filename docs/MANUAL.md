@@ -229,101 +229,124 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
 End Function
 
 '''
-''' roducts シートの変更を検知し、未登録のブランドやタグを brands/tags シートへ自動追加を促すマクロ。
+''' products シートの変更を検知し、未登録のブランドやタグを brands/tags シートへ自動追加を促すマクロ。
+''' 一括貼り付け（Range）にも対応し、エラー耐性を高めた改良版。
 '''
 Sub SyncBrandToMaster(oEvent As Object)
-    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object, oRange As Object
-    Dim sValue As String, oCell As Object
+    On Error GoTo ErrorHandler ' エラーが発生しても異常終了させない
+    
+    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
     Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
     Dim iRow As Long, i As Long, bExists As Boolean
+    Dim sValue As String, oCell As Object, oCellName As Object
+
+    ' 1回の貼り付けで何度も聞かないための記憶リスト
+    Static processedBrands As Object
+    Static processedTags As Object
 
     oDoc = ThisComponent
+    oSheets = oDoc.Sheets
 
-    ' イベントの発生した範囲を特定（単一セルまたは範囲）
+    ' イベントの発生した範囲を特定
     If oEvent.supportsService("com.sun.star.sheet.SheetCell") Then
-        ' 単一セルの変更
         startRow = oEvent.CellAddress.Row : endRow = startRow
         startCol = oEvent.CellAddress.Column : endCol = startCol
-        oSheet = oDoc.Sheets.getByIndex(oEvent.CellAddress.Sheet)
+        oSheet = oSheets.getByIndex(oEvent.CellAddress.Sheet)
     ElseIf oEvent.supportsService("com.sun.star.sheet.SheetCellRange") Or _
            oEvent.supportsService("com.sun.star.table.CellRange") Then
-        ' 範囲（貼り付け等）の変更
         startRow = oEvent.RangeAddress.StartRow : endRow = oEvent.RangeAddress.EndRow
         startCol = oEvent.RangeAddress.StartColumn : endCol = oEvent.RangeAddress.EndColumn
-        oSheet = oDoc.Sheets.getByIndex(oEvent.RangeAddress.Sheet)
+        oSheet = oSheets.getByIndex(oEvent.RangeAddress.Sheet)
     Else
-        ' それ以外の変更（列削除など）は無視
         Exit Sub
     End If
 
-    ' products シート以外での変更なら終了
+    ' products シート以外は無視
     If oSheet.Name <> "products" Then Exit Sub
 
-    oSheets = oDoc.Sheets
+    ' リストの初期化（新しいセッション用）
+    Set processedBrands = CreateObject("Scripting.Dictionary")
+    Set processedTags = CreateObject("Scripting.Dictionary")
 
-    ' 変更された全行をループ処理
+    ' 変更された全行をチェック
     For iRow = startRow To endRow
-        If iRow = 0 Then GoTo NextRow ' ヘッダー行はスキップ
+        If iRow = 0 Then GoTo NextRow ' ヘッダーはスキップ
 
-        ' --- B列 (ブランド / Col 1) のチェック ---
+        ' --- B列 (ブランド / Index 1) が変更範囲に含まれているか ---
         If startCol <= 1 And endCol >= 1 Then
             sValue = Trim(oSheet.getCellByPosition(1, iRow).String)
-            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" Then
+            ' 既知のキーワードや空欄を除外
+            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" And sValue <> "#" And Not processedBrands.Exists(sValue) Then
                 oTargetSheet = oSheets.getByName("brands")
-                i = 1 : bExists = False
-                Do
-                    oCell = oTargetSheet.getCellByPosition(0, i)
-                    If oCell.String = "" Then Exit Do
-                    If LCase(oCell.String) = LCase(sValue) Or LCase(oTargetSheet.getCellByPosition(1, i).String) = LCase(sValue) Then
-                        bExists = True : Exit Do
+                bExists = False
+                i = 1 ' 2行目から検索
+                
+                ' brandsシートを最大5000行までスキャン（空行があっても飛ばさない）
+                Do While i < 5000
+                    oCell = oTargetSheet.getCellByPosition(0, i) ' Key列
+                    oCellName = oTargetSheet.getCellByPosition(1, i) ' Name列
+                    
+                    ' 完全一致チェック
+                    If LCase(Trim(oCell.String)) = LCase(sValue) Or LCase(Trim(oCellName.String)) = LCase(sValue) Then
+                        bExists = True
+                        Exit Do
                     End If
+                    
+                    ' 両方の列が空ならそこがデータの末尾
+                    If oCell.String = "" And oCellName.String = "" Then Exit Do
                     i = i + 1
                 Loop
+
                 If Not bExists Then
-                    If MsgBox("ブランド '" & sValue & "' は brands シートに未登録です。追加しますか？", 4 + 32, "ブランド自動登録") = 6 Then
+                    If MsgBox("新ブランド '" & sValue & "' を登録しますか？", 4 + 32, "ブランド登録") = 6 Then
                         Dim sKey As String, sBrandName As String
-                        sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: nutro）を入力してください:", "ブランドID登録", sValue))
+                        ' IDは小文字に自動変換、表示名はそのままをデフォルトに
+                        sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: medyfas）を入力してください:", "ブランドID登録", sValue))
                         If sKey <> "" Then
-                            sBrandName = InputBox("サイトに表示する正式名称を入力してください:", "ブランド名登録", sValue)
+                            sBrandName = InputBox("表示する名称:", "名称登録", sValue)
+                            ' 見つけた空行（i）に書き込み
                             oTargetSheet.getCellByPosition(0, i).String = sKey
                             oTargetSheet.getCellByPosition(1, i).String = sBrandName
-                            MsgBox "brands シートに登録しました。", 64
                         End If
                     End If
+                    processedBrands.Add sValue, True ' この回ではもう聞かない
                 End If
             End If
         End If
 
-        ' --- C列 (タグ / Col 2) のチェック ---
+        ' --- C列 (タグ / Index 2) が変更範囲に含まれているか ---
         If startCol <= 2 And endCol >= 2 Then
             sValue = Trim(oSheet.getCellByPosition(2, iRow).String)
             If sValue <> "" And sValue <> "tags" And sValue <> "タグ" Then
                 Dim aTags() As String, sTag As String
-                aTags = Split(Replace(sValue, ",", " "), " ")
+                aTags = Split(Replace(Replace(sValue, ",", " "), "　", " "), " ")
                 oTargetSheet = oSheets.getByName("tags")
                 For Each sTag In aTags
                     sTag = Trim(sTag)
-                    If Len(sTag) > 1 Then
-                        i = 1 : bExists = False
-                        Do
-                            oCell = oTargetSheet.getCellByPosition(1, i)
-                            If oCell.String = "" Then Exit Do
-                            If LCase(oCell.String) = LCase(sTag) Then
-                                bExists = True : Exit Do
+                    If Len(sTag) > 1 And Not processedTags.Exists(sTag) Then
+                        bExists = False
+                        i = 1
+                        Do While i < 5000
+                            oCell = oTargetSheet.getCellByPosition(1, i) ' Key列
+                            If LCase(Trim(oCell.String)) = LCase(sTag) Then
+                                bExists = True
+                                Exit Do
                             End If
+                            If oCell.String = "" And oTargetSheet.getCellByPosition(0, i).String = "" Then Exit Do
                             i = i + 1
                         Loop
                         If Not bExists Then
-                            If MsgBox("タグ '" & sTag & "' は tags シートに未登録です。追加しますか？", 4 + 32, "タグ自動登録") = 6 Then
+                            If MsgBox("新タグ '" & sTag & "' を登録しますか？", 4 + 32, "タグ登録") = 6 Then
                                 Dim sCat As String, sDisp As String
-                                sCat = InputBox("カテゴリを入力してください (animal, age, cond):", "タグ追加", "cond")
+                                sCat = InputBox("カテゴリ (animal/age/cond):", "タグ追加", "cond")
                                 If sCat <> "" Then
-                                    sDisp = InputBox("表示名を入力してください:", "タグ追加", sTag)
+                                    sDisp = InputBox("表示名:", "タグ追加", sTag)
                                     oTargetSheet.getCellByPosition(0, i).String = sCat
                                     oTargetSheet.getCellByPosition(1, i).String = sTag
                                     oTargetSheet.getCellByPosition(2, i).String = sDisp
                                 End If
                             End If
+                            processedTags.Add sTag, True ' この回ではもう聞かない
                         End If
                     End If
                 Next sTag
@@ -331,6 +354,11 @@ Sub SyncBrandToMaster(oEvent As Object)
         End If
 NextRow:
     Next iRow
+    Exit Sub
+
+ErrorHandler:
+    ' エラーが起きた場合は無視して次へ（一括貼り付け時のクラッシュ防止）
+    Resume Next
 End Sub
 ```
 

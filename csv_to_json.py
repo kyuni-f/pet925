@@ -80,10 +80,10 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
         return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
     # 列の欠落チェック（15列あるか）
-    expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
+    expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p', 'exclude_tags']
     missing_keys = [k for k in expected_keys if k not in row or row[k] is None]
     if missing_keys:
-        row_errors.append(f"行 {line_num}: 列が足りません。欠落: {', '.join(missing_keys)}")
+        row_errors.append(f"行 {line_num}: 列が足りません。期待される列: {len(expected_keys)}、検出された列: {len(row)}。欠落: {', '.join(missing_keys)}")
 
     norm_name = normalize_text(name)
     desc = row.get('desc', '').strip()
@@ -140,15 +140,37 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
         if t not in allowed_tags:
             row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
             
-    # 1. rules.csv に基づく自動付与と通知
+    # 1. rules.csv に基づく自動付与（通知用に一時保存）
+    auto_added_info = []
     for tag_id, keywords in tag_keywords.items():
-        if tag_id not in tags:
+        if tag_id not in tags: # 既存タグになければ追加
             found_kw = next((kw for kw in keywords if kw in check_text), None)
             if found_kw:
                 tags.append(tag_id)
-                row_warnings.append(f"行 {line_num}: 説明文に '{found_kw}' を検出。タグ '{tag_id}' を自動付与しました。")
+                auto_added_info.append((tag_id, found_kw))
 
-    # 2. タグ名そのものが説明文に含まれている場合の提案
+    # 2. 除外タグの処理 (自動付与されたタグも含めて除外対象にする)
+    exclude_tags_raw = row.get('exclude_tags', '').replace(',', ' ').split()
+    exclude_tags_norm = {normalize_text(t) for t in exclude_tags_raw if t}
+
+    tags_before_exclusion = set(tags)
+    tags = [t for t in tags if t not in exclude_tags_norm]
+    tags_after_exclusion = set(tags)
+
+    # 自動付与の通知（除外されなかったものだけ表示）
+    for tag_id, kw in auto_added_info:
+        if tag_id in tags_after_exclusion:
+            row_warnings.append(f"行 {line_num}: 説明文に '{kw}' を検出。タグ '{tag_id}' を自動付与しました。")
+
+    # 実際に除外されたタグの警告
+    for removed_tag in (tags_before_exclusion - tags_after_exclusion):
+        row_warnings.append(f"行 {line_num}: タグ '{removed_tag}' が除外タグにより削除されました。")
+
+    # 存在しないタグを除外しようとした場合の警告
+    for non_existent_excluded_tag in (exclude_tags_norm - tags_before_exclusion):
+        row_warnings.append(f"行 {line_num}: 除外タグ '{non_existent_excluded_tag}' はこの商品に存在しないか、未登録タグです。")
+
+    # 3. タグ名そのものが説明文に含まれている場合の提案 (除外タグ適用後)
     for t_name_norm, t_id in tag_lookup_for_suggest.items():
         if t_id not in tags and t_name_norm in check_text:
             row_warnings.append(f"行 {line_num}: 説明文に '{t_name_norm}' が含まれています。タグ '{t_id}' の付与を検討してください。")

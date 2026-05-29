@@ -1,4 +1,4 @@
-const siteVersion = '20260529100427';
+const siteVersion = '20260529123151';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -56,8 +56,6 @@ const brandMaster = {
 };
 const tagKeywords = {
     "gf": [
-        "grain_free",
-        "grainfree",
         "グレインフリー",
         "穀物不使用"
     ],
@@ -65,7 +63,6 @@ const tagKeywords = {
         "胃腸",
         "消化",
         "オナカ",
-        "digestive",
         "オ腹"
     ],
     "diet": [
@@ -75,8 +72,7 @@ const tagKeywords = {
         "減量"
     ],
     "lamb": [
-        "ラム肉",
-        "lamb"
+        "ラム肉"
     ],
     "tooth": [
         "歯"
