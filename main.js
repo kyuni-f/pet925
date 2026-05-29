@@ -132,6 +132,17 @@ function closeImageModal() {
     document.getElementById('image-modal-overlay').style.display = 'none';
 }
 
+function openLegalModal() {
+    const overlay = document.getElementById('legal-modal-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    trackEvent('UI', 'legal_open', 'click');
+}
+
+function closeLegalModal() {
+    const overlay = document.getElementById('legal-modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
 function getMoshimoUrl(shopKey, targetUrl) {
     const aid = AFFILIATE_CONFIG.moshimoAccountId;
     const pid = AFFILIATE_CONFIG.shopPid[shopKey];

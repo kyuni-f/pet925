@@ -189,6 +189,34 @@ Sub ExportAllSheetsToCSV
     MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
 End Sub
 
+'''
+''' 現在表示しているシートのみをCSV出力する（高速版）
+'''
+Sub ExportCurrentSheetOnly
+    Dim oDoc As Object, oSheet As Object
+    Dim sURL As String, sPath As String
+    Dim args(2) As New com.sun.star.beans.PropertyValue
+    Dim aParts() As String
+
+    oDoc = ThisComponent
+    oSheet = oDoc.CurrentController.ActiveSheet
+    
+    If Not CheckMandatoryFields(oSheet, oSheet.Name) Then Exit Sub
+
+    aParts = Split(oDoc.URL, "/")
+    aParts(UBound(aParts)) = ""
+    sPath = Join(aParts, "/")
+
+    args(0).Name = "Overwrite" : args(0).Value = True
+    args(1).Name = "FilterName" : args(1).Value = "Text - txt - csv (StarCalc)"
+    args(2).Name = "FilterOptions" : args(2).Value = "44,34,76,1,,0,false,true,true"
+
+    sURL = sPath & oSheet.Name & ".csv"
+    oDoc.storeToURL(sURL, args)
+
+    MsgBox "[" & oSheet.Name & ".csv] のみ出力しました。", 64, "完了"
+End Sub
+
 Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     Dim i As Long, col As Integer
     Dim mandatoryCols As Variant
@@ -433,6 +461,11 @@ GitHub に push してサイトを公開する前に、以下の項目を必ず�
 ### ④ SEO (検索エンジン最適化)
 - **タイトル**: ブラウザのタブに表示されるタイトルが適切か？
 - **紹介文**: ヘッダーの導入文が正しく表示されているか？
+
+### ⑤ 規約・法務チェック
+- **免責事項・プライバシーポリシー**: ページ下部からリンクが飛べるか？
+- **アフィリエイト表記**: Amazonアソシエイト等の規約に基づく表記が含まれているか？
+- **GA4告知**: クッキー利用についての記述があるか？
 
 ### ⑤ GA4 計測の確認
 - **リアルタイム**: 自分で検索した際、GA4 のリアルタイムレポートに `search` イベントが表示されるか？

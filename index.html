@@ -95,12 +95,33 @@
         </div>
     </div>
 
+    <!-- プライバシーポリシー・免責事項モーダル -->
+    <div id="legal-modal-overlay" class="modal-overlay" onclick="closeLegalModal()">
+        <div class="modal-content legal-content" onclick="event.stopPropagation()" style="text-align: left; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 30px;">
+            <h3 style="margin-top: 0;">プライバシーポリシー・免責事項</h3>
+            <div style="font-size: 0.85rem; line-height: 1.6; color: #444;">
+                <p><strong>■ 広告について</strong><br>
+                当サイトは、もしもアフィリエイト等のアフィリエイトプログラムに参加しており、Amazon.co.jp、楽天市場、Yahoo!ショッピング等の商品を紹介し、適格販売により収入を得ています。Amazonのアソシエイトとして、pet925は適格販売により収入を得ています。</p>
+                
+                <p><strong>■ 免責事項</strong><br>
+                当サイトに掲載されている情報の正確性には万全を期していますが、メーカーによる仕様変更や価格改定が反映されていない場合があります。また、フードの適合性については個体差があるため、最終的な判断は飼い主様の責任において行い、必要に応じて獣医師にご相談ください。当サイトの利用により生じた損害等の一切の責任を負いかねます。</p>
+                
+                <p><strong>■ アクセス解析</strong><br>
+                当サイトでは、サイト改善のためにGoogleアナリティクスを使用しています。データ収集のためにCookieを使用しますが、個人を特定するものではありません。</p>
+            </div>
+            <div class="modal-btns" style="margin-top: 20px;">
+                <button class="modal-btn btn-confirm" onclick="closeLegalModal()">閉じる</button>
+            </div>
+        </div>
+    </div>
+
     <!-- トップに戻るボタン（フローティング） -->
     <button id="floating-back-to-top" class="btn-floating-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" aria-label="ページトップへ戻る">↑</button>
 
     <footer>
         &copy; 2024-2026 pet925. All Rights Reserved. <br>
-        Reproduction of content is strictly prohibited.
+        Reproduction of content is strictly prohibited. <br>
+        <a href="javascript:void(0)" onclick="openLegalModal()" style="color: #999; text-decoration: underline; font-size: 0.75rem; margin-top: 10px; display: inline-block;">プライバシーポリシー・免責事項</a>
     </footer>
 </div>
 </body>

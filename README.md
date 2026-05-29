@@ -48,7 +48,7 @@ git push origin main --force
 sudo apt update && sudo apt install code
 
 # 7. APIで商品データを自動生成
-python3 auto_data_collector.py "[商品のURL]"
+python3 auto_data_collector.py ""
 ```
 
 ## 🌐 カスタムドメインの導入手順
