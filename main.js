@@ -340,7 +340,7 @@ function handleWorkerResults(data) {
     const loadMoreArea = document.getElementById('load-more-area');
     list.innerHTML = "";
     loadMoreArea.innerHTML = "";
-    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
+    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E";
     matchedItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
