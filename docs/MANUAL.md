@@ -241,8 +241,8 @@ Sub SyncBrandToMaster(oEvent As Object)
     Dim sValue As String, oCell As Object, oCellName As Object
 
     ' 1回の貼り付けで何度も聞かないための記憶リスト
-    Static processedBrands As Object
-    Static processedTags As Object
+    Static sProcessedBrands As String
+    Static sProcessedTags As String
 
     oDoc = ThisComponent
     oSheets = oDoc.Sheets
@@ -264,9 +264,9 @@ Sub SyncBrandToMaster(oEvent As Object)
     ' products シート以外は無視
     If oSheet.Name <> "products" Then Exit Sub
 
-    ' リストの初期化（新しいセッション用）
-    Set processedBrands = CreateObject("Scripting.Dictionary")
-    Set processedTags = CreateObject("Scripting.Dictionary")
+    ' 記憶リストの初期化（セッション開始時：1回の貼り付け単位で重複を防ぐ）
+    sProcessedBrands = "|" 
+    sProcessedTags = "|"
 
     ' 変更された全行をチェック
     For iRow = startRow To endRow
@@ -276,7 +276,7 @@ Sub SyncBrandToMaster(oEvent As Object)
         If startCol <= 1 And endCol >= 1 Then
             sValue = Trim(oSheet.getCellByPosition(1, iRow).String)
             ' 既知のキーワードや空欄を除外
-            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" And sValue <> "#" And Not processedBrands.Exists(sValue) Then
+            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" And sValue <> "#" And InStr(sProcessedBrands, "|" & sValue & "|") = 0 Then
                 oTargetSheet = oSheets.getByName("brands")
                 bExists = False
                 i = 1 ' 2行目から検索
@@ -298,18 +298,16 @@ Sub SyncBrandToMaster(oEvent As Object)
                 Loop
 
                 If Not bExists Then
-                    If MsgBox("新ブランド '" & sValue & "' を登録しますか？", 4 + 32, "ブランド登録") = 6 Then
+                    If MsgBox("新ブランド '" & sValue & "' を brands シートに登録しますか？", 4 + 32, "クイック追加") = 6 Then
                         Dim sKey As String, sBrandName As String
-                        ' IDは小文字に自動変換、表示名はそのままをデフォルトに
-                        sKey = LCase(InputBox("システム用のID（半角英数推奨 / 例: medyfas）を入力してください:", "ブランドID登録", sValue))
+                        sKey = LCase(InputBox("システム用ID (半角英数):", "1/2 ステップ", sValue))
                         If sKey <> "" Then
-                            sBrandName = InputBox("表示する名称:", "名称登録", sValue)
-                            ' 見つけた空行（i）に書き込み
+                            sBrandName = InputBox("サイトでの表示名:", "2/2 ステップ", sValue)
                             oTargetSheet.getCellByPosition(0, i).String = sKey
                             oTargetSheet.getCellByPosition(1, i).String = sBrandName
                         End If
                     End If
-                    processedBrands.Add sValue, True ' この回ではもう聞かない
+                    sProcessedBrands = sProcessedBrands & sValue & "|"
                 End If
             End If
         End If
@@ -323,7 +321,7 @@ Sub SyncBrandToMaster(oEvent As Object)
                 oTargetSheet = oSheets.getByName("tags")
                 For Each sTag In aTags
                     sTag = Trim(sTag)
-                    If Len(sTag) > 1 And Not processedTags.Exists(sTag) Then
+                    If Len(sTag) > 1 And InStr(sProcessedTags, "|" & sTag & "|") = 0 Then
                         bExists = False
                         i = 1
                         Do While i < 5000
@@ -336,17 +334,15 @@ Sub SyncBrandToMaster(oEvent As Object)
                             i = i + 1
                         Loop
                         If Not bExists Then
-                            If MsgBox("新タグ '" & sTag & "' を登録しますか？", 4 + 32, "タグ登録") = 6 Then
-                                Dim sCat As String, sDisp As String
-                                sCat = InputBox("カテゴリ (animal/age/cond):", "タグ追加", "cond")
-                                If sCat <> "" Then
-                                    sDisp = InputBox("表示名:", "タグ追加", sTag)
-                                    oTargetSheet.getCellByPosition(0, i).String = sCat
-                                    oTargetSheet.getCellByPosition(1, i).String = sTag
-                                    oTargetSheet.getCellByPosition(2, i).String = sDisp
-                                End If
+                            ' カテゴリ入力を省き、デフォルトで 'cond'（こだわり・お悩み）として追加
+                            If MsgBox("新タグ '" & sTag & "' を tags シートに追加しますか？", 4 + 32, "タグクイック追加") = 6 Then
+                                Dim sDisp As String
+                                sDisp = InputBox("サイトでの表示名:", "タグ追加", sTag)
+                                oTargetSheet.getCellByPosition(0, i).String = "cond"
+                                oTargetSheet.getCellByPosition(1, i).String = sTag
+                                oTargetSheet.getCellByPosition(2, i).String = sDisp
                             End If
-                            processedTags.Add sTag, True ' この回ではもう聞かない
+                            sProcessedTags = sProcessedTags & sTag & "|"
                         End If
                     End If
                 Next sTag

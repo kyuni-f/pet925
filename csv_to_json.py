@@ -79,7 +79,7 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
     if not name:
         return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
-    # 列の欠落チェック（15列あるか）
+    # 列の欠落チェック（16列あるか）
     expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p', 'exclude_tags']
     missing_keys = [k for k in expected_keys if k not in row or row[k] is None]
     if missing_keys:
@@ -140,16 +140,16 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
         if t not in allowed_tags:
             row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
             
-    # 1. rules.csv に基づく自動付与（通知用に一時保存）
+    # 1. rules.csv に基づく自動付与（候補を作成）
     auto_added_info = []
     for tag_id, keywords in tag_keywords.items():
-        if tag_id not in tags: # 既存タグになければ追加
+        if tag_id not in tags:
             found_kw = next((kw for kw in keywords if kw in check_text), None)
             if found_kw:
                 tags.append(tag_id)
                 auto_added_info.append((tag_id, found_kw))
 
-    # 2. 除外タグの処理 (自動付与されたタグも含めて除外対象にする)
+    # 2. 除外タグの処理
     exclude_tags_raw = row.get('exclude_tags', '').replace(',', ' ').split()
     exclude_tags_norm = {normalize_text(t) for t in exclude_tags_raw if t}
 
