@@ -376,10 +376,14 @@ window.render = function(isTyping = false) {
     if (isTyping) visibleCount = PAGE_SIZE;
     const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     renderActiveChips();
-    updateFavoriteButtonUI(); // お気に入りボタンの件数表示を更新
-    searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
+    updateFavoriteButtonUI();
+
+    // 全ての処理（Workerへの命令とGA4へのURL更新）をタイマーの中に統合
     clearTimeout(searchTrackTimer);
-    searchTrackTimer = setTimeout(() => { if (isTyping) updateURL(); }, 800);
+    searchTrackTimer = setTimeout(() => {
+        searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
+        if (isTyping) updateURL();
+    }, 800);
 }
 
 function handleWorkerResults(data) {
