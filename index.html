@@ -87,6 +87,14 @@
         </div>
     </div>
 
+    <!-- 画像拡大モーダル -->
+    <div id="image-modal-overlay" class="modal-overlay" onclick="closeImageModal()">
+        <div class="image-modal-content" onclick="event.stopPropagation()">
+            <img id="modal-expanded-img" src="" alt="">
+            <button class="modal-close-btn" onclick="closeImageModal()">&times;</button>
+        </div>
+    </div>
+
     <footer>
         &copy; 2024-2026 pet925. All Rights Reserved. <br>
         Reproduction of content is strictly prohibited.

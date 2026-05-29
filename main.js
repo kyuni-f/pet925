@@ -107,6 +107,19 @@ function executeClearAllFavorites() {
     render(false);
 }
 
+function openImageModal(src, alt) {
+    const overlay = document.getElementById('image-modal-overlay');
+    const img = document.getElementById('modal-expanded-img');
+    img.src = src;
+    img.alt = alt;
+    overlay.style.display = 'flex';
+    trackEvent('UI', 'image_expand', alt);
+}
+
+function closeImageModal() {
+    document.getElementById('image-modal-overlay').style.display = 'none';
+}
+
 function toggleFavFilter() {
     showFavoritesOnly = !showFavoritesOnly;
     updateFavoriteButtonUI();
@@ -327,12 +340,12 @@ function handleWorkerResults(data) {
     const loadMoreArea = document.getElementById('load-more-area');
     list.innerHTML = "";
     loadMoreArea.innerHTML = "";
-    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23f4f4f4'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
+    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23bbb'%3Eno image%3C/text%3E%3C/svg%3E";
     matchedItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
         const isFav = favorites.includes(item.name);
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${(!item.img || item.img === "#") ? defaultImg : item.img}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async"><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')">${isFav ? '❤' : '♡'}</button></div><div class="card-content"><span class="brand-badge">${item.brand}</span><div class="${item.name.length > 45 ? 'product-name is-long' : 'product-name'}">${item.name}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${(!item.img || item.img === "#") ? defaultImg : item.img}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')">${isFav ? '❤' : '♡'}</button></div><div class="card-content"><span class="brand-badge">${item.brand}</span><div class="${item.name.length > 45 ? 'product-name is-long' : 'product-name'}">${item.name}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazon</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
@@ -342,7 +355,17 @@ function handleWorkerResults(data) {
     });
     const submitBtn = document.getElementById('main-submit-btn');
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
-    if (totalMatchCount > currentVisibleCount) loadMoreArea.innerHTML = `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
+    
+    let footerHtml = '';
+    if (totalMatchCount > currentVisibleCount) {
+        footerHtml += `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
+    }
+    // 1件以上結果がある場合は「一番上に戻る」を表示
+    if (totalMatchCount > 0) {
+        footerHtml += `<button class="btn-back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">一番上に戻る ↑</button>`;
+    }
+    loadMoreArea.innerHTML = footerHtml;
+
     if (totalMatchCount === 0) {
         list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
         // 0件ヒットの計測：お気に入りモード時は除外
