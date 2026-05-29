@@ -21,6 +21,7 @@ let activeFilters = {};
 let searchTrackTimer = null;
 let tagLookupMap = {}; 
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
+let lastSearchCount = 0; // 最新の検索ヒット数を保持
 let showFavoritesOnly = false;
 let searchWorker = null; 
 let isWorkerReady = false; 
@@ -195,6 +196,17 @@ function updateURL() {
             gtag('event', 'search', {
                 'search_term': searchVal
             });
+
+            // 検索結果が0件だった場合のデバウンス計測（お気に入りモード時は除外）
+            if (lastSearchCount === 0 && !showFavoritesOnly) {
+                const filterInfo = Object.entries(activeFilters)
+                    .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
+                    .map(([cat, val]) => `${cat}:${val}`).join(', ');
+                
+                gtag('event', 'search_no_results', {
+                    'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}`
+                });
+            }
         }
         gtag('event', 'page_view', {
             page_location: window.location.href,
@@ -405,16 +417,11 @@ function handleWorkerResults(data) {
     }
     loadMoreArea.innerHTML = footerHtml;
 
+    // ヒット数をグローバルに保存（デバウンスされたGA4送信で使用）
+    lastSearchCount = totalMatchCount;
+
     if (totalMatchCount === 0) {
         list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
-        // 0件ヒットの計測：お気に入りモード時は除外
-        if (!showFavoritesOnly) {
-            const searchVal = document.getElementById('search-input').value.trim();
-            const filterInfo = Object.entries(activeFilters)
-                .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
-                .map(([cat, val]) => `${cat}:${val}`).join(', ');
-            trackEvent('Search', 'no_results', `Words: "${searchVal}" | Filters: {${filterInfo}}`);
-        }
     }
 }
 
