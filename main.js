@@ -452,15 +452,13 @@ function handleWorkerResults(data) {
     const { matchedItems, totalMatchCount, visibleCount: currentVisibleCount } = data;
     const list = document.getElementById('product-list');
     const loadMoreArea = document.getElementById('load-more-area');
-    const countDisplay = document.getElementById('results-total-count');
     const submitBtn = document.getElementById('main-submit-btn');
 
     if (list) list.innerHTML = "";
     if (loadMoreArea) loadMoreArea.innerHTML = "";
 
-    // 件数表示の更新（検索画面のボタンと結果画面の見出しを同期）
+    // 検索画面のボタンのみ件数を表示（結果画面の件数は表示しない）
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
-    if (countDisplay) countDisplay.textContent = `${totalMatchCount} PRODUCTS FOUND`;
 
     lastSearchCount = totalMatchCount;
 
