@@ -290,15 +290,16 @@ footer a { color: var(--gold); text-decoration: none; }
         padding-bottom: 100px !important;
     }
 
-    /* スマホでタグの幅を2列に統一 */
+    /* スマホでタグの幅を3列に統一し、左右に余白を追加 */
     .filter-wrap-box {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        padding: 5px 15px;
     }
 
     .filter-btn {
-        padding: 10px 4px;
+        padding: 8px 2px;
         text-align: center;
         justify-content: center;
         display: flex;
@@ -308,13 +309,13 @@ footer a { color: var(--gold); text-decoration: none; }
         box-sizing: border-box;
     }
 
-    /* 2列グリッドにおけるチェックマーク位置の調整 */
+    /* 3列グリッドにおけるチェックマーク位置の調整 */
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
-        padding-left: 24px;
-        padding-right: 8px;
+        padding-left: 18px;
+        padding-right: 2px;
     }
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
-        left: 8px;
+        left: 5px;
     }
 }
 
