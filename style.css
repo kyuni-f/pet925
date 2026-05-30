@@ -53,7 +53,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
 /* こだわり条件フィルターナビゲーション */
-.filter-nav { position: sticky; top: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; max-height: 80vh; overflow-y: auto; }
+.filter-nav { position: relative; background: #fff; z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
 .filter-group { margin-bottom: 25px; }
 
 /* カテゴリヘッダーの改善 */
