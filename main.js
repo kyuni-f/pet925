@@ -336,10 +336,14 @@ function renderFilters() {
         if (catInfo.multi) groupDiv.setAttribute('data-multiselect', 'true');
         const isAllActive = catInfo.multi ? (!activeFilters[category] || activeFilters[category].length === 0) : (activeFilters[category] === 'all');
         const allActiveClass = isAllActive ? 'active' : '';
-        let html = `<div class="group-header" onclick="toggleGroupCollapse(this)"><span class="group-label-jp">${catInfo.jp}</span><span class="group-label-en">${catInfo.en}</span>${catInfo.multi ? '<span class="multi-badge">複数選択可</span>' : ''}<span class="collapse-icon">▲</span></div><div class="filter-wrap-box" id="filter-${category}"><button class="filter-btn ${allActiveClass}" data-cat="${category}" data-val="all" onclick="toggleFilter(this)">すべて</button>`;
+        let html = `<div class="group-header" onclick="toggleGroupCollapse(this)"><span class="group-label-jp">${catInfo.jp}</span><span class="group-label-en">${catInfo.en}</span>${catInfo.multi ? '<span class="multi-badge">複数選択可</span>' : ''}<span class="collapse-icon">▲</span></div><div class="filter-wrap-box" id="filter-${category}"><button class="filter-btn ${allActiveClass}" data-cat="${category}" data-val="all" onclick="toggleFilter(this)"><span class="btn-jp">すべて</span></button>`;
         for (const [tagKey, tagName] of Object.entries(tags)) {
             const isActive = Array.isArray(activeFilters[category]) ? activeFilters[category].includes(tagKey) : activeFilters[category] === tagKey;
-            html += `<button class="filter-btn ${isActive ? 'active' : ''}" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${tagName}</button>`;
+            const parts = tagName.match(/(.+)\s*\((.+)\)/);
+            const labelHtml = parts 
+                ? `<span class="btn-jp">${parts[1]}</span><span class="btn-en">${parts[2]}</span>`
+                : `<span class="btn-jp">${tagName}</span>`;
+            html += `<button class="filter-btn ${isActive ? 'active' : ''}" data-cat="${category}" data-val="${tagKey}" onclick="toggleFilter(this)">${labelHtml}</button>`;
         }
         html += `</div>`;
         groupDiv.innerHTML = html;

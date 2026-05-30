@@ -77,11 +77,20 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 .filter-btn { 
     position: relative;
-    background: #fff; border: 1px solid #eee; padding: 8px 16px; font-size: 0.75rem; 
+    background: #fff; border: 1px solid #eee; padding: 10px 16px; 
     transition: 0.3s; cursor: pointer; white-space: nowrap; border-radius: 2px;
     -webkit-tap-highlight-color: transparent;
     outline: none !important; /* ブラウザ標準の枠線を強制非表示 */
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    box-sizing: border-box;
 }
+
+.btn-jp { font-size: 0.75rem; line-height: 1.2; display: block; }
+.btn-en { font-size: 0.55rem; line-height: 1.2; display: block; opacity: 0.6; margin-top: 2px; font-weight: normal; }
 
 /* マウス操作が可能なデバイスのみホバー効果（金枠）を適用。スマホ(touch)では無効化。 */
 @media (hover: hover) and (pointer: fine) {
@@ -299,13 +308,9 @@ footer a { color: var(--gold); text-decoration: none; }
     }
 
     .filter-btn {
-        padding: 8px 2px;
-        text-align: center;
-        justify-content: center;
-        display: flex;
-        font-size: 0.7rem;
+        padding: 6px 2px;
         white-space: normal; /* 長いテキストの折り返しを許可 */
-        height: 100%;
+        height: 56px; /* スマホ側の高さを56pxで完全統一 */
         box-sizing: border-box;
     }
 
