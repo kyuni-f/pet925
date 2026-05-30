@@ -89,7 +89,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     box-sizing: border-box;
 }
 
-.btn-jp { font-size: 0.75rem; line-height: 1.2; display: block; }
+.btn-jp { font-size: 0.75rem; line-height: 1.2; display: block; font-weight: bold; }
 .btn-en { font-size: 0.55rem; line-height: 1.2; display: block; opacity: 0.6; margin-top: 2px; font-weight: normal; }
 
 /* マウス操作が可能なデバイスのみホバー効果（金枠）を適用。スマホ(touch)では無効化。 */
@@ -299,11 +299,11 @@ footer a { color: var(--gold); text-decoration: none; }
         padding-bottom: 100px !important;
     }
 
-    /* スマホでタグの幅を3列に統一し、左右に余白を追加 */
+    /* スマホでタグの幅を2列に統一し、左右に余白を追加 */
     .filter-wrap-box {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
         padding: 5px 15px;
     }
 
@@ -314,13 +314,13 @@ footer a { color: var(--gold); text-decoration: none; }
         box-sizing: border-box;
     }
 
-    /* 3列グリッドにおけるチェックマーク位置の調整 */
+    /* 2列グリッドにおけるチェックマーク位置の調整 */
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
-        padding-left: 18px;
-        padding-right: 2px;
+        padding-left: 30px;
+        padding-right: 8px;
     }
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
-        left: 5px;
+        left: 10px;
     }
 }
 
