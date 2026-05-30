@@ -269,7 +269,12 @@ function toggleFilter(btn) {
             else allBtn.classList.remove('active');
         }
     }
-    btn.blur(); // スマホ操作時にタップしたボタンのフォーカス枠（ゴールドの線など）が残るのを防ぐ
+
+    // 解除直後の金枠残存を確実に防ぐため、非同期でフォーカスを強制解除
+    setTimeout(() => {
+        btn.blur();
+    }, 50);
+
     trackEvent('Filter', 'select_tag', `${category}:${value}`);
     updateURL();
     visibleCount = PAGE_SIZE;

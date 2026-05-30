@@ -77,20 +77,36 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 .filter-btn { 
     position: relative;
-    background: #fff; border: 1px solid #eee; padding: 8px 20px; font-size: 0.75rem; 
+    background: #fff; border: 1px solid #eee; padding: 8px 16px; font-size: 0.75rem; 
     transition: 0.3s; cursor: pointer; white-space: nowrap; border-radius: 2px;
+    -webkit-tap-highlight-color: transparent;
+    outline: none !important; /* ブラウザ標準の枠線を強制非表示 */
 }
-.filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* マウス操作が可能なデバイスのみホバー効果（金枠）を適用。スマホ(touch)では無効化。 */
+@media (hover: hover) and (pointer: fine) {
+    .filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+}
+
+/* タップ時（アクティブ）のフィードバック：金枠ではなく、一瞬だけ背景をグレーにする */
+.filter-btn:active {
+    background-color: var(--gray);
+    border-color: #ddd;
+}
+
+/* キーボード操作時のみ枠線を表示（アクセシビリティ対応） */
+.filter-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
 .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
 
 /* 複数選択ボタンがアクティブな時のチェックマーク */
 .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
-    padding-left: 32px; 
+    padding-left: 30px; 
 }
 .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
     content: '✓';
     position: absolute;
-    left: 12px;
+    left: 10px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 0.9rem;
