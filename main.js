@@ -22,6 +22,7 @@ let searchTrackTimer = null;
 let tagLookupMap = {}; 
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
 let lastSearchCount = 0; // 最新の検索ヒット数を保持
+let visibleChipsInResults = new Set(); // 結果画面で表示し続けるチップのキー管理
 let showFavoritesOnly = false;
 let searchWorker = null; 
 let isWorkerReady = false; 
@@ -58,7 +59,18 @@ function updateFavoriteButtonUI() {
 function showResults() {
     document.body.classList.add('state-results');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // 結果画面に入る瞬間のフィルター状態を「表示対象」として登録
+    visibleChipsInResults.clear();
+    for (const [cat, val] of Object.entries(activeFilters)) {
+        const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
+        values.forEach(v => visibleChipsInResults.add(`${cat}:${v}`));
+    }
+    const searchVal = document.getElementById('search-input').value.trim();
+    if (searchVal) visibleChipsInResults.add(`q:${searchVal}`);
+
     trackEvent('Navigation', 'show_results', 'click');
+    render(false);
 }
 
 function backToSearch() {
@@ -77,7 +89,7 @@ function backToSearch() {
         // 検索条件が残っている場合はURLを更新
         updateURL();
     }
-    render(false); // フィルター状態が変更されたので、UIを更新する
+    render(false);
 }
 
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
@@ -338,22 +350,45 @@ function renderFilters() {
 function renderActiveChips() {
     const container = document.getElementById('active-chips-container');
     const searchVal = document.getElementById('search-input').value.trim();
-    let chipsHtml = '';
+    container.innerHTML = '';
     let hasActive = false;
-    if (searchVal) {
-        chipsHtml += `<div class="chip" onclick="document.getElementById('search-input').value='';render(true);">${searchVal} <span class="chip-close">×</span></div>`;
+
+    // 登録された表示対象チップを一つずつ描画
+    visibleChipsInResults.forEach(chipKey => {
+        const [cat, val] = chipKey.split(':');
+        let isActive = false;
+        let label = '';
+        let onClickAction = null;
+
+        if (cat === 'q') {
+            isActive = (searchVal === val);
+            label = val;
+            onClickAction = () => { document.getElementById('search-input').value = isActive ? '' : val; render(true); };
+        } else {
+            const currentVal = activeFilters[cat];
+            isActive = Array.isArray(currentVal) ? currentVal.includes(val) : currentVal === val;
+            label = tagLookupMap[val] || val;
+            onClickAction = () => removeSingleFilter(cat, val);
+        }
+
+        const chipEl = document.createElement('div');
+        chipEl.className = `chip ${isActive ? '' : 'is-off'}`;
+        chipEl.innerHTML = `${label} <span class="chip-close">×</span>`;
+        chipEl.onclick = onClickAction;
+        container.appendChild(chipEl);
         hasActive = true;
-    }    
-    const clearFavBtn = document.getElementById('clear-fav-btn'); // 結果画面のクリアボタン
-    if (clearFavBtn) clearFavBtn.style.display = (favorites.length > 0 && showFavoritesOnly) ? 'block' : 'none';
-    for (const [cat, val] of Object.entries(activeFilters)) {
-        const values = Array.isArray(val) ? val : (val !== 'all' ? [val] : []);
-        values.forEach(v => {
-            chipsHtml += `<div class="chip" onclick="removeSingleFilter('${cat}', '${v}')">${tagLookupMap[v] || v} <span class="chip-close">×</span></div>`;
-            hasActive = true;
-        });
+    });
+
+    if (hasActive) {
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'clear-all';
+        clearBtn.textContent = 'CLEAR ALL ×';
+        clearBtn.onclick = clearAllFilters;
+        container.appendChild(clearBtn);
     }
-    container.innerHTML = hasActive ? `<span class="active-chips-label">ACTIVE:</span>` + chipsHtml + `<button class="clear-all" onclick="clearAllFilters()">CLEAR ALL ×</button>` : '';
+
+    const clearFavBtn = document.getElementById('clear-fav-btn');
+    if (clearFavBtn) clearFavBtn.style.display = (favorites.length > 0 && showFavoritesOnly) ? 'block' : 'none';
 }
 
 function removeSingleFilter(cat, val) {

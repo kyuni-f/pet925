@@ -97,7 +97,12 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 /* キーボード操作時のみ枠線を表示（アクセシビリティ対応） */
 .filter-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-.filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); font-weight: bold; }
+.filter-btn.active { 
+    background: var(--dark); 
+    color: #fff; 
+    border-color: var(--dark); 
+    font-weight: bold;
+}
 
 /* 複数選択ボタンがアクティブな時のチェックマーク */
 .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
@@ -125,10 +130,25 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 /* アクティブフィルターのチップ表示 */
 .active-chips-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; min-height: 32px; }
-.chip { background: var(--gold); color: #fff; font-size: 0.65rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.3s; letter-spacing: 1px; }
-.chip:hover { opacity: 0.8; transform: scale(0.95); }
-.chip-close { font-size: 0.8rem; line-height: 1; }
-.clear-all { font-size: 0.6rem; color: #666; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; cursor: pointer; margin-left: 12px; background: #fff; transition: 0.3s; letter-spacing: 1px; font-weight: bold; text-transform: uppercase; }
+
+/* 結果画面の調整チップ：通常（選択中）は金背景、解除時は金枠 */
+.chip {
+    background: var(--gold); color: #fff; border: 1.5px solid var(--gold);
+    font-size: 0.65rem; font-weight: bold; padding: 5px 12px; border-radius: 20px;
+    display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.2s;
+    letter-spacing: 1px;
+}
+/* 一時調整で解除された状態：ゴールドの枠線デザイン */
+.chip.is-off {
+    background: #fff; color: var(--gold); border: 1.5px solid var(--gold);
+}
+.chip-close { 
+    font-size: 0.9rem; line-height: 1; margin-left: 2px;
+    display: inline-block; transition: 0.2s;
+}
+.chip.is-off .chip-close { transform: rotate(45deg); } /* 解除時は＋に見えるように回転 */
+
+.clear-all { font-size: 0.6rem; color: #666; border: 1px solid #ddd; padding: 5px 12px; border-radius: 20px; cursor: pointer; background: #fff; transition: 0.3s; letter-spacing: 1px; font-weight: bold; text-transform: uppercase; }
 .clear-all:hover { background: #f0f0f0; color: var(--dark); border-color: #999; }
 
 .fav-toggle-btn { background: #fff; border: 1px solid #eee; color: var(--dark); padding: 8px 18px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-weight: bold; border-radius: 25px; letter-spacing: 1px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); outline: none; }
@@ -268,6 +288,33 @@ footer a { color: var(--gold); text-decoration: none; }
 @media (max-width: 768px) {
     .filter-nav {
         padding-bottom: 100px !important;
+    }
+
+    /* スマホでタグの幅を2列に統一 */
+    .filter-wrap-box {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .filter-btn {
+        padding: 10px 4px;
+        text-align: center;
+        justify-content: center;
+        display: flex;
+        font-size: 0.7rem;
+        white-space: normal; /* 長いテキストの折り返しを許可 */
+        height: 100%;
+        box-sizing: border-box;
+    }
+
+    /* 2列グリッドにおけるチェックマーク位置の調整 */
+    .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
+        padding-left: 24px;
+        padding-right: 8px;
+    }
+    .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
+        left: 8px;
     }
 }
 
