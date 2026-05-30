@@ -26,6 +26,9 @@ let showFavoritesOnly = false;
 let searchWorker = null; 
 let isWorkerReady = false; 
 
+// カテゴリの表示順序を定義（この順序で画面に並びます）
+const CATEGORY_PRIORITY = ['animal', 'age', 'cond'];
+
 let visibleCount = 20; 
 const PAGE_SIZE = 20;  
 
@@ -196,17 +199,6 @@ function updateURL() {
             gtag('event', 'search', {
                 'search_term': searchVal
             });
-
-            // 検索結果が0件だった場合のデバウンス計測（お気に入りモード時は除外）
-            if (lastSearchCount === 0 && !showFavoritesOnly) {
-                const filterInfo = Object.entries(activeFilters)
-                    .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
-                    .map(([cat, val]) => `${cat}:${val}`).join(', ');
-                
-                gtag('event', 'search_no_results', {
-                    'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}`
-                });
-            }
         }
         gtag('event', 'page_view', {
             page_location: window.location.href,
@@ -277,6 +269,7 @@ function toggleFilter(btn) {
             else allBtn.classList.remove('active');
         }
     }
+    btn.blur(); // スマホ操作時にタップしたボタンのフォーカス枠（ゴールドの線など）が残るのを防ぐ
     trackEvent('Filter', 'select_tag', `${category}:${value}`);
     updateURL();
     visibleCount = PAGE_SIZE;
@@ -289,6 +282,11 @@ function toggleGroupCollapse(header) {
 }
 
 function clearAllFilters() {
+    // クリックした「CLEAR ALL」ボタン自体のフォーカス枠を消す
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.tagName === 'BUTTON') {
+        activeEl.blur();
+    }
     for (const cat in activeFilters) {
         activeFilters[cat] = (typeof tagMaster !== 'undefined' && tagMaster[cat]) ? getDefaultFilterValue(cat) : "all";
     }
@@ -307,7 +305,14 @@ function renderFilters() {
     if (typeof tagMaster === 'undefined') return;
     const navContainer = document.getElementById('filter-nav-container');
     navContainer.innerHTML = '';
-    for (const [category, tags] of Object.entries(tagMaster)) {
+
+    // 表示順序に基づいてカテゴリをソートしてレンダリング
+    const sortedCategories = Object.keys(tagMaster).sort((a, b) => {
+        return CATEGORY_PRIORITY.indexOf(a) - CATEGORY_PRIORITY.indexOf(b);
+    });
+
+    for (const category of sortedCategories) {
+        const tags = tagMaster[category];
         const groupDiv = document.createElement('div');
         groupDiv.className = 'filter-group';
         const catInfo = categoryMaster[category] || { jp: category, en: category.toUpperCase(), multi: false };
@@ -426,6 +431,17 @@ function handleWorkerResults(data) {
 
     if (totalMatchCount === 0) {
         list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
+        // 検索結果が0件だった場合の計測（お気に入りモード時は除外）
+        const searchVal = document.getElementById('search-input').value.trim();
+        if (searchVal && !showFavoritesOnly && window.gtag) {
+            const filterInfo = Object.entries(activeFilters)
+                .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
+                .map(([cat, val]) => `${cat}:${val}`).join(', ');
+            
+            gtag('event', 'search_no_results', {
+                'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}`
+            });
+        }
     }
 }
 
