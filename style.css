@@ -57,8 +57,12 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .filter-group { margin-bottom: 25px; }
 
 /* カテゴリヘッダーの改善 */
-.group-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 5px; cursor: pointer; user-select: none; transition: 0.2s; }
-.group-header:hover { background: var(--gray); }
+.group-header { 
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px; 
+    padding: 8px 12px; cursor: pointer; user-select: none; transition: 0.2s; 
+    background: var(--gray); border-radius: 2px; 
+}
+.group-header:hover { opacity: 0.8; }
 .group-label-jp { font-size: 0.95rem; font-weight: 600; color: var(--dark); }
 .group-label-en { font-size: 0.6rem; font-weight: 700; color: #bbb; letter-spacing: 1px; text-transform: uppercase; }
 .collapse-icon { font-size: 0.6rem; color: #ccc; transition: 0.3s; margin-left: auto; }
@@ -89,8 +93,8 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     box-sizing: border-box;
 }
 
-.btn-jp { font-size: 0.75rem; line-height: 1.2; display: block; font-weight: bold; }
-.btn-en { font-size: 0.55rem; line-height: 1.2; display: block; opacity: 0.6; margin-top: 2px; font-weight: normal; }
+.btn-jp { font-size: 0.75rem; line-height: 1.2; display: block; font-weight: bold; letter-spacing: 0.05rem; }
+.btn-en { font-size: 0.55rem; line-height: 1.2; display: block; opacity: 0.6; margin-top: 2px; font-weight: normal; letter-spacing: 0.03rem; }
 
 /* マウス操作が可能なデバイスのみホバー効果（金枠）を適用。スマホ(touch)では無効化。 */
 @media (hover: hover) and (pointer: fine) {

@@ -18,7 +18,7 @@ const AFFILIATE_CONFIG = {
 };
 
 let activeFilters = {}; 
-let searchTrackTimer = null;
+let searchInputDebounceTimer = null; // 検索入力欄専用のデバウンスタイマー
 let tagLookupMap = {}; 
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
 let lastSearchCount = 0; // 最新の検索ヒット数を保持
@@ -58,7 +58,7 @@ function updateFavoriteButtonUI() {
 
 function showResults() {
     document.body.classList.add('state-results');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
     
     // 結果画面に入る瞬間のフィルター状態を「表示対象」として登録
     visibleChipsInResults.clear();
@@ -70,12 +70,12 @@ function showResults() {
     if (searchVal) visibleChipsInResults.add(`q:${searchVal}`);
 
     trackEvent('Navigation', 'show_results', 'click');
-    render(false);
+    render(); // 即座にレンダリングとWorkerをトリガー
 }
 
 function backToSearch() {
     document.body.classList.remove('state-results');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
     // 検索画面に戻る際、お気に入りフィルターが有効であれば解除する
     if (showFavoritesOnly) {
         showFavoritesOnly = false;
@@ -86,10 +86,9 @@ function backToSearch() {
     if (!searchVal && !hasActiveFilters) {
         history.replaceState(null, '', window.location.pathname);
     } else {
-        // 検索条件が残っている場合はURLを更新
-        updateURL();
+        // 検索条件が残っている場合はURLを更新（render()内で実行される）
     }
-    render(false);
+    render(); // 即座にレンダリングとWorkerをトリガー
 }
 
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
@@ -115,6 +114,7 @@ function toggleFavorite(name) {
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
     updateFavoriteButtonUI();
     render(false);
+    updateURLAndGA4(); // お気に入り変更もURLに反映
 }
 
 function clearAllFavorites() {
@@ -132,7 +132,7 @@ function executeClearAllFavorites() {
     updateFavoriteButtonUI();
     trackEvent('Favorites', 'clear_all', 'all');
     closeFavModal();
-    render(false);
+    render(); // 即座にレンダリングとWorkerをトリガー
 }
 
 function openImageModal(src, alt) {
@@ -174,22 +174,23 @@ function toggleFavFilter() {
     if (showFavoritesOnly && !document.body.classList.contains('state-results')) {
         showResults();
     }
-    render(false);
+    render(); // 即座にレンダリングとWorkerをトリガー
 }
 
-function trackEvent(category, action, label) {
+function trackEvent(category, action, label, value = null) { // value引数を追加
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
         console.log(`[Analytics] ${category} > ${action}: ${label}`);
     }
     if (window.gtag) {
         const eventName = (category + '_' + action).toLowerCase();
         gtag('event', eventName, {
-            'item_label': label
+            'item_label': label,
+            'value': value // 必要に応じて数値データも送信
         });
     }
 }
 
-function updateURL() {
+function updateURLAndGA4() { // 関数名を変更し、GA4イベント送信も統合
     const params = new URLSearchParams();
     const searchVal = document.getElementById('search-input').value.trim();
     if (searchVal) params.set('q', searchVal);
@@ -207,16 +208,15 @@ function updateURL() {
     history.replaceState(null, '', newRelativePathQuery);
     
     if (window.gtag) {
-        if (searchVal) {
-            gtag('event', 'search', {
-                'search_term': searchVal
-            });
-        }
         gtag('event', 'page_view', {
             page_location: window.location.href,
             page_path: window.location.pathname + window.location.search,
             page_title: document.title
         });
+        // 検索ワードがある場合のみ search イベントを送信
+        if (searchVal) {
+            gtag('event', 'search', { 'search_term': searchVal });
+        }
     }
 }
 
@@ -288,9 +288,8 @@ function toggleFilter(btn) {
     }, 50);
 
     trackEvent('Filter', 'select_tag', `${category}:${value}`);
-    updateURL();
+    render(); // 即座にレンダリングとWorkerをトリガー
     visibleCount = PAGE_SIZE;
-    render(false);
 }
 
 function toggleGroupCollapse(header) {
@@ -313,9 +312,16 @@ function clearAllFilters() {
         else btn.classList.remove('active');
     });
     trackEvent('Filter', 'clear_all', 'all');
+    render(); // 即座にレンダリングとWorkerをトリガー
     visibleCount = PAGE_SIZE;
-    updateURL();
-    render(false);
+}
+
+// 検索入力欄のデバウンス処理
+function handleSearchInput() {
+    clearTimeout(searchInputDebounceTimer);
+    searchInputDebounceTimer = setTimeout(() => {
+        render(); // デバウンス後にレンダリングとWorkerをトリガー
+    }, 800);
 }
 
 function renderFilters() {
@@ -404,50 +410,75 @@ function getSearchUrl(shop, brand, name, fallbackUrl) {
     if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
     const q = encodeURIComponent(`${brand} ${name}`);
     let targetShopUrl = '';
-
     if (shop === 'amz') {
-        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`; // Amazonの安い順ソート
+        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
         return getMoshimoUrl('amazon', targetShopUrl);
     }
     if (shop === 'rak') {
-        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`; // 楽天の安い順ソート
+        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
         return getMoshimoUrl('rakuten', targetShopUrl);
     }
     if (shop === 'yah') {
-        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`; // Yahoo!ショッピングの安い順ソート
+        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
         return getMoshimoUrl('yahoo', targetShopUrl);
     }
     return '#';
 }
 
-window.render = function(isTyping = false) {
+window.render = function(resetVisibleCount = true) { // isTyping引数をresetVisibleCountに変更
     if (!searchWorker || !isWorkerReady) return;
-    if (isTyping) visibleCount = PAGE_SIZE;
+    if (resetVisibleCount) visibleCount = PAGE_SIZE; // 新しい検索/フィルターの場合のみvisibleCountをリセット
     const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     renderActiveChips();
     updateFavoriteButtonUI();
 
-    // 全ての処理（Workerへの命令とGA4へのURL更新）をタイマーの中に統合
-    clearTimeout(searchTrackTimer);
-    searchTrackTimer = setTimeout(() => {
-        searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
-        if (isTyping) updateURL();
-    }, 800);
+    // Workerへの命令は常に即座に実行
+    searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
+    
+    // URLとGA4の更新も常に即座に実行（検索入力欄からの呼び出しはhandleSearchInputでデバウンスされる）
+    updateURLAndGA4();
 }
 
 function handleWorkerResults(data) {
     if (data.type === 'READY') {
         isWorkerReady = true;
-        if (document.getElementById('main-submit-btn')) document.getElementById('main-submit-btn').textContent = `準備完了（${data.total}件）`;
+        const btn = document.getElementById('main-submit-btn');
+        if (btn) btn.textContent = `準備完了（${data.total}件）`;
         render();
+        updateURLAndGA4(); // 初期ロード完了時もURLとGA4を更新
         return;
     }
+
     const { matchedItems, totalMatchCount, visibleCount: currentVisibleCount } = data;
     const list = document.getElementById('product-list');
     const loadMoreArea = document.getElementById('load-more-area');
-    list.innerHTML = "";
-    loadMoreArea.innerHTML = "";
-    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E";
+    const countDisplay = document.getElementById('results-total-count');
+    const submitBtn = document.getElementById('main-submit-btn');
+
+    if (list) list.innerHTML = "";
+    if (loadMoreArea) loadMoreArea.innerHTML = "";
+
+    // 件数表示の更新（検索画面のボタンと結果画面の見出しを同期）
+    if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
+    if (countDisplay) countDisplay.textContent = `${totalMatchCount} PRODUCTS FOUND`;
+
+    lastSearchCount = totalMatchCount;
+
+    if (totalMatchCount === 0) {
+        if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
+        // 0件時のGA4計測
+        const searchVal = document.getElementById('search-input').value.trim();
+        if (searchVal && !showFavoritesOnly && window.gtag) {
+            const filterInfo = Object.entries(activeFilters)
+                .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
+                .map(([cat, val]) => `${cat}:${val}`).join(', ');
+            gtag('event', 'search_no_results', { 'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}` });
+        }
+        return;
+    }
+
+    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E"; // Moved to global or constant if used elsewhere
+
     matchedItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
@@ -461,32 +492,12 @@ function handleWorkerResults(data) {
             `</div></div>`;
         list.appendChild(card);
     });
-    const submitBtn = document.getElementById('main-submit-btn');
-    if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
-    
+
     let footerHtml = '';
     if (totalMatchCount > currentVisibleCount) {
         footerHtml += `<button class="btn-load-more" onclick="loadMore()">さらに表示 (${totalMatchCount - currentVisibleCount}件)</button>`;
     }
-    loadMoreArea.innerHTML = footerHtml;
-
-    // ヒット数をグローバルに保存（デバウンスされたGA4送信で使用）
-    lastSearchCount = totalMatchCount;
-
-    if (totalMatchCount === 0) {
-        list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
-        // 検索結果が0件だった場合の計測（お気に入りモード時は除外）
-        const searchVal = document.getElementById('search-input').value.trim();
-        if (searchVal && !showFavoritesOnly && window.gtag) {
-            const filterInfo = Object.entries(activeFilters)
-                .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
-                .map(([cat, val]) => `${cat}:${val}`).join(', ');
-            
-            gtag('event', 'search_no_results', {
-                'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}`
-            });
-        }
-    }
+    if (loadMoreArea) loadMoreArea.innerHTML = footerHtml;
 }
 
 function initializeApp() {
@@ -526,7 +537,7 @@ function initializeApp() {
         if (document.getElementById('main-submit-btn')) document.getElementById('main-submit-btn').textContent = "エラー: データの読み込みに失敗しました";
     };
     initFilters();
-    renderFilters();
+    renderFilters(); // フィルターUIの初期描画
     updateFavoriteButtonUI(); // 初期表示時のお気に入りボタンの状態を更新
 }
 
