@@ -85,7 +85,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 48px;
+    min-height: 44px;
     box-sizing: border-box;
 }
 
@@ -310,7 +310,7 @@ footer a { color: var(--gold); text-decoration: none; }
     .filter-btn {
         padding: 6px 2px;
         white-space: normal; /* 長いテキストの折り返しを許可 */
-        height: 56px; /* スマホ側の高さを56pxで完全統一 */
+        height: 50px; /* スマホ側の高さを50pxで完全統一 */
         box-sizing: border-box;
         text-align: center;
     }
