@@ -18,10 +18,9 @@ const AFFILIATE_CONFIG = {
 };
 
 let activeFilters = {}; 
-let searchInputDebounceTimer = null; // 検索入力欄専用のデバウンスタイマー
+let searchInputDebounceTimer = null; // 検索入力専用のデバウンスタイマー
 let tagLookupMap = {}; 
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
-let lastSearchCount = 0; // 最新の検索ヒット数を保持
 let visibleChipsInResults = new Set(); // 結果画面で表示し続けるチップのキー管理
 let showFavoritesOnly = false;
 let searchWorker = null; 
@@ -33,13 +32,13 @@ const CATEGORY_PRIORITY = ['animal', 'age', 'cond'];
 let visibleCount = 20; 
 const PAGE_SIZE = 20;  
 
-function loadMore() {
+function loadMore() { // 「さらに表示」ボタン：表示件数を増やして再描画
     visibleCount += PAGE_SIZE;
     trackEvent('Navigation', 'load_more', visibleCount);
     render(false);
 }
 
-function updateFavoriteButtonUI() {
+function updateFavoriteButtonUI() { // お気に入りボタン（検索・結果両方）の件数バッジを更新
     const favCount = favorites.length;
 
     // 結果画面のお気に入りボタン
@@ -56,7 +55,7 @@ function updateFavoriteButtonUI() {
     }
 }
 
-function showResults() {
+function showResults() { // 検索画面から結果画面へ切り替え
     document.body.classList.add('state-results');
     window.scrollTo({ top: 0, behavior: 'auto' });
     
@@ -70,10 +69,10 @@ function showResults() {
     if (searchVal) visibleChipsInResults.add(`q:${searchVal}`);
 
     trackEvent('Navigation', 'show_results', 'click');
-    render(); // 即座にレンダリングとWorkerをトリガー
+    render(false);
 }
 
-function backToSearch() {
+function backToSearch() { // 結果画面から検索画面へ戻る
     document.body.classList.remove('state-results');
     window.scrollTo({ top: 0, behavior: 'auto' });
     // 検索画面に戻る際、お気に入りフィルターが有効であれば解除する
@@ -85,24 +84,24 @@ function backToSearch() {
     const hasActiveFilters = Object.values(activeFilters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'));
     if (!searchVal && !hasActiveFilters) {
         history.replaceState(null, '', window.location.pathname);
-    } else {
-        // 検索条件が残っている場合はURLを更新（render()内で実行される）
     }
-    render(); // 即座にレンダリングとWorkerをトリガー
+    render(false);
 }
 
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
 const getDefaultFilterValue = (cat) => isMulti(cat) ? [] : "all";
 
-const getTagLookup = () => {
+const getTagLookup = () => { // タグのIDから日本語名を取得するための逆引きマップを作成
     const lookup = {};
     if (typeof tagMaster !== 'undefined') {
-        Object.values(tagMaster).forEach(group => Object.assign(lookup, group));
+        Object.values(tagMaster).forEach(group => {
+            Object.assign(lookup, group);
+        });
     }
     return lookup;
 };
 
-function toggleFavorite(name) {
+function toggleFavorite(name) { // お気に入りの登録・解除を切り替え
     const index = favorites.indexOf(name);
     if (index > -1) {
         favorites.splice(index, 1);
@@ -114,28 +113,27 @@ function toggleFavorite(name) {
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
     updateFavoriteButtonUI();
     render(false);
-    updateURLAndGA4(); // お気に入り変更もURLに反映
 }
 
-function clearAllFavorites() {
+function clearAllFavorites() { // お気に入り一括解除の確認モーダルを表示
     if (favorites.length === 0) return;
     document.getElementById('fav-modal-overlay').style.display = 'flex';
 }
 
-function closeFavModal() {
+function closeFavModal() { // お気に入り一括解除の確認モーダルを閉じる
     document.getElementById('fav-modal-overlay').style.display = 'none';
 }
 
-function executeClearAllFavorites() {
-    favorites = [];
+function executeClearAllFavorites() { // お気に入りを実際にすべて削除
+    favorites.length = 0; // 配列の中身を空にする（再代入によるエラーを防止）
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
     updateFavoriteButtonUI();
     trackEvent('Favorites', 'clear_all', 'all');
     closeFavModal();
-    render(); // 即座にレンダリングとWorkerをトリガー
+    render(false);
 }
 
-function openImageModal(src, alt) {
+function openImageModal(src, alt) { // 商品画像の拡大モーダルを開く
     const overlay = document.getElementById('image-modal-overlay');
     const img = document.getElementById('modal-expanded-img');
     img.src = src;
@@ -144,7 +142,7 @@ function openImageModal(src, alt) {
     trackEvent('UI', 'image_expand', alt);
 }
 
-function closeImageModal() {
+function closeImageModal() { // 商品画像の拡大モーダルを閉じる
     document.getElementById('image-modal-overlay').style.display = 'none';
 }
 
@@ -154,7 +152,7 @@ function openLegalModal() {
     trackEvent('UI', 'legal_open', 'click');
 }
 
-function closeLegalModal() {
+function closeLegalModal() { // 規約モーダルを閉じる
     const overlay = document.getElementById('legal-modal-overlay');
     if (overlay) overlay.style.display = 'none';
 }
@@ -167,30 +165,29 @@ function getMoshimoUrl(shopKey, targetUrl) {
     return `https://af.moshimo.com/af/c/click?a_id=${aid}&p_id=${pid}&pc_id=1&url=${encodeURIComponent(targetUrl)}`;
 }
 
-function toggleFavFilter() {
+function toggleFavFilter() { // 「お気に入り商品のみ表示」モードを切り替え
     showFavoritesOnly = !showFavoritesOnly;
     updateFavoriteButtonUI();
     // お気に入りボタンを押した時、もし検索画面にいたら結果画面へ切り替える
     if (showFavoritesOnly && !document.body.classList.contains('state-results')) {
         showResults();
     }
-    render(); // 即座にレンダリングとWorkerをトリガー
+    render(false);
 }
 
-function trackEvent(category, action, label, value = null) { // value引数を追加
+function trackEvent(category, action, label) { // Google Analytics (GA4) にイベントを送信
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
         console.log(`[Analytics] ${category} > ${action}: ${label}`);
     }
     if (window.gtag) {
         const eventName = (category + '_' + action).toLowerCase();
         gtag('event', eventName, {
-            'item_label': label,
-            'value': value // 必要に応じて数値データも送信
+            'item_label': label
         });
     }
 }
 
-function updateURLAndGA4() { // 関数名を変更し、GA4イベント送信も統合
+function updateURLAndGA4() { // URLパラメータの更新とページビューの計測
     const params = new URLSearchParams();
     const searchVal = document.getElementById('search-input').value.trim();
     if (searchVal) params.set('q', searchVal);
@@ -208,19 +205,20 @@ function updateURLAndGA4() { // 関数名を変更し、GA4イベント送信も
     history.replaceState(null, '', newRelativePathQuery);
     
     if (window.gtag) {
+        // 検索ワードがある場合は search イベントを送信（成功した検索の記録）
+        if (searchVal) {
+            gtag('event', 'search', { 'search_term': searchVal });
+        }
+
         gtag('event', 'page_view', {
             page_location: window.location.href,
             page_path: window.location.pathname + window.location.search,
             page_title: document.title
         });
-        // 検索ワードがある場合のみ search イベントを送信
-        if (searchVal) {
-            gtag('event', 'search', { 'search_term': searchVal });
-        }
     }
 }
 
-const normalize = (str) => {
+const normalize = (str) => { // 検索キーワードの正規化（全角半角・ひらがなカタカナの揺れを吸収）
     if (!str) return "";
     return String(str)
         .replace(/　/g, ' ')
@@ -230,7 +228,7 @@ const normalize = (str) => {
         .trim();
 };
 
-function initFilters() {
+function initFilters() { // URLのパラメータからフィルター状態を初期化
     if (typeof tagMaster === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.has('q')) {
@@ -247,7 +245,7 @@ function initFilters() {
     }
 }
 
-function toggleFilter(btn) {
+function toggleFilter(btn) { // フィルターボタンの選択・解除を切り替え
     const category = btn.getAttribute('data-cat');
     const value = btn.getAttribute('data-val');
 
@@ -283,16 +281,30 @@ function toggleFilter(btn) {
     }
 
     // 解除直後の金枠残存を確実に防ぐため、非同期でフォーカスを強制解除
-    setTimeout(() => {
-        btn.blur();
-    }, 50);
+    setTimeout(() => btn.blur(), 50);
 
     trackEvent('Filter', 'select_tag', `${category}:${value}`);
-    render(); // 即座にレンダリングとWorkerをトリガー
     visibleCount = PAGE_SIZE;
+    render(false);
 }
 
-function toggleGroupCollapse(header) {
+function handleSearchInput() { // 検索入力時のデバウンス処理（入力停止から800ms後に実行）
+    clearTimeout(searchInputDebounceTimer);
+    searchInputDebounceTimer = setTimeout(() => {
+        render(true);
+    }, 800);
+}
+
+// Enterキーが押された時の処理：キーボードを閉じ、即座に検索
+function handleSearchKeydown(event) {
+    if (event.key === 'Enter') {
+        event.target.blur(); // フォーカスを外してキーボードを閉じる
+        clearTimeout(searchInputDebounceTimer); // 待機中のタイマーをキャンセル
+        render(true); // 即座に検索実行
+    }
+}
+
+function toggleGroupCollapse(header) { // カテゴリグループの開閉切り替え
     const group = header.parentElement;
     group.classList.toggle('collapsed');
 }
@@ -312,19 +324,11 @@ function clearAllFilters() {
         else btn.classList.remove('active');
     });
     trackEvent('Filter', 'clear_all', 'all');
-    render(); // 即座にレンダリングとWorkerをトリガー
     visibleCount = PAGE_SIZE;
+    render(false);
 }
 
-// 検索入力欄のデバウンス処理
-function handleSearchInput() {
-    clearTimeout(searchInputDebounceTimer);
-    searchInputDebounceTimer = setTimeout(() => {
-        render(); // デバウンス後にレンダリングとWorkerをトリガー
-    }, 800);
-}
-
-function renderFilters() {
+function renderFilters() { // フィルターボタン一覧を画面に描画
     if (typeof tagMaster === 'undefined') return;
     const navContainer = document.getElementById('filter-nav-container');
     navContainer.innerHTML = '';
@@ -357,13 +361,13 @@ function renderFilters() {
     }
 }
 
-function renderActiveChips() {
+function renderActiveChips() { // 結果画面の「現在選択中の条件（チップ）」を描画
     const container = document.getElementById('active-chips-container');
     const searchVal = document.getElementById('search-input').value.trim();
     container.innerHTML = '';
     let hasActive = false;
 
-    // 登録された表示対象チップを一つずつ描画
+    // 結果画面での「一時調整チップ」を一つずつ描画
     visibleChipsInResults.forEach(chipKey => {
         const [cat, val] = chipKey.split(':');
         let isActive = false;
@@ -401,51 +405,51 @@ function renderActiveChips() {
     if (clearFavBtn) clearFavBtn.style.display = (favorites.length > 0 && showFavoritesOnly) ? 'block' : 'none';
 }
 
-function removeSingleFilter(cat, val) {
+function removeSingleFilter(cat, val) { // 特定のフィルターを解除
     const btn = document.querySelector(`.filter-btn[data-cat="${cat}"][data-val="${val}"]`);
     if (btn) toggleFilter(btn);
 }
 
-function getSearchUrl(shop, brand, name, fallbackUrl) {
+function getSearchUrl(shop, brand, name, fallbackUrl) { // モールごとの検索・アフィリエイトURLを生成
     if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
     const q = encodeURIComponent(`${brand} ${name}`);
     let targetShopUrl = '';
+
     if (shop === 'amz') {
-        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
+        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`; // Amazonの安い順ソート
         return getMoshimoUrl('amazon', targetShopUrl);
     }
     if (shop === 'rak') {
-        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
+        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`; // 楽天の安い順ソート
         return getMoshimoUrl('rakuten', targetShopUrl);
     }
     if (shop === 'yah') {
-        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
+        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`; // Yahoo!ショッピングの安い順ソート
         return getMoshimoUrl('yahoo', targetShopUrl);
     }
     return '#';
 }
 
-window.render = function(resetVisibleCount = true) { // isTyping引数をresetVisibleCountに変更
+window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更新の実行
     if (!searchWorker || !isWorkerReady) return;
-    if (resetVisibleCount) visibleCount = PAGE_SIZE; // 新しい検索/フィルターの場合のみvisibleCountをリセット
+    if (isTyping) visibleCount = PAGE_SIZE;
     const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
     renderActiveChips();
     updateFavoriteButtonUI();
 
-    // Workerへの命令は常に即座に実行
+    // Workerへの命令とURL更新を即座に実行（入力のデバウンスはhandleSearchInput側で制御済み）
     searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
-    
-    // URLとGA4の更新も常に即座に実行（検索入力欄からの呼び出しはhandleSearchInputでデバウンスされる）
     updateURLAndGA4();
 }
 
-function handleWorkerResults(data) {
+function handleWorkerResults(data) { // Web Workerからの検索結果を受け取って画面に表示
     if (data.type === 'READY') {
         isWorkerReady = true;
         const btn = document.getElementById('main-submit-btn');
         if (btn) btn.textContent = `準備完了（${data.total}件）`;
+        const sc = document.getElementById('search-count-display');
+        if (sc) sc.textContent = `${data.total} PRODUCTS FOUND`;
         render();
-        updateURLAndGA4(); // 初期ロード完了時もURLとGA4を更新
         return;
     }
 
@@ -457,25 +461,24 @@ function handleWorkerResults(data) {
     if (list) list.innerHTML = "";
     if (loadMoreArea) loadMoreArea.innerHTML = "";
 
-    // 検索画面のボタンのみ件数を表示（結果画面の件数は表示しない）
+    // 検索画面のボタンのみ件数を表示（復元完了）
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
-
-    lastSearchCount = totalMatchCount;
+    const sc = document.getElementById('search-count-display');
+    if (sc) sc.textContent = `${totalMatchCount} PRODUCTS FOUND`;
 
     if (totalMatchCount === 0) {
         if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
-        // 0件時のGA4計測
         const searchVal = document.getElementById('search-input').value.trim();
-        if (searchVal && !showFavoritesOnly && window.gtag) {
+        if (searchVal && !showFavoritesOnly) {
             const filterInfo = Object.entries(activeFilters)
                 .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
                 .map(([cat, val]) => `${cat}:${val}`).join(', ');
-            gtag('event', 'search_no_results', { 'item_label': `Words: "${searchVal}" | Filters: {${filterInfo}}` });
+            trackEvent('Search', 'no_results', `Words: "${searchVal}" | Filters: {${filterInfo}}`);
         }
         return;
     }
 
-    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E"; // Moved to global or constant if used elsewhere
+    const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E";
 
     matchedItems.forEach(item => {
         const card = document.createElement('div');
@@ -488,7 +491,7 @@ function handleWorkerResults(data) {
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
             `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Shop', 'click', 'A8:${item.name}')">公式/他</a>` : ''}` +
             `</div></div>`;
-        list.appendChild(card);
+        if (list) list.appendChild(card);
     });
 
     let footerHtml = '';
@@ -498,7 +501,7 @@ function handleWorkerResults(data) {
     if (loadMoreArea) loadMoreArea.innerHTML = footerHtml;
 }
 
-function initializeApp() {
+function initializeApp() { // アプリ全体の初期化処理
     // --- 簡易的なドメインロック（疑似サイト対策） ---
     const authorizedDomains = ['kyuni-f.github.io', 'localhost', '127.0.0.1'];
     const currentHostname = window.location.hostname;
@@ -535,7 +538,7 @@ function initializeApp() {
         if (document.getElementById('main-submit-btn')) document.getElementById('main-submit-btn').textContent = "エラー: データの読み込みに失敗しました";
     };
     initFilters();
-    renderFilters(); // フィルターUIの初期描画
+    renderFilters();
     updateFavoriteButtonUI(); // 初期表示時のお気に入りボタンの状態を更新
 }
 

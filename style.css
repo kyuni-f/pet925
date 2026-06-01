@@ -5,15 +5,18 @@ body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #
 header { 
     padding: 60px 20px; 
     text-align: center; 
-    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     background: #fff;
 }
-h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-transform: none; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .sub-copy { font-size: 0.7rem; letter-spacing: 4px; color: var(--gold); margin-top: 10px; text-transform: uppercase; transition: opacity 0.3s; }
 .site-intro { max-width: 600px; margin: 30px auto 0; font-size: 0.85rem; color: #666; line-height: 1.8; transition: all 0.4s ease; opacity: 1; overflow: hidden; max-height: 200px; }
 
 /* --- View切り替えロジック --- */
 #view-results { display: none; }
+
+/* 切り替え時のガタつき防止（最小高さを確保） */
+#view-results, #view-search { min-height: 100vh; }
 
 /* 結果表示モード (state-results) */
 body.state-results #view-search { display: none; }
@@ -48,6 +51,8 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .btn-back-to-search:hover { color: var(--dark); }
 
 /* 検索バー：ミニマルデザイン */
+#search-count-display { display: none; } /* デフォルト（PC）は非表示 */
+
 .search-container { margin: 20px auto; max-width: 600px; }
 #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
 #search-input:focus { border-color: var(--dark); background: var(--gray); }
@@ -302,6 +307,9 @@ footer a { color: var(--gold); text-decoration: none; }
     .filter-nav {
         padding-bottom: 100px !important;
     }
+
+    /* スマホのみ検索画面トップの件数を表示 */
+    #search-count-display { display: block; }
 
     /* スマホでタグの幅を2列に統一し、左右に余白を追加 */
     .filter-wrap-box {

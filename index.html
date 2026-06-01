@@ -19,8 +19,38 @@
         'cookie_domain': 'none'
       });
     </script>
-    <title>pet925 | Premium Pet Nutrition</title>
-    <meta name="description" content="愛犬・愛猫へのこだわりから最適なプレミアムフードを見つける選定ガイド。グレインフリー、特定のタンパク源、低カロリーなど、飼い主様のこだわりから最高の一皿を提案します。">
+    <title>pet925 | ペットフード選定ガイド - 愛犬・愛猫に最適なプレミアムフード検索</title>
+    <meta name="description" content="愛犬・愛猫の健康を守るプレミアムフード選定ガイド。グレインフリー、特定のタンパク源、体重管理など、飼い主様のこだわり条件から最高の一皿を爆速検索。">
+    <meta name="keywords" content="ペットフード,ドッグフード,キャットフード,プレミアムフード,選定ガイド,グレインフリー,涙やけ,体重管理">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://kyuni-f.github.io/pet925/">
+    <meta property="og:title" content="pet925 | ペットフード選定ガイド">
+    <meta property="og:description" content="愛犬・愛猫に最適なプレミアムフードを、こだわり条件から爆速で見つける検索システム。">
+    <meta property="og:image" content="https://kyuni-f.github.io/pet925/og-image.jpg"> <!-- 画像を用意して配置することを推奨 -->
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://kyuni-f.github.io/pet925/">
+    <meta property="twitter:title" content="pet925 | ペットフード選定ガイド">
+    <meta property="twitter:description" content="愛犬・愛猫に最適なプレミアムフードを、こだわり条件から爆速で見つける検索システム。">
+
+    <!-- 構造化データ (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "url": "https://kyuni-f.github.io/pet925/",
+      "name": "pet925",
+      "description": "プレミアムペットフードの選定ガイドシステム",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://kyuni-f.github.io/pet925/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
 
     <script>
         // 1. 最初にマスタデータを読み込み siteVersion を確定させる
@@ -48,8 +78,16 @@
     <!-- 検索・フィルターView -->
     <div id="view-search">
         <div class="search-container">
+            <div id="search-count-display" style="text-align: center; margin-bottom: 10px; font-size: 0.8rem; color: #c5a059; font-weight: bold; letter-spacing: 1px;"></div>
             <div style="font-size: 0.7rem; color: #999; margin-bottom: 8px; letter-spacing: 1px;">SEARCH BY NAME, BRAND OR INGREDIENT</div>
-            <input type="text" id="search-input" placeholder="商品名、ブランド、キーワードがあれば入力" oninput="handleSearchInput()">
+            <input 
+                type="search" 
+                id="search-input" 
+                placeholder="商品名、ブランド、キーワードがあれば入力" 
+                oninput="handleSearchInput()" 
+                onkeydown="handleSearchKeydown(event)"
+                enterkeyhint="search"
+            >
         </div>
         <div class="search-screen-fav-area">
             <button id="fav-filter-btn-search-screen" class="fav-toggle-btn" onclick="toggleFavFilter()">お気に入り <span style="color:#ff4757">❤</span></button>
