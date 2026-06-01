@@ -14,6 +14,10 @@ h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-tr
 
 /* --- View切り替えロジック --- */
 #view-results { display: none; }
+#view-search {
+    display: flex;
+    flex-direction: column;
+}
 
 /* 切り替え時のガタつき防止（最小高さを確保） */
 #view-results, #view-search { min-height: 100vh; }
@@ -37,6 +41,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .floating-action-area { 
     position: sticky; bottom: 30px; left: 0; right: 0; 
     display: flex; justify-content: center; z-index: 1001;
+    order: 10; /* PCでは要素の最後に配置 */
     pointer-events: none;
 }
 .btn-primary-action { 
@@ -304,6 +309,15 @@ footer a { color: var(--gold); text-decoration: none; }
 @media (max-width: 768px) {
     .filter-nav {
         padding-bottom: 100px !important;
+    }
+
+    /* スマホ時のみ実行ボタンを検索窓の上へ移動 */
+    .floating-action-area {
+        order: -1; /* 一番上に移動 */
+        position: relative;
+        bottom: auto;
+        margin-top: 20px;
+        margin-bottom: 10px;
     }
 
     /* スマホでタグの幅を2列に統一し、左右に余白を追加 */
