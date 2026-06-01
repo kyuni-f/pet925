@@ -51,8 +51,6 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .btn-back-to-search:hover { color: var(--dark); }
 
 /* 検索バー：ミニマルデザイン */
-#search-count-display { display: none; } /* デフォルト（PC）は非表示 */
-
 .search-container { margin: 20px auto; max-width: 600px; }
 #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
 #search-input:focus { border-color: var(--dark); background: var(--gray); }
@@ -307,9 +305,6 @@ footer a { color: var(--gold); text-decoration: none; }
     .filter-nav {
         padding-bottom: 100px !important;
     }
-
-    /* スマホのみ検索画面トップの件数を表示 */
-    #search-count-display { display: block; }
 
     /* スマホでタグの幅を2列に統一し、左右に余白を追加 */
     .filter-wrap-box {

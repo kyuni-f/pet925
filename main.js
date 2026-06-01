@@ -447,8 +447,10 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         isWorkerReady = true;
         const btn = document.getElementById('main-submit-btn');
         if (btn) btn.textContent = `SHOW RESULTS`;
-        const sc = document.getElementById('search-count-display');
-        if (sc) sc.textContent = `${data.total} 件が対象です`;
+        const sc = document.getElementById('search-info-label');
+        if (sc && window.innerWidth <= 768) {
+            sc.textContent = `${data.total}件が見つかりました`;
+        }
         render();
         return;
     }
@@ -463,8 +465,10 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
     // 下のボタンは固定文言に戻し、件数は上部エリアにのみ表示
     if (submitBtn) submitBtn.textContent = `SHOW RESULTS`;
-    const sc = document.getElementById('search-count-display');
-    if (sc) sc.textContent = `${totalMatchCount} 件見つかりました`;
+    const sc = document.getElementById('search-info-label');
+    if (sc && window.innerWidth <= 768) {
+        sc.textContent = `${totalMatchCount}件が見つかりました`;
+    }
 
     if (totalMatchCount === 0) {
         if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
