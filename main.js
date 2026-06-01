@@ -446,7 +446,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (data.type === 'READY') {
         isWorkerReady = true;
         const btn = document.getElementById('main-submit-btn');
-        if (btn) btn.textContent = `全${data.total}件から探す`;
+        if (btn) btn.textContent = `SHOW RESULTS`;
         const sc = document.getElementById('search-count-display');
         if (sc) sc.textContent = `${data.total} 件が対象です`;
         render();
@@ -461,8 +461,8 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (list) list.innerHTML = "";
     if (loadMoreArea) loadMoreArea.innerHTML = "";
 
-    // 検索画面のボタンのみ件数を表示（復元完了）
-    if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
+    // 下のボタンは固定文言に戻し、件数は上部エリアにのみ表示
+    if (submitBtn) submitBtn.textContent = `SHOW RESULTS`;
     const sc = document.getElementById('search-count-display');
     if (sc) sc.textContent = `${totalMatchCount} 件見つかりました`;
 
