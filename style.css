@@ -329,7 +329,7 @@ footer a { color: var(--gold); text-decoration: none; }
 
     /* 2列グリッドにおけるチェックマーク位置の調整 */
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"]) {
-        padding-left: 8px;
+        padding-left: 28px; /* チェックマーク用の余白を確保 */
         padding-right: 8px;
     }
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {

@@ -446,9 +446,9 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (data.type === 'READY') {
         isWorkerReady = true;
         const btn = document.getElementById('main-submit-btn');
-        if (btn) btn.textContent = `準備完了（${data.total}件）`;
+        if (btn) btn.textContent = `全${data.total}件から探す`;
         const sc = document.getElementById('search-count-display');
-        if (sc) sc.textContent = `${data.total} PRODUCTS FOUND`;
+        if (sc) sc.textContent = `${data.total} 件が対象です`;
         render();
         return;
     }
@@ -464,7 +464,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     // 検索画面のボタンのみ件数を表示（復元完了）
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
     const sc = document.getElementById('search-count-display');
-    if (sc) sc.textContent = `${totalMatchCount} PRODUCTS FOUND`;
+    if (sc) sc.textContent = `${totalMatchCount} 件見つかりました`;
 
     if (totalMatchCount === 0) {
         if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
