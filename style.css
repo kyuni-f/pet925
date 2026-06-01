@@ -14,10 +14,6 @@ h1 { font-size: 3rem; letter-spacing: 12px; margin: 0; font-weight: 200; text-tr
 
 /* --- View切り替えロジック --- */
 #view-results { display: none; }
-#view-search {
-    display: flex;
-    flex-direction: column;
-}
 
 /* 切り替え時のガタつき防止（最小高さを確保） */
 #view-results, #view-search { min-height: 100vh; }
@@ -56,7 +52,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .btn-back-to-search:hover { color: var(--dark); }
 
 /* 検索バー：ミニマルデザイン */
-.search-container { margin: 20px auto; max-width: 600px; }
+.search-container { margin: 20px auto; max-width: 600px; width: 100%; }
 #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
 #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
@@ -311,13 +307,20 @@ footer a { color: var(--gold); text-decoration: none; }
         padding-bottom: 100px !important;
     }
 
+    /* スマホ時のみ要素の並び替え（ボタン移動）を有効にする */
+    #view-search {
+        display: flex;
+        flex-direction: column;
+    }
+
     /* スマホ時のみ実行ボタンを検索窓の上へ移動 */
     .floating-action-area {
         order: -1; /* 一番上に移動 */
-        position: relative;
-        bottom: auto;
+        position: sticky;
+        top: 10px; /* 画面上部に固定 */
         margin-top: 20px;
         margin-bottom: 10px;
+        pointer-events: auto;
     }
 
     /* スマホでタグの幅を2列に統一し、左右に余白を追加 */

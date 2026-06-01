@@ -446,11 +446,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (data.type === 'READY') {
         isWorkerReady = true;
         const btn = document.getElementById('main-submit-btn');
-        if (btn) {
-            btn.textContent = (window.innerWidth <= 768) 
-                ? `全${data.total}件を表示` 
-                : `SHOW RESULTS`;
-        }
+        if (btn) btn.textContent = `全${data.total}件を表示`;
         render();
         return;
     }
@@ -463,11 +459,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (list) list.innerHTML = "";
     if (loadMoreArea) loadMoreArea.innerHTML = "";
 
-    if (submitBtn) {
-        submitBtn.textContent = (window.innerWidth <= 768) 
-            ? `${totalMatchCount}件を表示` 
-            : `SHOW RESULTS`;
-    }
+    if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
 
     if (totalMatchCount === 0) {
         if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
