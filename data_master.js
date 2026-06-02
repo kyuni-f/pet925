@@ -1,4 +1,4 @@
-const siteVersion = '20260602025745';
+const siteVersion = '20260603080702';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -52,7 +52,8 @@ const brandMaster = {
     "royal canin": "ロイヤルカナン",
     "sheba": "シーバ",
     "medycoat": "ペットライン",
-    "medyfas": "ペットライン"
+    "medyfas": "ペットライン",
+    "select balance": "セレクトバランス"
 };
 const tagKeywords = {
     "gf": [
