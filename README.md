@@ -39,7 +39,7 @@ npm start
 npm run build
 
 # 4. データの公開（デプロイ）
-npm run deploy   # 検品、ビルド、コミット、プッシュを一括実行
+npm run deploy  # 検品、ビルド、コミット、プッシュを一括実行
 
 # 5. 強制同期（競合等でプッシュできない場合）
 git push origin main --force

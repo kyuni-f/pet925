@@ -59,7 +59,7 @@ def fetch_product_data(target_url):
     # --- API 設定 ---
     # 404エラー（見つからない）を回避するため、一覧で確認できたモデル名に変更します。
     # --list-models で表示された一覧の中から、使いたいモデル名を正確に指定してください
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-1.5-flash"
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={API_KEY}"
     
     # 補助データの読み込み（AIに判断基準を与える）
@@ -87,7 +87,10 @@ def fetch_product_data(target_url):
         }]
     }
     
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     req = urllib.request.Request(api_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
     
     print(f"🔍 解析中: {target_url}...")
