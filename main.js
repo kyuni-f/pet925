@@ -9,9 +9,9 @@ if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
 // --- アフィリエイト設定（ご自身のIDに書き換えてください） ---
 // もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
 const AFFILIATE_CONFIG = {
-    moshimoAccountId: "", // あなたのもしも会員ID (例: 1234567)
+    moshimoAccountId: "あなたの会員ID", // もしもアフィリエイトで発行された7桁前後のIDを入れてください
     shopPid: {
-        amazon: "170",  // AmazonプロモーションID (もしもアフィリエイトのかんたんリンク用)
+        amazon: "",     // 審査落ちの間は空に。これでAmazonボタンは「普通の検索」に戻ります
         rakuten: "54",  // 楽天プロモーションID (もしもアフィリエイトのかんたんリンク用)
         yahoo: "1225"   // Yahoo!ショッピングプロモーションID (もしもアフィリエイトのかんたんリンク用)
     }
@@ -175,15 +175,15 @@ function toggleFavFilter() { // 「お気に入り商品のみ表示」モード
     render(false);
 }
 
-function trackEvent(category, action, label) { // Google Analytics (GA4) にイベントを送信
+function trackEvent(category, action, label, extraParams = {}) { // Google Analytics (GA4) にイベントを送信
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
         console.log(`[Analytics] ${category} > ${action}: ${label}`);
     }
     if (window.gtag) {
         const eventName = (category + '_' + action).toLowerCase();
-        gtag('event', eventName, {
+        gtag('event', eventName, Object.assign({
             'item_label': label
-        });
+        }, extraParams));
     }
 }
 
@@ -468,7 +468,10 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
             const filterInfo = Object.entries(activeFilters)
                 .filter(([_, val]) => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
                 .map(([cat, val]) => `${cat}:${val}`).join(', ');
-            trackEvent('Search', 'no_results', `Words: "${searchVal}" | Filters: {${filterInfo}}`);
+            trackEvent('Search', 'no_results', `Words: "${searchVal}" | Filters: {${filterInfo}}`, {
+                'search_term_custom': searchVal,
+                'active_filters_custom': filterInfo
+            });
         }
         return;
     }
