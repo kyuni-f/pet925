@@ -9,11 +9,20 @@ if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
 // --- アフィリエイト設定（ご自身のIDに書き換えてください） ---
 // もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
 const AFFILIATE_CONFIG = {
-    moshimoAccountId: "あなたの会員ID", // もしもアフィリエイトで発行された7桁前後のIDを入れてください
+    shopAid: {
+        amazon: "",     // Amazon用の a_id
+        rakuten: "5597949", // 楽天のどこでもリンクで確認したa_id
+        yahoo: "5597952"   // Yahooのどこでもリンクで確認したa_id
+    },
     shopPid: {
         amazon: "",     // 審査落ちの間は空に。これでAmazonボタンは「普通の検索」に戻ります
-        rakuten: "54",  // 楽天プロモーションID (もしもアフィリエイトのかんたんリンク用)
-        yahoo: "1225"   // Yahoo!ショッピングプロモーションID (もしもアフィリエイトのかんたんリンク用)
+        rakuten: "54",  // 楽天のどこでもリンクで確認したp_id（通常54）
+        yahoo: "1225"   // Yahooのどこでもリンクで確認したp_id（通常1225）
+    },
+    shopPcid: {
+        amazon: "",
+        rakuten: "54",   // どこでもリンクに記載されている pc_id
+        yahoo: "1925"    // どこでもリンクに記載されている pc_id
     }
 };
 
@@ -158,11 +167,15 @@ function closeLegalModal() { // 規約モーダルを閉じる
 }
 
 function getMoshimoUrl(shopKey, targetUrl) {
-    const aid = AFFILIATE_CONFIG.moshimoAccountId;
-    const pid = AFFILIATE_CONFIG.shopPid[shopKey];
-    if (!aid || !pid) return targetUrl; // IDが設定されていなければそのままのURLを返す
+    // IDを文字列として取得し、念のため余計な空白を削除（.trim()）
+    const aid = String(AFFILIATE_CONFIG.shopAid[shopKey] || '').trim();
+    const pid = String(AFFILIATE_CONFIG.shopPid[shopKey] || '').trim();
+    const pcid = String(AFFILIATE_CONFIG.shopPcid[shopKey] || '').trim();
+
+    if (!aid || !pid || !pcid) return targetUrl; // IDが不足していればそのままのURLを返す
     
-    return `https://af.moshimo.com/af/c/click?a_id=${aid}&p_id=${pid}&pc_id=1&url=${encodeURIComponent(targetUrl)}`;
+    const moshimoUrl = `https://af.moshimo.com/af/c/click?a_id=${aid}&p_id=${pid}&pc_id=${pcid}&url=${encodeURIComponent(targetUrl)}`;
+    return moshimoUrl;
 }
 
 function toggleFavFilter() { // 「お気に入り商品のみ表示」モードを切り替え
@@ -411,20 +424,20 @@ function removeSingleFilter(cat, val) { // 特定のフィルターを解除
 }
 
 function getSearchUrl(shop, brand, name, fallbackUrl) { // モールごとの検索・アフィリエイトURLを生成
-    if (fallbackUrl && fallbackUrl !== '#') return fallbackUrl;
     const q = encodeURIComponent(`${brand} ${name}`);
-    let targetShopUrl = '';
+    // CSVにURLがあればそれを使用、なければ検索URLを生成
+    let targetShopUrl = (fallbackUrl && fallbackUrl !== '#') ? fallbackUrl : '';
 
     if (shop === 'amz') {
-        targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`; // Amazonの安い順ソート
+        if (!targetShopUrl) targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
         return getMoshimoUrl('amazon', targetShopUrl);
     }
     if (shop === 'rak') {
-        targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`; // 楽天の安い順ソート
+        if (!targetShopUrl) targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
         return getMoshimoUrl('rakuten', targetShopUrl);
     }
     if (shop === 'yah') {
-        targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`; // Yahoo!ショッピングの安い順ソート
+        if (!targetShopUrl) targetShopUrl = `https://shopping.yahoo.co.jp/search?p=${q}&ss_first=1&X=2`;
         return getMoshimoUrl('yahoo', targetShopUrl);
     }
     return '#';
