@@ -1,4 +1,4 @@
-const siteVersion = '20260606040022';
+const siteVersion = '20260608022630';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -45,16 +45,6 @@ const categoryMaster = {
         "multi": true
     }
 };
-const brandMaster = {
-    "nutro": "ニュートロ",
-    "supremo": "ニュートロ",
-    "wildrecipe": "ニュートロ",
-    "royal canin": "ロイヤルカナン",
-    "sheba": "シーバ",
-    "medycoat": "ペットライン",
-    "medyfas": "ペットライン",
-    "select balance": "セレクトバランス"
-};
 const tagKeywords = {
     "gf": [
         "グレインフリー",
@@ -79,3 +69,37 @@ const tagKeywords = {
         "歯"
     ]
 };
+const brands = [
+    {
+        "key": "nutro",
+        "name": "ニュートロ"
+    },
+    {
+        "key": "supremo",
+        "name": "ニュートロ"
+    },
+    {
+        "key": "wildrecipe",
+        "name": "ニュートロ"
+    },
+    {
+        "key": "royal canin",
+        "name": "ロイヤルカナン"
+    },
+    {
+        "key": "sheba",
+        "name": "シーバ"
+    },
+    {
+        "key": "Medycoat",
+        "name": "ペットライン"
+    },
+    {
+        "key": "Medyfas",
+        "name": "ペットライン"
+    },
+    {
+        "key": "Select Balance",
+        "name": "セレクトバランス"
+    }
+];

@@ -9,21 +9,22 @@ import time
 import concurrent.futures
 import difflib
 
+
 # 設定
 DATA_DIR = 'data'  # CSVファイルが格納されているディレクトリ
 PRODUCT_CSV = os.path.join(DATA_DIR, 'products.csv')
 CAT_CSV = os.path.join(DATA_DIR, 'categories.csv')
 TAG_CSV = os.path.join(DATA_DIR, 'tags.csv')
-BRAND_CSV = os.path.join(DATA_DIR, 'brands.csv')
 RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 
 OUTPUT_JSON = 'product_data.json'
+CHUNK_SIZE = 5000  # 1ファイルあたりの最大件数
 OUTPUT_MASTER_JS = 'data_master.js'
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
 SPECIFIC_MASTER_CSVS = {
-    'categories.csv', 'tags.csv', 'brands.csv', 'rules.csv'
+    'categories.csv', 'tags.csv', 'rules.csv'
 }
 
 
@@ -66,7 +67,7 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
-def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest):
+def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
@@ -79,8 +80,8 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
     if not name:
         return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
-    # 列の欠落チェック（16列あるか）
-    expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p', 'exclude_tags']
+    # 16列構成（JANコード対応版）
+    expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
     missing_keys = [k for k in expected_keys if k not in row or row[k] is None]
     if missing_keys:
         row_errors.append(f"行 {line_num}: 列が足りません。期待される列: {len(expected_keys)}、検出された列: {len(row)}。欠落: {', '.join(missing_keys)}")
@@ -89,50 +90,16 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
     desc = row.get('desc', '').strip()
     check_text = normalize_text(name + desc)
 
-    # ブランド情報の処理
-    brand_raw = row.get('brand', '').strip()
-    found_id = ""
-    found_name = brand_raw
+    # ブランド情報の処理 (直接入力値をIDとしても使用)
+    brand_name = row.get('brand', '').strip()
+    row['brand'] = brand_name
+    row['brand_id'] = normalize_text(brand_name)
 
-    if brand_raw:
-        norm_brand = normalize_text(brand_raw)
-        # 1. まずKey(ID)で直接検索
-        if norm_brand in brand_master:
-            # Keyでヒットしても、正式名称(found_name)を取得し、その名称に紐付く代表IDに統一する
-            found_name = brand_master[norm_brand]
-            found_id = brand_id_map.get(found_name, norm_brand)
-        else:
-            # 2. 次にName(正式名称)で検索
-            for b_id, b_name in brand_master.items():
-                if norm_brand == normalize_text(b_name):
-                    found_name = b_name
-                    found_id = brand_id_map.get(found_name, b_id)
-                    break
-        
-        # 見つからなかった場合、入力値をIDの仮候補にする
-        if not found_id:
-            found_id = normalize_text(brand_raw)
-    else:
-        # 3. 未入力の場合のみテキストスキャン（商品名＋説明文から）
-        for b_id, b_name in brand_master.items():
-            if b_id in check_text or normalize_text(b_name) in check_text:
-                found_name = b_name
-                found_id = brand_id_map.get(found_name, b_id)
-                found_name = b_name
-                break
-    
-    row['brand_id'] = found_id
-    row['brand'] = found_name # 常にマスタの正式名称（または入力値）で上書き
+    current_kws = []
 
-    # 検索強化：商品名や説明文にないブランドの別名（Key）を隠しフィールド（_keywords）に付与
-    if found_id in brand_aliases:
-        # 既に商品名や説明文に含まれていないキーワードのみ追加
-        extra_kws = [a for a in brand_aliases[found_id] if a not in check_text]
-        if extra_kws:
-            row['_keywords'] = " ".join(extra_kws)
-
-    if found_id and found_id not in brand_master:
-        row_errors.append(f"行 {line_num}: ブランド '{found_name}' は brands.csv に未登録です。")
+    # 外部ライブラリに頼らず、CSV側の「_keywords」フィールドや
+    # rules.csv からの情報を統合するのみに留める
+    row['_keywords'] = " ".join(list(set(current_kws)))
 
     tags = row.get('tags', '').replace(',', ' ').split()
     tags = [normalize_text(t) for t in tags if t]
@@ -149,26 +116,6 @@ def process_row_task(line_num, row, brand_master, brand_id_map, brand_aliases, t
                 tags.append(tag_id)
                 auto_added_info.append((tag_id, found_kw))
 
-    # 2. 除外タグの処理
-    exclude_tags_raw = row.get('exclude_tags', '').replace(',', ' ').split()
-    exclude_tags_norm = {normalize_text(t) for t in exclude_tags_raw if t}
-
-    tags_before_exclusion = set(tags)
-    tags = [t for t in tags if t not in exclude_tags_norm]
-    tags_after_exclusion = set(tags)
-
-    # 自動付与の通知（除外されなかったものだけ表示）
-    for tag_id, kw in auto_added_info:
-        if tag_id in tags_after_exclusion:
-            row_warnings.append(f"行 {line_num}: 説明文に '{kw}' を検出。タグ '{tag_id}' を自動付与しました。")
-
-    # 実際に除外されたタグの警告
-    for removed_tag in (tags_before_exclusion - tags_after_exclusion):
-        row_warnings.append(f"行 {line_num}: タグ '{removed_tag}' が除外タグにより削除されました。")
-
-    # 存在しないタグを除外しようとした場合の警告
-    for non_existent_excluded_tag in (exclude_tags_norm - tags_before_exclusion):
-        row_warnings.append(f"行 {line_num}: 除外タグ '{non_existent_excluded_tag}' はこの商品に存在しないか、未登録タグです。")
 
     # 3. タグ名そのものが説明文に含まれている場合の提案 (除外タグ適用後)
     for t_name_norm, t_id in tag_lookup_for_suggest.items():
@@ -198,6 +145,11 @@ def convert(exit_on_error=True):
     global validation_errors, validation_warnings
     validation_errors = []
     validation_warnings = []
+
+    # --- 重複チェック用の変数をここで確実に初期化 ---
+    seen_names = {}      # 商品名重複チェック用
+    seen_jans = {}       # JANコード重複チェック用
+    names_by_brand = {}  # 類似商品チェック用
 
     # 1. カテゴリマスタの読み込み
     category_master = {}
@@ -232,27 +184,8 @@ def convert(exit_on_error=True):
             for t_key in tag_master[cat_key]:
                 tag_to_cat_index[t_key] = idx
 
-    # 3. ブランドマスタの読み込み
-    brand_master = {}
-    brand_id_map = {} # 正式名称から代表IDを引くためのマップ
     # ビルド時間をバージョンとして記録
     build_version = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-
-    brand_aliases = {} # 代表IDから検索用キーワード（Key群）を引くためのマップ
-    brand_rows = load_csv_simple(BRAND_CSV)
-    for row in brand_rows:
-        if len(row) < 2 or row[0].lower() in ['key', 'キー']: continue
-        key, name = [s.strip() for s in row[:2]]
-        norm_key = normalize_text(key)
-        brand_master[norm_key] = name
-        
-        # 同じ名前（例：ニュートロ）が複数あれば、最初のID（例：nutro）を代表とする
-        if name not in brand_id_map:
-            brand_id_map[name] = norm_key
-            
-        rep_id = brand_id_map[name]
-        if rep_id not in brand_aliases: brand_aliases[rep_id] = set()
-        brand_aliases[rep_id].add(norm_key)
 
     # 4. 自動ルール（キーワード）の読み込み
     tag_keywords = {}
@@ -300,15 +233,13 @@ def convert(exit_on_error=True):
     # 並列処理の実行
     print(f"   - {len(all_rows_input)}件を並列処理中...")
     processed_results = []
-    seen_names = {}
-    names_by_brand = {} # 類似チェック用：ブランドごとの名前リスト
 
-    # max_workers を指定することで使用するCPUコア数を制限できます
+     # max_workers を指定することで使用するCPUコア数を制限できます
     # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, brand_master, brand_id_map, brand_aliases, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest) 
+        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest) 
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
@@ -316,40 +247,58 @@ def convert(exit_on_error=True):
             validation_errors.extend(res_errs)
             validation_warnings.extend(res_warns)
             if res_row:
-                # 重複チェック用のキー（ブランドID + 空白を完全に除去した正規化名）
-                dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
-                brand_id = res_row['brand_id']
+                processed_results.append((ln, res_row, norm_name))
 
-                if dup_key in seen_names:
-                    validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
-                else:
-                    # 類似商品チェック（同じブランド内で 95% 以上一致するものがあるか）
-                    if brand_id not in names_by_brand:
-                        names_by_brand[brand_id] = []
-                    
-                    close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.95)
-                    if close_matches:
-                        validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
-
-                    seen_names[dup_key] = ln
-                    names_by_brand[brand_id].append(norm_name)
-                    processed_results.append((ln, res_row))
-
-    # 行番号で並び替えて元の順序を復元
+    # 全プロセス終了後、行番号で並び替えて元の順序を復元
     processed_results.sort(key=lambda x: x[0])
     products = [r[1] for r in processed_results]
 
+    for ln, res_row, norm_name in processed_results:
+        # JAN重複チェック (# はスキップ)
+        jan_val = str(res_row.get('jan', '#')).strip()
+        if jan_val != '#':
+            if jan_val in seen_jans:
+                validation_errors.append(f"行 {ln}: JANコード '{jan_val}' が重複しています。(商品: {res_row['name']} / 既出: 行 {seen_jans[jan_val]})")
+            else:
+                seen_jans[jan_val] = ln
+
+        # 商品名重複チェック
+        dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
+        brand_id = res_row['brand_id']
+
+        if dup_key in seen_names:
+            validation_errors.append(f"行 {ln}: 商品名 '{res_row['name']}' が重複しています。(既出: 行 {seen_names[dup_key]})")
+        else:
+            # 類似商品チェック（同じブランド内で 95% 以上一致するものがあるか）
+            if brand_id not in names_by_brand: names_by_brand[brand_id] = []
+            if len(names_by_brand[brand_id]) < 1000: # 10万件規模では、ブランド内の商品数が少ない場合のみ実行
+                close_matches = difflib.get_close_matches(norm_name, names_by_brand[brand_id], n=1, cutoff=0.95)
+                if close_matches:
+                    validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
+            seen_names[dup_key] = ln
+            names_by_brand[brand_id].append(norm_name)
+
+    # products リストは既に上で作成済み
+    # products = [r[1] for r in processed_results]
+
     if not validation_errors:
         # 7. エラーが一つもない場合のみファイル書き出しを実行
-        # 読み込み速度を優先し、スペースを最小化したJSONで保存
+        # 10万件規模に対応するため、ファイルを分割（チャンク化）して保存
+        num_chunks = (len(products) + CHUNK_SIZE - 1) // CHUNK_SIZE
+        for i in range(num_chunks):
+            chunk = products[i * CHUNK_SIZE : (i + 1) * CHUNK_SIZE]
+            chunk_filename = f'product_data_{i}.json'
+            with open(chunk_filename, 'w', encoding='utf-8') as f:
+                json.dump(chunk, f, ensure_ascii=False, separators=(',', ':'))
+        
+        # メインのJSONにはメタデータのみを記述
         with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
-            json.dump(products, f, ensure_ascii=False, separators=(',', ':'))
+            json.dump({"total": len(products), "chunks": num_chunks, "version": build_version}, f)
 
         with open(OUTPUT_MASTER_JS, 'w', encoding='utf-8') as f:
             f.write(f"const siteVersion = '{build_version}';\n")
             f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
-            f.write(f"const brandMaster = {json.dumps(brand_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
             # 動的に読み込んだマスターデータを追記
             for var_name, data in other_masters_data.items():

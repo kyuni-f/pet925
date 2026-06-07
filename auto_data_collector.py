@@ -72,14 +72,15 @@ def fetch_product_data(target_url):
     tags_context = load_context_csv("data/tags.csv")
     brands_context = load_context_csv("data/brands.csv")
 
-    csv_header = "name,brand,tags,desc,size,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p"
+    csv_header = "name,brand,tags,desc,size,jan,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p"
     
     prompt = f"""{instructions}
 
 【許可タグリスト (data/tags.csv)】\n{tags_context}
 【ブランドリスト (data/brands.csv)】\n{brands_context}
 
-【重要】必ず以下の15列のCSV形式で出力してください。ヘッダー行も必ず含めてください。\n{csv_header}\n\n【解析対象URL】\n{target_url}"""
+【重要】必ず以下の15列のCSV形式で出力してください。ヘッダー行も必ず含めてください。
+\n{csv_header}\n\n【解析対象URL】\n{target_url}"""
     
     payload = {
         "contents": [{

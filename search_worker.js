@@ -17,6 +17,50 @@ const normalize = (str) => {
 };
 
 let allProducts = [];
+let db = null;
+const DB_NAME = "Pet925DB";
+const STORE_NAME = "products";
+
+// IndexedDBの初期化
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, parseInt(version));
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+                db.deleteObjectStore(STORE_NAME);
+            }
+            // 検索用の高速化設定：JANコードでも検索できるようにインデックスを作成
+            const store = db.createObjectStore(STORE_NAME, { keyPath: "_originalIndex" });
+            store.createIndex("jan", "jan", { unique: false });
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            resolve(db);
+        };
+        request.onerror = (e) => reject(e);
+    });
+}
+
+// データベースから全件取得（メモリ展開を最小限に）
+function getAllFromDB() {
+    return new Promise((resolve) => {
+        const transaction = db.transaction([STORE_NAME], "readonly");
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
+// データを保存
+async function saveToDB(products) {
+    const transaction = db.transaction([STORE_NAME], "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    products.forEach(p => store.put(p));
+    return new Promise((resolve) => {
+        transaction.oncomplete = () => resolve();
+    });
+}
 
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
 
@@ -71,13 +115,40 @@ function processChunk(data) {
 // JSONデータを非同期で取得
 async function initWorker() {
     try {
-        // ビルド時のバージョンを使用してJSONを取得
-        const response = await fetch('product_data.json?v=' + version);
-        const productData = await response.json();
+        await initDB();
+        
+        // すでにデータがあるか確認
+        const existingData = await getAllFromDB();
+        if (existingData.length > 0) {
+            console.log("Worker: Loaded from IndexedDB");
+            allProducts = existingData;
+            self.postMessage({ type: 'READY', total: allProducts.length });
+            return;
+        }
 
-        processChunk(productData);
+        // データがなければダウンロードして保存
+        const metaRes = await fetch(`product_data.json?v=${version}`);
+        const meta = await metaRes.json();
 
-        // 初期ロード完了を通知
+        const chunkPromises = [];
+        for (let i = 0; i < meta.chunks; i++) {
+            chunkPromises.push(
+                fetch(`product_data_${i}.json?v=${version}`).then(res => res.json())
+            );
+        }
+
+        const allChunksData = await Promise.all(chunkPromises);
+        
+        // 取得したデータを順番どおりに処理（processChunkを使用して高品質なインデックスを作成）
+        allChunksData.forEach((chunkData) => {
+            processChunk(chunkData);
+            // allProducts.length を使うことで正しい進捗をメインスレッドに通知
+            self.postMessage({ type: 'PROGRESS', current: allProducts.length, total: meta.total });
+        });
+
+        // 加工済みの全データをIndexedDBに保存
+        await saveToDB(allProducts);
+
         self.postMessage({ type: 'READY', total: allProducts.length });
     } catch (e) {
         console.error("Worker data load failed:", e);
@@ -132,20 +203,23 @@ self.onmessage = function(e) {
         if (!matchFilters) continue;
 
         // キーワード検索
-        const matchSearch = searchWords.every(word => item._searchFullText.includes(word));
+        // 全文検索の高速化：indexOfはincludesよりわずかに速い場合があります
+        const fullText = item._searchFullText;
+        const matchSearch = searchWords.every(word => fullText.indexOf(word) !== -1);
 
         if (matchSearch) {
             let score = 0;
-            // 検索ワードが含まれている場所によって加点
-            searchWords.forEach(word => {
-                if (item._weightedFields.name.includes(word)) score += 100;
-                // 商品名と完全に一致する場合はさらにボーナス
-                if (item._weightedFields.name === word) score += 500;
-                if (item._weightedFields.brand.includes(word)) score += 50;
-                if (item._weightedFields.tags.includes(word)) score += 20;
-                if (item._weightedFields.keywords.includes(word)) score += 10;
-                if (item._weightedFields.desc.includes(word)) score += 5;
-            });
+            const w = item._weightedFields;
+            // 10万件ループ内では関数の呼び出し回数を減らすため、for文を使用
+            for (let j = 0; j < searchWords.length; j++) {
+                const word = searchWords[j];
+                if (w.name.indexOf(word) !== -1) score += 100;
+                if (w.name === word) score += 500;
+                if (w.brand.indexOf(word) !== -1) score += 50;
+                if (w.tags.indexOf(word) !== -1) score += 20;
+                if (w.keywords.indexOf(word) !== -1) score += 40;
+                if (w.desc.indexOf(word) !== -1) score += 5;
+            }
             item._tempScore = score;
             allMatches.push(item);
         }
