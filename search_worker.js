@@ -181,7 +181,7 @@ self.onmessage = function(e) {
     for (const item of allProducts) {
         // お気に入りフィルターの適用
         if (showFavoritesOnly) {
-            if (favSet.has(item.name)) {
+            if (favSet.has(item.id)) {
                 // お気に入りモード時は他のフィルタやスコアを無視してリストに追加
                 item._tempScore = 0;
                 allMatches.push(item);

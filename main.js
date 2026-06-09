@@ -27,7 +27,10 @@ const AFFILIATE_CONFIG = {
         amazon: "",
         rakuten: "616",   // 楽天のリンクコードに含まれていたpl_id
         yahoo: "18502"   // Yahooのリンクコードに含まれていたpl_id
-    }
+    },
+    // 楽天の画像サーバー(cabinet)で使用するショップ名
+    // 多くのペットフードはここを "petline" や自身の提携ショップ名に設定することで画像を自動取得できます
+    rakutenImageShop: "petline" 
 };
 
 let activeFilters = {}; 
@@ -116,14 +119,14 @@ const getTagLookup = () => { // タグのIDから日本語名を取得するた�
     return lookup;
 };
 
-function toggleFavorite(name) { // お気に入りの登録・解除を切り替え
-    const index = favorites.indexOf(name);
+function toggleFavorite(id, nameForLog) { // お気に入りの登録・解除を切り替え（ID管理）
+    const index = favorites.indexOf(id);
     if (index > -1) {
         favorites.splice(index, 1);
-        trackEvent('Favorites', 'remove', name);
+        trackEvent('Favorites', 'remove', nameForLog);
     } else {
-        favorites.push(name);
-        trackEvent('Favorites', 'add', name);
+        favorites.push(id);
+        trackEvent('Favorites', 'add', nameForLog);
     }
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
     updateFavoriteButtonUI();
@@ -456,8 +459,11 @@ function removeSingleFilter(cat, val) { // 特定のフィルターを解除
     if (btn) toggleFilter(btn);
 }
 
-function getSearchUrl(shop, brand, name, fallbackUrl) { // モールごとの検索・アフィリエイトURLを生成
-    const q = encodeURIComponent(`${brand} ${name}`);
+function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごとの検索・アフィリエイトURLを生成
+    // JANコードが13桁の有効な数値なら、検索精度を最大化するために最優先で使用
+    const searchVal = (jan && jan !== '#' && jan.length === 13) ? jan : `${brand} ${name}`;
+    const q = encodeURIComponent(searchVal);
+
     // CSVにURLがあればそれを使用、なければ検索URLを生成
     let targetShopUrl = (fallbackUrl && fallbackUrl !== '#') ? fallbackUrl : '';
 
@@ -474,6 +480,20 @@ function getSearchUrl(shop, brand, name, fallbackUrl) { // モールごとの検
         return getMoshimoUrl('yahoo', targetShopUrl);
     }
     return '#';
+}
+
+function getProductImageSrc(item, defaultImg) { // 商品画像のURLを決定（JANコードによる自動生成対応）
+    // 1. CSVに画像URLが直接指定されている場合は最優先で使用
+    if (item.img && item.img !== "#") return item.img;
+    
+    // 2. 画像がなく、JANコード(13桁)がある場合は楽天の画像サーバーURLを合成
+    if (item.jan && item.jan !== "#" && item.jan.length === 13) {
+        const shop = AFFILIATE_CONFIG.rakutenImageShop || "petline";
+        return `https://thumbnail.image.rakuten.co.jp/@0_mall/${shop}/cabinet/jan/${item.jan}.jpg`;
+    }
+    
+    // 3. いずれもない場合はデフォルトの「No Image」SVGを返す
+    return defaultImg;
 }
 
 window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更新の実行
@@ -533,12 +553,13 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
             productName = productName.replace(brandName, '').trim();
         }
 
-        const isFav = favorites.includes(item.name);
+        const imageSrc = getProductImageSrc(item, defaultImg);
+        const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${(!item.img || item.img === "#") ? defaultImg : item.img}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${brandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
-            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazon</a>` +
-            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天</a>` +
-            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${brandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazon</a>` +
+            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天</a>` +
+            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
             `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Shop', 'click', 'A8:${item.name}')">公式/他</a>` : ''}` +
             `</div></div>`;
         if (list) list.appendChild(card);

@@ -256,6 +256,9 @@ def convert(exit_on_error=True):
     for ln, res_row, norm_name in processed_results:
         # JAN重複チェック (# はスキップ)
         jan_val = str(res_row.get('jan', '#')).strip()
+        # 商品名重複チェック用のキー（ブランドID + 空白を除去した名前）
+        dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
+
         if jan_val != '#':
             if jan_val in seen_jans:
                 validation_errors.append(f"行 {ln}: JANコード '{jan_val}' が重複しています。(商品: {res_row['name']} / 既出: 行 {seen_jans[jan_val]})")
@@ -263,7 +266,6 @@ def convert(exit_on_error=True):
                 seen_jans[jan_val] = ln
 
         # 商品名重複チェック
-        dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
         brand_id = res_row['brand_id']
 
         if dup_key in seen_names:
@@ -277,6 +279,12 @@ def convert(exit_on_error=True):
                     validation_warnings.append(f"行 {ln}: '{res_row['name']}' は既出の '{close_matches[0]}' と非常に似ています。")
             seen_names[dup_key] = ln
             names_by_brand[brand_id].append(norm_name)
+        
+        # お気に入り管理用の不変なIDを付与
+        # JANがあればJANを使用、なければ名寄せ用キーのパイプをアンダーバーに変えたものを使用
+        res_row['id'] = jan_val if jan_val != '#' else dup_key.replace('|', '_')
+
+    # products リストは既に上で作成済み
 
     # products リストは既に上で作成済み
     # products = [r[1] for r in processed_results]
