@@ -14,9 +14,10 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
+      // ローカル環境(localhostやfile://)ではクッキーを無効化し、本番では 'auto' で警告を抑制
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
       gtag('config', 'G-XR7TWP7ZJ0', {
-        'send_page_view': true,
-        'cookie_domain': 'none'
+        'cookie_domain': isLocal ? 'none' : 'auto'
       });
     </script>
     <title>pet925 | ペットフード選定ガイド - 愛犬・愛猫に最適なプレミアムフード検索</title>
