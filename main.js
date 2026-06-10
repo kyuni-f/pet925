@@ -3,7 +3,7 @@
 // マスターデータが存在しない場合の空オブジェクト初期化（エラー防止）
 if (typeof categoryMaster === 'undefined') window.categoryMaster = {};
 if (typeof tagMaster === 'undefined') window.tagMaster = {};
-if (typeof tagKeywords === 'undefined') window.tagKeywords = {};
+if (typeof tagKeywords === 'undefined') window.tagKeywords = {}; // tagKeywordsはrules.csvから生成
 
 // --- アフィリエイト設定（ご自身のIDに書き換えてください） ---
 // もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
@@ -38,6 +38,7 @@ let searchInputDebounceTimer = null; // 検索入力専用のデバウンスタ�
 let analyticsDebounceTimer = null; // アナリティクス送信用のデバウンスタイマー
 let currentTotalMatchCount = 0; // 最新の検索結果件数を保持
 let tagLookupMap = {}; 
+let brandLookupMap = {}; // ブランドのkeyから表示名へのマップ
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
 let visibleChipsInResults = new Set(); // 結果画面で表示し続けるチップのキー管理
 let showFavoritesOnly = false;
@@ -201,6 +202,21 @@ function toggleFavFilter() { // 「お気に入り商品のみ表示」モード
         showResults();
     }
     render(false);
+}
+
+function toggleDescription(button) {
+    const parentP = button.closest('p');
+    const shortDesc = parentP.querySelector('.short-desc');
+    const fullDesc = parentP.querySelector('.full-desc');
+    if (shortDesc.style.display === 'none') {
+        shortDesc.style.display = 'inline';
+        fullDesc.style.display = 'none';
+        button.textContent = '続きを読む';
+    } else {
+        shortDesc.style.display = 'none';
+        fullDesc.style.display = 'inline';
+        button.textContent = '閉じる';
+    }
 }
 
 function trackEvent(category, action, label, extraParams = {}) { // Google Analytics (GA4) にイベントを送信
@@ -544,22 +560,35 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     matchedItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
-        
-        // 表示用ブランド名の決定（マスターがあればそれを使い、なければJSONの値を採用）
-        const brandName = (typeof brandMaster !== 'undefined' && item.brand_id && brandMaster[item.brand_id]) ? brandMaster[item.brand_id] : item.brand;
+
+        // brandLookupMap を使用して正式名称を取得
+        const displayBrandName = brandLookupMap[item.brand_id] || item.brand;
         let productName = item.name;
         // 商品名の先頭にブランド名が入っている場合、重複を避けるために削る
-        if (brandName && productName.startsWith(brandName)) {
-            productName = productName.replace(brandName, '').trim();
+        if (displayBrandName && productName.startsWith(displayBrandName)) {
+            productName = productName.replace(displayBrandName, '').trim();
+        }
+
+        let descHtml = `<p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p>`;
+        const fullDesc = item.desc || "";
+        const TRUNCATE_LENGTH = 150; // 説明文を切り詰める長さ
+
+        if (fullDesc.length > TRUNCATE_LENGTH) {
+            const displayDesc = fullDesc.substring(0, TRUNCATE_LENGTH) + '...';
+            descHtml = `<p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">
+                            <span class="short-desc">${displayDesc}</span>
+                            <span class="full-desc" style="display:none;">${fullDesc}</span>
+                            <button class="read-more-btn" onclick="toggleDescription(this)">続きを読む</button>
+                        </p>`;
         }
 
         const imageSrc = getProductImageSrc(item, defaultImg);
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${brandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div><p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p><div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
-            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazon</a>` +
-            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天</a>` +
-            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo:${item.name}')">Yahoo!</a>` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazonで詳細を見る</a>` +
+            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天市場で詳細を見る</a>` +
+            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo!ショッピングで詳細を見る</a>` +
             `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Shop', 'click', 'A8:${item.name}')">公式/他</a>` : ''}` +
             `</div></div>`;
         if (list) list.appendChild(card);
@@ -588,6 +617,13 @@ function initializeApp() { // アプリ全体の初期化処理
     tagLookupMap = getTagLookup();
     console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black;");
     console.log("このサイトのコンテンツおよびデータの無断転載・複製を固く禁じます。");
+
+    // brandLookupMapの初期化
+    if (typeof brands !== 'undefined') {
+        brands.forEach(b => {
+            brandLookupMap[normalize(b.key)] = b.name; // keyも正規化して小文字で登録
+        });
+    }
 
     // --- スクロール監視：トップに戻るボタンの表示制御 ---
     const backToTopBtn = document.getElementById('floating-back-to-top');

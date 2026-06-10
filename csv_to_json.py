@@ -256,10 +256,17 @@ def convert(exit_on_error=True):
     for ln, res_row, norm_name in processed_results:
         # JAN重複チェック (# はスキップ)
         jan_val = str(res_row.get('jan', '#')).strip()
+        # 全角を半角に変換し、数字以外を除去
+        jan_val = unicodedata.normalize('NFKC', jan_val).replace(" ", "").replace("-", "")
+        res_row['jan'] = jan_val
+
         # 商品名重複チェック用のキー（ブランドID + 空白を除去した名前）
         dup_key = f"{res_row['brand_id']}|{''.join(norm_name.split())}"
 
         if jan_val != '#':
+            if not jan_val.isdigit() or len(jan_val) != 13:
+                validation_warnings.append(f"行 {ln}: JANコード '{jan_val}' が標準的な13桁の数字ではありません。画像生成に失敗する可能性があります。")
+
             if jan_val in seen_jans:
                 validation_errors.append(f"行 {ln}: JANコード '{jan_val}' が重複しています。(商品: {res_row['name']} / 既出: 行 {seen_jans[jan_val]})")
             else:

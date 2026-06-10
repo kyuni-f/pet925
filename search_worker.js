@@ -65,9 +65,17 @@ async function saveToDB(products) {
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
 
 // 初期化：検索用文字列の事前生成
+// マスタデータの逆引きマップ（タグ名、ブランド名）
 const tagLookupMap = {};
 if (typeof tagMaster !== 'undefined') {
     Object.values(tagMaster).forEach(group => Object.assign(tagLookupMap, group));
+}
+
+const brandLookupMap = {};
+if (typeof brands !== 'undefined') {
+    brands.forEach(b => {
+        brandLookupMap[normalize(b.key)] = b.name; // keyも正規化して小文字で登録
+    });
 }
 
 // チャンク（分割ファイル）を処理する関数
@@ -75,7 +83,8 @@ function processChunk(data) {
     data.forEach(item => {
         // スコアリング用に各フィールドを個別に正規化して保持
         const nameNorm = normalize(item.name);
-        const brandNorm = normalize(item.brand) + " " + normalize(item.brand_id || "");
+        const brandDisplayName = brandLookupMap[item.brand_id] || "";
+        const brandNorm = normalize(item.brand) + " " + normalize(item.brand_id || "") + " " + normalize(brandDisplayName);
         const descNorm = normalize(item.desc);
         const keywordsNorm = normalize(item._keywords || "");
         
@@ -166,17 +175,16 @@ self.onmessage = function(e) {
 
     const { searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites } = e.data;
     const catsToCheck = Object.keys(tagMaster);
+    const favSet = new Set(favorites || []); // ループの外で一度だけ作成
     
     // お気に入りが空で、かつお気に入りフィルターがONの場合は即座に空の結果を返す
-    if (showFavoritesOnly && (!favorites || favorites.length === 0)) {
+    if (showFavoritesOnly && favSet.size === 0) {
         self.postMessage({ matchedItems: [], totalMatchCount: 0, visibleCount: visibleCount });
         return;
     }
 
     let matchCount = 0;
     let allMatches = [];
-    // 検索ごとに1回だけSetを作成（ループ内での生成を避ける）
-    const favSet = new Set(favorites);
 
     for (const item of allProducts) {
         // お気に入りフィルターの適用
