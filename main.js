@@ -30,7 +30,7 @@ const AFFILIATE_CONFIG = {
     },
     // 楽天の画像サーバー(cabinet)で使用するショップ名
     // 多くのペットフードはここを "petline" や自身の提携ショップ名に設定することで画像を自動取得できます
-    rakutenImageShop: "petline" 
+    rakutenImageShop: "正しいショップ名" // 例: "my-shop-name"
 };
 
 let activeFilters = {}; 
