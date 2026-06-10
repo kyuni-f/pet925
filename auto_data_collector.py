@@ -59,7 +59,7 @@ def fetch_product_data(target_url):
     # --- API 設定 ---
     # 404エラー（見つからない）を回避するため、一覧で確認できたモデル名に変更します。
     # --list-models で表示された一覧の中から、使いたいモデル名を正確に指定してください
-    model_name = "gemini-1.5-flash"
+    model_name = "gemini-2.5-flash"
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={API_KEY}"
     
     # 補助データの読み込み（AIに判断基準を与える）
@@ -79,7 +79,8 @@ def fetch_product_data(target_url):
 【許可タグリスト (data/tags.csv)】\n{tags_context}
 【ブランドリスト (data/brands.csv)】\n{brands_context}
 
-【重要】必ず以下の15列のCSV形式で出力してください。ヘッダー行も必ず含めてください。
+【重要】必ず以下の16列のCSV形式で出力してください。ヘッダー行も必ず含めてください。
+【JANコード】わかる場合はjan列に13桁の数値を入力してください。不明な場合は # を入力してください。
 \n{csv_header}\n\n【解析対象URL】\n{target_url}"""
     
     payload = {

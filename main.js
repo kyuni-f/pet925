@@ -9,24 +9,24 @@ if (typeof tagKeywords === 'undefined') window.tagKeywords = {}; // tagKeywords�
 // もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
 const AFFILIATE_CONFIG = {
     shopAid: {
-        amazon: "",     // Amazon用の a_id
-        rakuten: "5597949", 
-        yahoo: "5597952"
+        amazon: "",     // Amazonの提携が取り消されたため空に
+        rakuten: "", // 楽天の提携が取り消されたため空に
+        yahoo: ""    // Yahooの提携が取り消されたため空に
     },
     shopPid: {
-        amazon: "",     // 審査落ちの間は空に。これでAmazonボタンは「普通の検索」に戻ります
-        rakuten: "54",  // 楽天のどこでもリンクで確認したp_id（通常54）
-        yahoo: "1225"   // Yahoo!ショッピングのp_id
+        amazon: "",     // Amazonの提携が取り消されたため空に
+        rakuten: "",  // 楽天の提携が取り消されたため空に
+        yahoo: ""   // Yahooの提携が取り消されたため空に
     },
     shopPcid: {
-        amazon: "",
-        rakuten: "54",   // 楽天のどこでもリンクに記載されていたpc_id
-        yahoo: "1925"    // Yahooのどこでもリンクに記載されていたpc_id
+        amazon: "",     // Amazonの提携が取り消されたため空に
+        rakuten: "",   // 楽天の提携が取り消されたため空に
+        yahoo: ""    // Yahooの提携が取り消されたため空に
     },
     shopPlid: {
-        amazon: "",
-        rakuten: "616",   // 楽天のリンクコードに含まれていたpl_id
-        yahoo: "18502"   // Yahooのリンクコードに含まれていたpl_id
+        amazon: "",     // Amazonの提携が取り消されたため空に
+        rakuten: "",   // 楽天の提携が取り消されたため空に
+        yahoo: ""   // Yahooの提携が取り消されたため空に
     },
     // 楽天の画像サーバー(cabinet)で使用するショップ名
     // 多くのペットフードはここを "petline" や自身の提携ショップ名に設定することで画像を自動取得できます
@@ -484,8 +484,7 @@ function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごと�
     let targetShopUrl = (fallbackUrl && fallbackUrl !== '#') ? fallbackUrl : '';
 
     if (shop === 'amz') {
-        if (!targetShopUrl) targetShopUrl = `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`;
-        return getMoshimoUrl('amazon', targetShopUrl);
+        return `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`; // アフィリエイトIDを削除
     }
     if (shop === 'rak') {
         if (!targetShopUrl) targetShopUrl = `https://search.rakuten.co.jp/search/mall/${q}/?s=2`;
@@ -586,10 +585,10 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
         card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${item.name}" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
-            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Shop', 'click', 'Amazon:${item.name}')">Amazonで詳細を見る</a>` +
-            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Shop', 'click', 'Rakuten:${item.name}')">楽天市場で詳細を見る</a>` +
-            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Shop', 'click', 'Yahoo!ショッピングで詳細を見る</a>` +
-            `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Shop', 'click', 'A8:${item.name}')">公式/他</a>` : ''}` +
+            `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
+            `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
+            `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +
+            `${item.a8 && item.a8 !== '#' ? `<a href="${item.a8}" class="btn-shop btn-a8" target="_blank" onclick="trackEvent('Search', 'click', 'A8:Search')">公式/他で検索</a>` : ''}` +
             `</div></div>`;
         if (list) list.appendChild(card);
     });
