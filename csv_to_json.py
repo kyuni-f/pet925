@@ -151,8 +151,13 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
 
     # リンク/画像URLの簡易形式チェック
     for l_col in ['img', 'amz', 'rak', 'yah', 'a8']:
-        l_val = str(row.get(l_col, '#')).strip()
-        if l_val != '#' and not l_val.startswith('http') and not (l_col == 'img' and l_val.startswith('[')):
+        # 引用符や空白を徹底的に除去
+        l_val = str(row.get(l_col, '#')).strip().strip('"').strip("'")
+        
+        # 有効な形式: 1. '#' (未設定)  2. 'http'で始まる  3. '['で始まるJSONリスト(imgのみ)
+        is_valid = (l_val == '#') or (l_val.startswith('http')) or (l_col == 'img' and l_val.startswith('['))
+        
+        if not is_valid:
             row_errors.append(f"行 {line_num}: {l_col} のURL形式が正しくありません（httpから開始するか # にしてください）")
 
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
