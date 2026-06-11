@@ -28,11 +28,6 @@ const AFFILIATE_CONFIG = {
         rakuten: "",   // 楽天の提携が取り消されたため空に
         yahoo: ""   // Yahooの提携が取り消されたため空に
     },
-    // --- 画像自動取得（JANコード）の補助設定 ---
-    // 特定のショップ(例: "rakuten24"等)が "cabinet/jan/JAN.jpg" という形式を採用している場合のみ有効です。
-    // pet-gardeninglife のように独自の階層を持つショップでは自動生成できません。
-    // 画像が表示されない(1x1になる)場合は、ブックマークレットで取得したURLを img 列に貼ってください。
-    rakutenImageShop: "pet-gardeninglife"
 };
 
 let activeFilters = {}; 
@@ -500,16 +495,8 @@ function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごと�
 }
 
 function getProductImageSrc(item, defaultImg) { // 商品画像のURLを決定（JANコードによる自動生成対応）
-    // 1. CSVに画像URLが直接指定されている場合は最優先で使用
+    // ビルド時にPython側でURLが生成されているため、そのまま返すだけ
     if (item.img && item.img !== "#") return item.img;
-    
-    // 2. 画像がなく、JANコード(13桁)がある場合は楽天の画像サーバーURLを合成
-    if (item.jan && item.jan !== "#" && item.jan.length === 13) {
-        const shop = AFFILIATE_CONFIG.rakutenImageShop || "petline";
-        return `https://thumbnail.image.rakuten.co.jp/@0_mall/${shop}/cabinet/jan/${item.jan}.jpg`;
-    }
-    
-    // 3. いずれもない場合はデフォルトの「No Image」SVGを返す
     return defaultImg;
 }
 
@@ -562,6 +549,19 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const card = document.createElement('div');
         card.className = 'product-card';
 
+        const imageSrc = getProductImageSrc(item, defaultImg);
+        
+        // ドメインから出典元を推測（注釈用）
+        let sourceNote = '';
+        if (imageSrc.includes('r10s.jp')) sourceNote = '出典: 楽天市場';
+        else if (imageSrc.includes('amazon.com') || imageSrc.includes('ssl-images-amazon')) sourceNote = '出典: Amazon';
+        else if (imageSrc.includes('top-seller.jp')) sourceNote = '提供: TopSeller';
+        else if (imageSrc.includes('moshimo.com')) sourceNote = '提供: もしもアフィリエイト';
+        else if (imageSrc !== defaultImg) sourceNote = '参考画像';
+
+        // 「参考用」であることを強調するラベルの有無
+        const referenceBadge = (imageSrc !== defaultImg) ? '<div class="reference-badge">参考画像</div>' : '';
+
         // brandLookupMap を使用して正式名称を取得
         const displayBrandName = brandLookupMap[item.brand_id] || item.brand;
         let productName = item.name;
@@ -583,10 +583,9 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
                         </p>`;
         }
 
-        const imageSrc = getProductImageSrc(item, defaultImg);
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${item.name}" onload="if(this.naturalWidth <= 1) this.src='${defaultImg}'" onerror="this.src='${defaultImg}'" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${item.name}" onload="if(this.naturalWidth <= 1) { this.src='${defaultImg}'; this.nextElementSibling.style.display='none'; } " onerror="this.src='${defaultImg}'; this.nextElementSibling.style.display='none';" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

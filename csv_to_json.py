@@ -21,6 +21,10 @@ OUTPUT_JSON = 'product_data.json'
 CHUNK_SIZE = 5000  # 1ファイルあたりの最大件数
 OUTPUT_MASTER_JS = 'data_master.js'
 
+# 画像自動生成に使用するデフォルトの楽天ショップID
+# 特定のショップが cabinet/jan/ 形式を採用している場合に使用
+DEFAULT_RAKUTEN_IMAGE_SHOP = 'pet-gardeninglife'
+
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
 SPECIFIC_MASTER_CSVS = {
@@ -67,7 +71,7 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
-def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest):
+def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_id):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
@@ -94,6 +98,13 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     brand_name = row.get('brand', '').strip()
     row['brand'] = brand_name
     row['brand_id'] = normalize_text(brand_name)
+
+    # 画像URLのプレレンダリング (JANコードからの自動生成)
+    img_val = row.get('img', '#').strip()
+    jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
+    if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
+        # ビルド時にURLを確定させておく
+        row['img'] = f"https://thumbnail.image.rakuten.co.jp/@0_mall/{rakuten_shop_id}/cabinet/jan/{jan_val}.jpg"
 
     current_kws = []
 
@@ -239,7 +250,7 @@ def convert(exit_on_error=True):
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest) 
+        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, DEFAULT_RAKUTEN_IMAGE_SHOP) 
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
