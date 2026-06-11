@@ -494,10 +494,34 @@ function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごと�
     return '#';
 }
 
+// 画像URLのフォールバック処理
+function tryNextImageSource(imgElement, allSourcesJson, defaultImg) {
+    let sources;
+    try {
+        sources = JSON.parse(allSourcesJson);
+    } catch (e) {
+        // JSONパース失敗時はデフォルト画像にフォールバック
+        imgElement.src = defaultImg;
+        return;
+    }
+
+    const currentSrc = imgElement.src;
+    const currentIndex = sources.indexOf(currentSrc);
+
+    if (currentIndex !== -1 && currentIndex < sources.length - 1) {
+        // 次のソースを試す
+        imgElement.src = sources[currentIndex + 1];
+    } else {
+        // これ以上試すソースがない場合、または現在のソースがリストにない場合、デフォルト画像にフォールバック
+        imgElement.src = defaultImg;
+    }
+}
+
 function getProductImageSrc(item, defaultImg) { // 商品画像のURLを決定（JANコードによる自動生成対応）
-    // ビルド時にPython側でURLが生成されているため、そのまま返すだけ
-    if (item.img && item.img !== "#") return item.img;
-    return defaultImg;
+    // Python側で生成されたURLリストがある場合、最初のURLを返す
+    if (item.img && item.img !== "#" && item.img.startsWith('[')) return JSON.parse(item.img)[0];
+    if (item.img && item.img !== "#") return item.img; // 直接URLが指定されている場合
+    return defaultImg; // いずれでもない場合
 }
 
 window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更新の実行
@@ -585,7 +609,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${item.name}" onload="if(this.naturalWidth <= 1) { this.src='${defaultImg}'; this.nextElementSibling.style.display='none'; } " onerror="this.src='${defaultImg}'; this.nextElementSibling.style.display='none';" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${item.name}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${item.img.replace(/`/g, '\\`')}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${item.img.replace(/`/g, '\\`')}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

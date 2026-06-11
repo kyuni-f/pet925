@@ -21,9 +21,14 @@ OUTPUT_JSON = 'product_data.json'
 CHUNK_SIZE = 5000  # 1ファイルあたりの最大件数
 OUTPUT_MASTER_JS = 'data_master.js'
 
-# 画像自動生成に使用するデフォルトの楽天ショップID
-# 特定のショップが cabinet/jan/ 形式を採用している場合に使用
-DEFAULT_RAKUTEN_IMAGE_SHOP = 'pet-gardeninglife'
+# 画像自動生成に使用するデフォルトの楽天ショップIDリスト
+# これらのショップが cabinet/jan/ 形式を採用している場合、JANコードから画像を自動生成します。
+# 優先度の高い順に並べてください。
+DEFAULT_RAKUTEN_IMAGE_SHOPS = [
+    'rakuten24',         # 楽天24 (大手でJANコード管理がしっかりしている可能性が高い)
+    'pet-gardeninglife', # 現在使用中のショップ
+    'net-baby',          # 新しく追加したいショップID
+]
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
@@ -71,7 +76,7 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
-def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_id):
+def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
@@ -100,11 +105,15 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     row['brand_id'] = normalize_text(brand_name)
 
     # 画像URLのプレレンダリング (JANコードからの自動生成)
+    # 複数のショップIDを試行し、URLのリストを生成
     img_val = row.get('img', '#').strip()
     jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
     if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
-        # ビルド時にURLを確定させておく
-        row['img'] = f"https://thumbnail.image.rakuten.co.jp/@0_mall/{rakuten_shop_id}/cabinet/jan/{jan_val}.jpg"
+        potential_img_urls = []
+        for shop_id in rakuten_shop_ids:
+            potential_img_urls.append(f"https://thumbnail.image.rakuten.co.jp/@0_mall/{shop_id}/cabinet/jan/{jan_val}.jpg")
+        # JSON文字列として保存し、ブラウザ側でフォールバック処理を行う
+        row['img'] = json.dumps(potential_img_urls)
 
     current_kws = []
 
@@ -143,7 +152,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     # リンク/画像URLの簡易形式チェック
     for l_col in ['img', 'amz', 'rak', 'yah', 'a8']:
         l_val = str(row.get(l_col, '#')).strip()
-        if l_val != '#' and not l_val.startswith('http'):
+        if l_val != '#' and not l_val.startswith('http') and not (l_col == 'img' and l_val.startswith('[')):
             row_errors.append(f"行 {line_num}: {l_col} のURL形式が正しくありません（httpから開始するか # にしてください）")
 
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
@@ -250,7 +259,7 @@ def convert(exit_on_error=True):
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, DEFAULT_RAKUTEN_IMAGE_SHOP) 
+        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, DEFAULT_RAKUTEN_IMAGE_SHOPS) 
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):

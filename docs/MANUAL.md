@@ -10,7 +10,9 @@
 3.  **マスター反映**: `pet925_master.ods` の `img` 列（G列）に貼り付け。
 4.  **仕上げ**: 商品名（A列）、ブランド名（B列）、タグ（C列）を手動で入力または調整。
     - **画像について**: 楽天のショップによって画像保存先が異なるため、JANコードによる自動生成は一部の商品でのみ有効です。表示されない場合は、ブックマークレットで取得した正確なURLを `img` 列に貼り付けてください。
-    - **JANコード**: F列に入力します。画像が空の場合、設定された特定のショップ倉庫から自動取得を試みます。楽天の仕様で「画像なし」の場合は1x1ピクセルの透明画像が返りますが、システム側で自動的に「No Image」プレースホルダーへ差し替えます。
+    - **JANコード**: F列に入力します。画像が空の場合、Pythonビルド時に複数の楽天ショップID（`csv_to_json.py` の `DEFAULT_RAKUTEN_IMAGE_SHOPS` で設定）を順番に試行し、画像URL候補を生成します。ブラウザ側でこれらの候補を自動で試行し、画像が見つからない場合は「No Image」プレースホルダーへ差し替えます。
+    - **優先順位**: `img` 列に直接URLが入力されている場合はそれが最優先されます。次にJANコードからの自動生成、最後に「No Image」となります。
+
 
 ### B. 手動一括管理（メンテナンス時）
 （略）
@@ -436,10 +438,14 @@ End Sub
 
 ---
 ## 10. 開発環境のセットアップ
-追加のライブラリインストールは不要です。Node.js と Python 3 があれば動作します。
+Node.js と Python 3 が必要です。
 
 0.  **Node.jsインストール**: `sudo apt install nodejs npm`
 1.  **Python環境**: `python3 --version` で Python 3 が入っていることを確認。
+2.  **ライブラリインストール**: 以下のいずれかを実行してください。
+    - 推奨（システム全体）: `sudo apt install python3-requests`
+    - 推奨（仮想環境）: `python3 -m venv venv && source venv/bin/activate && pip install requests`
+    - 強制実行（非推奨）: `pip install requests --break-system-packages`
 2.  **ビルドテスト**: `npm run build` で `product_data.json` が生成されるか確認。
 3.  **公開**: `npm run deploy`
 

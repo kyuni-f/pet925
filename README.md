@@ -32,6 +32,9 @@
 # 1. 依存関係のインストール
 npm install
 
+# 2. Pythonライブラリのインストール
+sudo apt install python3-requests
+
 # 2. データのビルド（CSV -> JSON 変換）
 npm start
 
