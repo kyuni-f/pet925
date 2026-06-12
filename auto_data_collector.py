@@ -10,6 +10,12 @@ import time
 def load_config():
     """.envファイルから環境変数を読み込む"""
     config = {}
+    # システム環境変数を優先
+    if os.getenv("RAKUTEN_APP_ID"): config["RAKUTEN_APP_ID"] = os.getenv("RAKUTEN_APP_ID")
+    if os.getenv("RAKUTEN_ACCESS_KEY"): config["RAKUTEN_ACCESS_KEY"] = os.getenv("RAKUTEN_ACCESS_KEY")
+    if os.getenv("GEMINI_API_KEY"): config["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+
+    # .env ファイルで補完
     if os.path.exists(".env"):
         with open(".env", "r", encoding="utf-8-sig") as f:
             for line in f:
@@ -39,25 +45,25 @@ def fetch_rakuten_official_data(jan):
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
     
-    # 2026年統合認証対応
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search" # バージョン指定なし
-    headers = {
-        "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
-        "Authorization": f"Bearer {RAKUTEN_ACCESS_KEY}"
-    }
+    # 2026年RAPネイティブエンドポイント
+    url = "https://api.rakuten.co.jp/ichiba/item/v1/search"
     params = {
-        "format": "json",
         "keyword": jan,
         "hits": 1
+    }
+    headers = {
+        "Authorization": RAKUTEN_ACCESS_KEY.strip(),
+        "X-Rakuten-Application-Id": RAKUTEN_APP_ID.strip()
     }
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         data = resp.json()
-        if "Items" in data and len(data["Items"]) > 0:
-            item = data["Items"][0]["Item"]
+        items = data.get("items", [])
+        if items:
+            item = items[0]
             return {
                 "name": item.get("itemName"),
-                "image": item.get("mediumImageUrls", [{}])[0].get("imageUrl")
+                "image": item.get("image_url") or item.get("medium_image_urls", [None])[0]
             }
     except:
         return None

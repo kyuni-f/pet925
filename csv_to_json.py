@@ -36,6 +36,13 @@ def load_rakuten_config():
     config = {"app_id": None, "access_key": None, "affiliate_id": None, "use_api_for_images": True} # 新しい設定を追加
     base_dir = os.path.dirname(os.path.abspath(__file__))
     env_path = os.path.join(base_dir, ".env")
+
+    # ターミナル環境変数を最優先
+    config["app_id"] = os.getenv("RAKUTEN_APP_ID")
+    config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
+    config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
+    if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"): 
+        config["use_api_for_images"] = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
     
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8-sig") as f:
@@ -54,10 +61,6 @@ def load_rakuten_config():
                         config["affiliate_id"] = value.strip().strip("'").strip('"')
                     elif key_clean == "USE_RAKUTEN_API_FOR_IMAGES": # 新しい設定を読み込む
                         config["use_api_for_images"] = value.strip().lower() == "true"
-    if not config["app_id"]: config["app_id"] = os.getenv("RAKUTEN_APP_ID")
-    if not config["access_key"]: config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
-    if not config["affiliate_id"]: config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
-    if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"): config["use_api_for_images"] = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
     return config
 
 rak_config = load_rakuten_config()
@@ -115,16 +118,15 @@ def fetch_rakuten_data(jan):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
     if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY: return None
     
-    # 2026年統合認証仕様
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search" # バージョン指定なし
-    headers = {
-        "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
-        "Authorization": f"Bearer {RAKUTEN_ACCESS_KEY.strip()}"
-    }
+    # 2026年RAPネイティブエンドポイント
+    url = "https://api.rakuten.co.jp/ichiba/item/v1/search"
     params = {
-        "format": "json",
         "keyword": jan,
         "hits": 1
+    }
+    headers = {
+        "Authorization": RAKUTEN_ACCESS_KEY.strip(),
+        "X-Rakuten-Application-Id": RAKUTEN_APP_ID.strip()
     }
     if RAKUTEN_AFFILIATE_ID:
         params["affiliateId"] = RAKUTEN_AFFILIATE_ID
@@ -135,11 +137,13 @@ def fetch_rakuten_data(jan):
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            item = data["Items"][0]["Item"]
-            # 中サイズ画像を優先取得
-            images = item.get("mediumImageUrls", [])
+            items = data.get("items", [])
+            if not items: return None
+            item = items[0]
+            
+            img_url = item.get("image_url") or item.get("medium_image_urls", [None])[0]
             return {
-                "image": images[0].get("imageUrl") if images else None,
+                "image": img_url,
                 "url": None # アフィリエイトリンクは取得せず、検索リンクに任せる
             }
     except:
