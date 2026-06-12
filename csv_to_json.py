@@ -8,6 +8,7 @@ import datetime
 import time
 import concurrent.futures
 import difflib
+import requests
 
 
 # 設定
@@ -29,6 +30,24 @@ DEFAULT_RAKUTEN_IMAGE_SHOPS = [
     'pet-gardeninglife', # 現在使用中のショップ
     'net-baby',          # 新しく追加したいショップID
 ]
+
+# 楽天API・アフィリエイト設定の読み込み
+def load_rakuten_config():
+    config = {"app_id": None, "affiliate_id": None}
+    if os.path.exists(".env"):
+        with open(".env", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("RAKUTEN_APP_ID="):
+                    config["app_id"] = line.split("=", 1)[1].strip().strip("'").strip('"')
+                if line.startswith("RAKUTEN_AFFILIATE_ID="):
+                    config["affiliate_id"] = line.split("=", 1)[1].strip().strip("'").strip('"')
+    if not config["app_id"]: config["app_id"] = os.getenv("RAKUTEN_APP_ID")
+    if not config["affiliate_id"]: config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
+    return config
+
+rak_config = load_rakuten_config()
+RAKUTEN_APP_ID = rak_config["app_id"]
+RAKUTEN_AFFILIATE_ID = rak_config["affiliate_id"]
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
@@ -76,6 +95,30 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
+def fetch_rakuten_data(jan):
+    """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
+    if not RAKUTEN_APP_ID or jan == '#': return None
+    
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706?format=json&keyword={jan}&applicationId={RAKUTEN_APP_ID}&hits=1"
+    if RAKUTEN_AFFILIATE_ID:
+        url += f"&affiliateId={RAKUTEN_AFFILIATE_ID}"
+
+    try:
+        # API負荷軽減のためわずかに待機
+        time.sleep(0.2) 
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if "Items" in data and len(data["Items"]) > 0:
+            item = data["Items"][0]["Item"]
+            # 中サイズ画像を優先取得
+            images = item.get("mediumImageUrls", [])
+            return {
+                "image": images[0].get("imageUrl") if images else None,
+                "url": None # アフィリエイトリンクは取得せず、検索リンクに任せる
+            }
+    except:
+        return None
+
 def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
@@ -105,9 +148,20 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     row['brand_id'] = normalize_text(brand_name)
 
     # 画像URLのプレレンダリング (JANコードからの自動生成)
-    # 複数のショップIDを試行し、URLのリストを生成
     img_val = row.get('img', '#').strip()
+    rak_val = row.get('rak', '#').strip()
     jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
+
+    # 1. 楽天APIで画像の検索を試みる
+    if img_val == '#' and jan_val != '#' and len(jan_val) == 13:
+        api_data = fetch_rakuten_data(jan_val)
+        if api_data:
+            if img_val == '#' and api_data["image"]:
+                row['img'] = api_data["image"]
+                img_val = api_data["image"]
+            # rak_val (アフィリエイトリンク) の自動更新は行わない
+
+    # 2. APIで見つからなかった場合のフォールバック（推測リスト）
     if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
         potential_img_urls = []
         for shop_id in rakuten_shop_ids:
