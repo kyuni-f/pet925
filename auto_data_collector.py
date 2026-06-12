@@ -40,15 +40,14 @@ def fetch_rakuten_official_data(jan):
         return None
     
     # 2026年統合認証対応
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search" # バージョン指定なし
     headers = {
         "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
-        "X-Rakuten-Access-Key": RAKUTEN_ACCESS_KEY
+        "Authorization": f"Bearer {RAKUTEN_ACCESS_KEY}"
     }
     params = {
         "format": "json",
         "keyword": jan,
-        "access_key": RAKUTEN_ACCESS_KEY,
         "hits": 1
     }
     try:
@@ -183,7 +182,7 @@ if __name__ == "__main__":
             jan = row.get("jan", "#")
             official = fetch_rakuten_official_data(jan)
             
-            if official:
+            if official and official.get("name"):
                 print(f"✨ 楽天APIから公式データを取得しました: {official['name'][:30]}...")
                 # AIが要約してしまった名前を「公式名称」に差し替え
                 row["name"] = official["name"]

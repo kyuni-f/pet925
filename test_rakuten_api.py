@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 import requests
 import os
+import json
+import time
+
+COLOR_YELLOW = '\033[33m'
+COLOR_RESET = '\033[0m'
 
 def get_rakuten_config():
     """ IDの読み込み元を特定しながら取得する """
     config = {"app_id": None, "access_key": None}
-    
+    use_api_for_images = True # デフォルトはAPI使用
     # 実行場所に関わらず、スクリプトと同じディレクトリの .env を探す
     base_dir = os.path.dirname(os.path.abspath(__file__))
     env_path = os.path.join(base_dir, ".env")
@@ -28,6 +33,8 @@ def get_rakuten_config():
                         source = ".envファイル"
                     elif key_clean in ["RAKUTEN_ACCESS_KEY", "RAKUTEN_APPLICATION_SECRET"]:
                         config["access_key"] = val_clean
+                    elif key_clean == "USE_RAKUTEN_API_FOR_IMAGES":
+                        use_api_for_images = val_clean.lower() == "true"
     
     # ファイルになければシステム環境変数をチェック
     if not config["app_id"]:
@@ -35,10 +42,12 @@ def get_rakuten_config():
         if config["app_id"]: source = "ターミナル環境変数 (export)"
     if not config["access_key"]:
         config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
+    if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"):
+        use_api_for_images = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
 
-    return config["app_id"], config["access_key"], source
+    return config["app_id"], config["access_key"], use_api_for_images, source
 
-app_id, access_key, id_source = get_rakuten_config()
+app_id, access_key, use_api_for_images, id_source = get_rakuten_config()
 
 print(f"--- 楽天API 接続診断 ---")
 
@@ -50,28 +59,26 @@ else:
     print(f"📡 アプリケーションID: {app_id}")
     print(f"🔑 アクセスキー: {'設定済み' if access_key else '❌ 未設定'}")
 
-    if not access_key:
-        print("🛑 エラー: RAKUTEN_ACCESS_KEY が設定されていません。")
-
     # テスト用のJANコード
     test_jan = "4902418803128"
     
-    # 2026年統合ゲートウェイ: 認証はヘッダーで行い、バージョン指定は最新の互換レイヤーを使用
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    # 2026年最新統合ゲートウェイ
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search"
+    
+    # アクセスキーが空の場合、Bearerの後に何もつかないためエラーになる。それを防ぐ。
+    token = access_key.strip() if access_key else "MISSING_KEY"
+    
     headers = {
         "X-Rakuten-Application-Id": app_id.strip(),
-        "X-Rakuten-Access-Key": access_key.strip() if access_key else ""
+        "Authorization": f"Bearer {token}"
     }
     params = {
         "format": "json",
         "keyword": test_jan,
-        # UUIDをapplicationIdとして送るとエラーになるため、
-        # 2026年仕様の access_key パラメータのみを使用します
-        "access_key": access_key.strip() if access_key else "",
         "hits": 1
     }
 
-    print(f"🔍 2026年最新統合ゲートウェイ経由で送信中... (JAN: {test_jan})")
+    print(f"🔍 楽天APIリクエスト送信中... (JAN: {test_jan})")
     
     try:
         response = requests.get(url, params=params, headers=headers, timeout=10)

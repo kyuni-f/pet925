@@ -33,7 +33,7 @@ DEFAULT_RAKUTEN_IMAGE_SHOPS = [
 
 # 楽天API・アフィリエイト設定の読み込み
 def load_rakuten_config():
-    config = {"app_id": None, "access_key": None, "affiliate_id": None}
+    config = {"app_id": None, "access_key": None, "affiliate_id": None, "use_api_for_images": True} # 新しい設定を追加
     base_dir = os.path.dirname(os.path.abspath(__file__))
     env_path = os.path.join(base_dir, ".env")
     
@@ -52,9 +52,12 @@ def load_rakuten_config():
                         config["access_key"] = val_clean
                     elif key.strip() == "RAKUTEN_AFFILIATE_ID":
                         config["affiliate_id"] = value.strip().strip("'").strip('"')
+                    elif key_clean == "USE_RAKUTEN_API_FOR_IMAGES": # 新しい設定を読み込む
+                        config["use_api_for_images"] = value.strip().lower() == "true"
     if not config["app_id"]: config["app_id"] = os.getenv("RAKUTEN_APP_ID")
     if not config["access_key"]: config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
     if not config["affiliate_id"]: config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
+    if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"): config["use_api_for_images"] = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
     return config
 
 rak_config = load_rakuten_config()
@@ -110,18 +113,17 @@ def load_csv_dict_list(path):
 
 def fetch_rakuten_data(jan):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
-    if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or jan == '#': return None
+    if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY: return None
     
     # 2026年統合認証仕様
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search" # バージョン指定なし
     headers = {
         "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
-        "X-Rakuten-Access-Key": RAKUTEN_ACCESS_KEY
+        "Authorization": f"Bearer {RAKUTEN_ACCESS_KEY.strip()}"
     }
     params = {
         "format": "json",
         "keyword": jan,
-        "access_key": RAKUTEN_ACCESS_KEY,
         "hits": 1
     }
     if RAKUTEN_AFFILIATE_ID:
@@ -131,8 +133,8 @@ def fetch_rakuten_data(jan):
         # API負荷軽減のためわずかに待機
         time.sleep(0.5) # 並列実行されるため、少し長めに設定して制限(1req/sec)を回避
         resp = requests.get(url, params=params, headers=headers, timeout=10)
-        data = resp.json()
-        if "Items" in data and len(data["Items"]) > 0:
+        if resp.status_code == 200:
+            data = resp.json()
             item = data["Items"][0]["Item"]
             # 中サイズ画像を優先取得
             images = item.get("mediumImageUrls", [])
@@ -177,13 +179,16 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
 
     # 1. 楽天APIで画像の検索を試みる
-    if img_val == '#' and jan_val != '#' and len(jan_val) == 13:
-        api_data = fetch_rakuten_data(jan_val)
-        if api_data:
-            if img_val == '#' and api_data["image"]:
-                row['img'] = api_data["image"]
-                img_val = api_data["image"]
-            # rak_val (アフィリエイトリンク) の自動更新は行わない
+    # API利用が有効 (use_api_for_imagesがTrue) で、かつJANコードがあり、img_valが未設定の場合のみAPIを試行
+    if rak_config["use_api_for_images"] and img_val == '#' and jan_val != '#' and len(jan_val) == 13:
+        api_data = fetch_rakuten_data(jan_val) # API呼び出し
+        if api_data and api_data["image"]:
+            row['img'] = api_data["image"]
+            img_val = api_data["image"]
+        else:
+            # APIからの画像取得に失敗した場合、警告を出して推測モードに切り替える
+            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の楽天APIからの画像取得に失敗しました。推測モードに切り替えます。")
+
 
     # 2. APIで見つからなかった場合のフォールバック（推測リスト）
     if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
