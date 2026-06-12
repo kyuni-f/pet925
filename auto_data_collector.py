@@ -13,8 +13,8 @@ def load_config():
     if os.path.exists(".env"):
         with open(".env", "r", encoding="utf-8-sig") as f:
             for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
+                line = line.split('#')[0].strip()
+                if not line:
                     continue
                 if "=" in line:
                     parts = line.split("=", 1)
@@ -39,16 +39,20 @@ def fetch_rakuten_official_data(jan):
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
     
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20260401"
+    # 2026年統合認証対応
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    headers = {
+        "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
+        "X-Rakuten-Access-Key": RAKUTEN_ACCESS_KEY
+    }
     params = {
         "format": "json",
         "keyword": jan,
-        "applicationId": RAKUTEN_APP_ID,
-        "applicationSecret": RAKUTEN_ACCESS_KEY,
+        "access_key": RAKUTEN_ACCESS_KEY,
         "hits": 1
     }
     try:
-        resp = requests.get(url, params=params, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
         data = resp.json()
         if "Items" in data and len(data["Items"]) > 0:
             item = data["Items"][0]["Item"]

@@ -40,14 +40,16 @@ def load_rakuten_config():
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8-sig") as f:
             for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"): continue
+                line = line.split('#')[0].strip()
+                if not line: continue
                 if "=" in line:
                     key, value = line.split("=", 1)
-                    if key.strip() == "RAKUTEN_APP_ID":
-                        config["app_id"] = value.strip().strip("'").strip('"')
-                    elif key.strip() == "RAKUTEN_ACCESS_KEY":
-                        config["access_key"] = value.strip().strip("'").strip('"')
+                    key_clean = key.strip()
+                    val_clean = value.strip().strip("'").strip('"')
+                    if key_clean == "RAKUTEN_APP_ID":
+                        config["app_id"] = val_clean
+                    elif key_clean in ["RAKUTEN_ACCESS_KEY", "RAKUTEN_APPLICATION_SECRET"]:
+                        config["access_key"] = val_clean
                     elif key.strip() == "RAKUTEN_AFFILIATE_ID":
                         config["affiliate_id"] = value.strip().strip("'").strip('"')
     if not config["app_id"]: config["app_id"] = os.getenv("RAKUTEN_APP_ID")
@@ -110,15 +112,16 @@ def fetch_rakuten_data(jan):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or jan == '#': return None
     
-    # 2026年最新版エンドポイント
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20260401"
+    # 2026年統合認証仕様
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
     headers = {
         "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
-        "X-Rakuten-Application-Secret": RAKUTEN_ACCESS_KEY
+        "X-Rakuten-Access-Key": RAKUTEN_ACCESS_KEY
     }
     params = {
         "format": "json",
         "keyword": jan,
+        "access_key": RAKUTEN_ACCESS_KEY,
         "hits": 1
     }
     if RAKUTEN_AFFILIATE_ID:
