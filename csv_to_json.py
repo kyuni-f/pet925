@@ -33,20 +33,31 @@ DEFAULT_RAKUTEN_IMAGE_SHOPS = [
 
 # 楽天API・アフィリエイト設定の読み込み
 def load_rakuten_config():
-    config = {"app_id": None, "affiliate_id": None}
-    if os.path.exists(".env"):
-        with open(".env", "r", encoding="utf-8") as f:
+    config = {"app_id": None, "access_key": None, "affiliate_id": None}
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(base_dir, ".env")
+    
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8-sig") as f:
             for line in f:
-                if line.startswith("RAKUTEN_APP_ID="):
-                    config["app_id"] = line.split("=", 1)[1].strip().strip("'").strip('"')
-                if line.startswith("RAKUTEN_AFFILIATE_ID="):
-                    config["affiliate_id"] = line.split("=", 1)[1].strip().strip("'").strip('"')
+                line = line.strip()
+                if not line or line.startswith("#"): continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    if key.strip() == "RAKUTEN_APP_ID":
+                        config["app_id"] = value.strip().strip("'").strip('"')
+                    elif key.strip() == "RAKUTEN_ACCESS_KEY":
+                        config["access_key"] = value.strip().strip("'").strip('"')
+                    elif key.strip() == "RAKUTEN_AFFILIATE_ID":
+                        config["affiliate_id"] = value.strip().strip("'").strip('"')
     if not config["app_id"]: config["app_id"] = os.getenv("RAKUTEN_APP_ID")
+    if not config["access_key"]: config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
     if not config["affiliate_id"]: config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
     return config
 
 rak_config = load_rakuten_config()
 RAKUTEN_APP_ID = rak_config["app_id"]
+RAKUTEN_ACCESS_KEY = rak_config["access_key"]
 RAKUTEN_AFFILIATE_ID = rak_config["affiliate_id"]
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
@@ -97,16 +108,26 @@ def load_csv_dict_list(path):
 
 def fetch_rakuten_data(jan):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
-    if not RAKUTEN_APP_ID or jan == '#': return None
+    if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or jan == '#': return None
     
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706?format=json&keyword={jan}&applicationId={RAKUTEN_APP_ID}&hits=1"
+    # 2026年最新版エンドポイント
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20260401"
+    headers = {
+        "X-Rakuten-Application-Id": RAKUTEN_APP_ID,
+        "X-Rakuten-Application-Secret": RAKUTEN_ACCESS_KEY
+    }
+    params = {
+        "format": "json",
+        "keyword": jan,
+        "hits": 1
+    }
     if RAKUTEN_AFFILIATE_ID:
-        url += f"&affiliateId={RAKUTEN_AFFILIATE_ID}"
+        params["affiliateId"] = RAKUTEN_AFFILIATE_ID
 
     try:
         # API負荷軽減のためわずかに待機
         time.sleep(0.5) # 並列実行されるため、少し長めに設定して制限(1req/sec)を回避
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
         data = resp.json()
         if "Items" in data and len(data["Items"]) > 0:
             item = data["Items"][0]["Item"]

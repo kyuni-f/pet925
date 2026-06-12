@@ -11,19 +11,22 @@ def load_config():
     """.envファイルから環境変数を読み込む"""
     config = {}
     if os.path.exists(".env"):
-        with open(".env", "r", encoding="utf-8") as f:
+        with open(".env", "r", encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
                 if "=" in line:
-                    key, value = line.split("=", 1)
-                    config[key.strip()] = value.strip().strip("'").strip('"')
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        key, value = parts
+                        config[key.strip()] = value.strip().strip("'").strip('"')
     return config
 
 config = load_config()
 API_KEY = config.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 RAKUTEN_APP_ID = config.get("RAKUTEN_APP_ID")
+RAKUTEN_ACCESS_KEY = config.get("RAKUTEN_ACCESS_KEY")
 
 if not API_KEY:
     print("❌ エラー: 環境変数 GEMINI_API_KEY が設定されていません。")
@@ -33,12 +36,19 @@ if not API_KEY:
 
 def fetch_rakuten_official_data(jan):
     """楽天APIを使用して、JANコードから公式の商品名と画像URLを取得する"""
-    if not RAKUTEN_APP_ID or not jan or jan == '#':
+    if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
     
-    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706?format=json&keyword={jan}&applicationId={RAKUTEN_APP_ID}&hits=1"
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20260401"
+    params = {
+        "format": "json",
+        "keyword": jan,
+        "applicationId": RAKUTEN_APP_ID,
+        "applicationSecret": RAKUTEN_ACCESS_KEY,
+        "hits": 1
+    }
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, params=params, timeout=10)
         data = resp.json()
         if "Items" in data and len(data["Items"]) > 0:
             item = data["Items"][0]["Item"]
