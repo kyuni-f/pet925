@@ -33,6 +33,7 @@ const AFFILIATE_CONFIG = {
 let activeFilters = {}; 
 let searchInputDebounceTimer = null; // 検索入力専用のデバウンスタイマー
 let analyticsDebounceTimer = null; // アナリティクス送信用のデバウンスタイマー
+let lastRenderStateKey = ""; // 重複描画防止用のキー
 let currentTotalMatchCount = 0; // 最新の検索結果件数を保持
 let tagLookupMap = {}; 
 let brandLookupMap = {}; // ブランドのkeyから表示名へのマップ
@@ -117,18 +118,34 @@ const getTagLookup = () => { // タグのIDから日本語名を取得するた�
     return lookup;
 };
 
-function toggleFavorite(id, nameForLog) { // お気に入りの登録・解除を切り替え（ID管理）
+function toggleFavorite(id, nameForLog, btnElement) { // お気に入りの登録・解除を切り替え
     const index = favorites.indexOf(id);
+    let isFav = false;
     if (index > -1) {
         favorites.splice(index, 1);
         trackEvent('Favorites', 'remove', nameForLog);
+        isFav = false;
     } else {
         favorites.push(id);
         trackEvent('Favorites', 'add', nameForLog);
+        isFav = true;
     }
     localStorage.setItem('pet925_favs', JSON.stringify(favorites));
     updateFavoriteButtonUI();
-    render(false);
+
+    // 全画面再描画を避け、ボタンの状態だけを直接書き換える（UX向上と無駄な画像ロード防止）
+    if (btnElement) {
+        btnElement.classList.toggle('active', isFav);
+        btnElement.innerHTML = isFav ? '❤' : '♡';
+        btnElement.setAttribute('data-tooltip', isFav ? 'お気に入りから削除' : 'お気に入りに追加');
+        btnElement.setAttribute('aria-label', isFav ? 'お気に入りから削除' : 'お気に入りに追加');
+    }
+
+    // 「お気に入り限定表示」モードの時だけは、カードが消える必要があるため再描画する
+    if (showFavoritesOnly) {
+        render(false);
+        return;
+    }
 }
 
 function clearAllFavorites() { // お気に入り一括解除の確認モーダルを表示
@@ -505,12 +522,17 @@ function tryNextImageSource(imgElement, allSourcesJson, defaultImg) {
         return;
     }
 
+    // ブラウザが付与した絶対パスと、JSON内の相対/絶対URLの揺れを考慮して比較
     const currentSrc = imgElement.src;
-    const currentIndex = sources.indexOf(currentSrc);
+    const currentIndex = sources.findIndex(src => currentSrc.includes(src));
 
     if (currentIndex !== -1 && currentIndex < sources.length - 1) {
-        // 次のソースを試す
-        imgElement.src = sources[currentIndex + 1];
+        // 次のソースを試す（無限ループ防止のため1回限り試行をマーク）
+        const nextSrc = sources[currentIndex + 1];
+        if (imgElement.getAttribute('data-last-tried') !== nextSrc) {
+            imgElement.setAttribute('data-last-tried', nextSrc);
+            imgElement.src = nextSrc;
+        }
     } else {
         // これ以上試すソースがない場合、または現在のソースがリストにない場合、デフォルト画像にフォールバック
         imgElement.src = defaultImg;
@@ -527,11 +549,17 @@ function getProductImageSrc(item, defaultImg) { // 商品画像のURLを決定�
 window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更新の実行
     if (!searchWorker || !isWorkerReady) return;
     if (isTyping) visibleCount = PAGE_SIZE;
-    const searchWords = document.getElementById('search-input').value.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
+    const searchVal = document.getElementById('search-input').value;
+    const searchWords = searchVal.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
+
+    // 現在の検索状態をキー化して、前回と全く同じなら処理をスキップ（重複リクエスト防止）
+    const currentStateKey = JSON.stringify({searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites});
+    if (currentStateKey === lastRenderStateKey) return;
+    lastRenderStateKey = currentStateKey;
+
     renderActiveChips();
     updateFavoriteButtonUI();
 
-    // Workerへの命令とURL更新を即座に実行（入力のデバウンスはhandleSearchInput側で制御済み）
     searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
     updateURLAndGA4();
 }
@@ -609,7 +637,16 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${item.name}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${item.img.replace(/`/g, '\\`')}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${item.img.replace(/`/g, '\\`')}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${item.name.replace(/'/g, "\\'")}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.id}', '${item.name.replace(/'/g, "\\'")}')" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+
+        // HTML属性内（特にJavaScript呼び出し）でのクォート競合による SyntaxError を防ぐためのエスケープ処理
+        // 1. JSの文字列リテラルとして成立させるためのシングルクォート/バックティック処理
+        // 2. HTML属性の終了を防ぐためのダブルクォート処理 ( &quot; )
+        const safeName = String(item.name || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const safeId = String(item.id || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
+        const altName = String(item.name || "").replace(/"/g, '&quot;');
+
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

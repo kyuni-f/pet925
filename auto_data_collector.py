@@ -7,8 +7,9 @@ import io
 import requests
 import time
 
-def load_env():
-    """.envファイルから環境変数を手動で読み込む（標準ライブラリのみ）"""
+def load_config():
+    """.envファイルから環境変数を読み込む"""
+    config = {}
     if os.path.exists(".env"):
         with open(".env", "r", encoding="utf-8") as f:
             for line in f:
@@ -17,18 +18,36 @@ def load_env():
                     continue
                 if "=" in line:
                     key, value = line.split("=", 1)
-                    if key.strip() == "GEMINI_API_KEY":
-                        # 前後の空白や引用符 (" または ') を取り除く
-                        return value.strip().strip("'").strip('"')
-    return os.getenv("GEMINI_API_KEY")
+                    config[key.strip()] = value.strip().strip("'").strip('"')
+    return config
 
-API_KEY = load_env()
+config = load_config()
+API_KEY = config.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+RAKUTEN_APP_ID = config.get("RAKUTEN_APP_ID")
 
 if not API_KEY:
     print("❌ エラー: 環境変数 GEMINI_API_KEY が設定されていません。")
     print("💡 解決策: .envファイルに GEMINI_API_KEY=あなたのキー と書き込むか、")
     print("   ターミナルで 'export GEMINI_API_KEY=取得したキー' を実行してください。")
     sys.exit(1)
+
+def fetch_rakuten_official_data(jan):
+    """楽天APIを使用して、JANコードから公式の商品名と画像URLを取得する"""
+    if not RAKUTEN_APP_ID or not jan or jan == '#':
+        return None
+    
+    url = f"https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706?format=json&keyword={jan}&applicationId={RAKUTEN_APP_ID}&hits=1"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if "Items" in data and len(data["Items"]) > 0:
+            item = data["Items"][0]["Item"]
+            return {
+                "name": item.get("itemName"),
+                "image": item.get("mediumImageUrls", [{}])[0].get("imageUrl")
+            }
+    except:
+        return None
 
 def fetch_product_data(target_url):
     """
@@ -140,9 +159,34 @@ if __name__ == "__main__":
     target_url = sys.argv[1]
     try:
         result_csv = fetch_product_data(target_url)
+        
+        # 生成されたCSVを解析して、JANコードがあれば楽天APIで「正式データ」に補正する
+        f = io.StringIO(result_csv)
+        reader = list(csv.DictReader(f))
+        
+        if reader:
+            row = reader[0]
+            jan = row.get("jan", "#")
+            official = fetch_rakuten_official_data(jan)
+            
+            if official:
+                print(f"✨ 楽天APIから公式データを取得しました: {official['name'][:30]}...")
+                # AIが要約してしまった名前を「公式名称」に差し替え
+                row["name"] = official["name"]
+                # 画像URLも「確定URL」に差し替え（これでビルド時の推測リスト化を防ぐ）
+                row["img"] = official["image"]
+            
+            # 修正後のデータをCSV文字列に戻す
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=row.keys())
+            writer.writeheader()
+            writer.writerow(row)
+            result_csv = output.getvalue()
+
         print("-" * 30)
         print(result_csv)
         print("-" * 30)
-        print(f"✅ データ生成に成功しました！上記CSVをコピーして pet925_master.ods の products シートに貼り付けてください。")
+        print(f"✅ 楽天API連携済みのデータ生成に成功しました！")
+        print(f"💡 これを pet925_master.ods に貼り付けると、画像表示の失敗やコンソールの重複ロードが解消されます。")
     except Exception as e:
         print(f"❌ エラーが発生しました: {e}")

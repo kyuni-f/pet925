@@ -105,7 +105,7 @@ def fetch_rakuten_data(jan):
 
     try:
         # API負荷軽減のためわずかに待機
-        time.sleep(0.2) 
+        time.sleep(0.5) # 並列実行されるため、少し長めに設定して制限(1req/sec)を回避
         resp = requests.get(url, timeout=10)
         data = resp.json()
         if "Items" in data and len(data["Items"]) > 0:
