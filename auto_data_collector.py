@@ -45,8 +45,8 @@ def fetch_rakuten_official_data(jan):
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
     
-    # 2026年RAPネイティブエンドポイント
-    url = "https://api.rakuten.co.jp/ichiba/item/v1/search"
+    # ⭕ 2026年最新のマイクロサービス版URL
+    url = "https://rakuten.co.jp"
     params = {
         "keyword": jan,
         "hits": 1
@@ -58,12 +58,14 @@ def fetch_rakuten_official_data(jan):
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         data = resp.json()
-        items = data.get("items", [])
+        # RAP Native と Legacy 両方のレスポンス構造に対応
+        items = data.get("items") or data.get("Items", [])
         if items:
-            item = items[0]
+            entry = items[0]
+            item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
             return {
-                "name": item.get("itemName"),
-                "image": item.get("image_url") or item.get("medium_image_urls", [None])[0]
+                "name": item.get("itemName") or item.get("name"),
+                "image": item.get("image_url") or item.get("medium_image_urls", [None])[0] or item.get("mediumImageUrls", [{}])[0].get("imageUrl")
             }
     except:
         return None

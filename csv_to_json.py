@@ -118,8 +118,8 @@ def fetch_rakuten_data(jan):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
     if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY: return None
     
-    # 2026年RAPネイティブエンドポイント
-    url = "https://api.rakuten.co.jp/ichiba/item/v1/search"
+    # ⭕ 2026年最新のマイクロサービス版URL
+    url = "https://rakuten.co.jp"
     params = {
         "keyword": jan,
         "hits": 1
@@ -137,11 +137,12 @@ def fetch_rakuten_data(jan):
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            items = data.get("items", [])
+            items = data.get("items") or data.get("Items", [])
             if not items: return None
-            item = items[0]
+            entry = items[0]
+            item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
             
-            img_url = item.get("image_url") or item.get("medium_image_urls", [None])[0]
+            img_url = item.get("image_url") or item.get("medium_image_urls", [None])[0] or item.get("mediumImageUrls", [{}])[0].get("imageUrl")
             return {
                 "image": img_url,
                 "url": None # アフィリエイトリンクは取得せず、検索リンクに任せる
