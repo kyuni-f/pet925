@@ -9,6 +9,8 @@ import time
 import concurrent.futures
 import difflib
 import requests
+import random
+
 
 
 # 設定
@@ -27,8 +29,11 @@ OUTPUT_MASTER_JS = 'data_master.js'
 # 優先度の高い順に並べてください。
 DEFAULT_RAKUTEN_IMAGE_SHOPS = [
     'rakuten24',         # 楽天24 (大手でJANコード管理がしっかりしている可能性が高い)
-    'pet-gardeninglife', # 現在使用中のショップ
-    'net-baby',          # 新しく追加したいショップID
+    'petgo',             # ペットゴー (ペット用品大手、自社物流)
+    'chanet',            # チャーム (ペット用品最大手、JAN画像あり)
+    'pet-kan',           # ペット館 (ペット用品大手)
+    'pet-gardeninglife', # チャーム（別ID・ペットガーデニングライフ）
+    'net-baby',          # ネットベビー
 ]
 
 # 楽天API・アフィリエイト設定の読み込み
@@ -138,39 +143,60 @@ def fetch_rakuten_data(jan):
         "Referer": YOUR_REGISTERED_DOMAIN + "/"
     }
 
-    try:
-        # API負荷軽減のためわずかに待機
-        time.sleep(0.5) # 並列実行されるため、少し長めに設定して制限(1req/sec)を回避
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items") or data.get("Items", [])
-            if not items: return None
-            entry = items[0]
-            item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # 衝突回避のためのジッター待機
+            # attempt=0 の時は 0.2〜0.7秒、リトライ毎に待機時間を延ばす
+            wait_time = 0.2 + random.uniform(0.1, 0.5) * (attempt + 1)
+            time.sleep(wait_time)
             
-            raw_image = None
-            if isinstance(item, dict):
-                if item.get("image_url"):
-                    raw_image = item.get("image_url")
+            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("items") or data.get("Items", [])
+                if not items: return None
+                entry = items[0]
+                item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
+                
+                raw_image = None
+                if isinstance(item, dict):
+                    if item.get("image_url"):
+                        raw_image = item.get("image_url")
+                    else:
+                        urls_list = item.get("medium_image_urls") or item.get("mediumImageUrls")
+                        if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
+                            first_item = urls_list[0]
+                            if isinstance(first_item, dict):
+                                raw_image = first_item.get("imageUrl")
+                            else:
+                                raw_image = first_item
+
+                # 画像URLを高画質化 (パラメータ ?_ex=... を削除)
+                high_res_image = re.sub(r"\?_ex=.*$", "", raw_image) if raw_image else None
+
+                return {
+                    "image": high_res_image,
+                    "url": None # アフィリエイトリンクは取得せず、検索リンクに任せる
+                }
+            elif resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    # 429超過時はリトライを促すため長めにスリープ (1.5〜2.5秒)
+                    time.sleep(1.5 + random.uniform(0.1, 1.0))
+                    continue
                 else:
-                    urls_list = item.get("medium_image_urls") or item.get("mediumImageUrls")
-                    if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
-                        first_item = urls_list[0]
-                        if isinstance(first_item, dict):
-                            raw_image = first_item.get("imageUrl")
-                        else:
-                            raw_image = first_item
-
-            # 画像URLを高画質化 (パラメータ ?_ex=... を削除)
-            high_res_image = re.sub(r"\?_ex=.*$", "", raw_image) if raw_image else None
-
-            return {
-                "image": high_res_image,
-                "url": None # アフィリエイトリンクは取得せず、検索リンクに任せる
-            }
-    except:
-        return None
+                    print(f"❌ APIレート制限超過 (JAN {jan}): リトライ上限に達しました (429)")
+                    return None
+            else:
+                print(f"⚠️ APIステータスエラー (JAN {jan}): {resp.status_code} - {resp.text[:150]}")
+                return None
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(1.0 + random.uniform(0.1, 0.5))
+                continue
+            print(f"⚠️ API接続エラー (JAN {jan}): {e}")
+            return None
+    return None
 
 def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids):
     """1行分の重い処理を担当するワーカー関数"""
@@ -214,16 +240,29 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
             img_val = api_data["image"]
         else:
             # APIからの画像取得に失敗した場合、警告を出して推測モードに切り替える
-            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の楽天APIからの画像取得に失敗しました。推測モードに切り替えます。")
+            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の楽天APIからの画像取得に失敗しました。推測モード（実在確認付き）に切り替えます。")
 
 
-    # 2. APIで見つからなかった場合のフォールバック（推測リスト）
+    # 2. APIで見つからなかった場合のフォールバック（推測リストから実在する画像を事前確認）
     if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
-        potential_img_urls = []
+        found_img_url = None
         for shop_id in rakuten_shop_ids:
-            potential_img_urls.append(f"https://thumbnail.image.rakuten.co.jp/@0_mall/{shop_id}/cabinet/jan/{jan_val}.jpg")
-        # JSON文字列として保存し、ブラウザ側でフォールバック処理を行う
-        row['img'] = json.dumps(potential_img_urls)
+            test_url = f"https://thumbnail.image.rakuten.co.jp/@0_mall/{shop_id}/cabinet/jan/{jan_val}.jpg"
+            try:
+                # タイムアウトは短めに設定(2秒)し、実在するかHEADリクエストで確認
+                resp = requests.head(test_url, timeout=2.0)
+                if resp.status_code == 200:
+                    found_img_url = test_url
+                    row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の画像をショップ '{shop_id}' から検出しました！")
+                    break
+            except Exception:
+                pass
+        
+        if found_img_url:
+            row['img'] = found_img_url
+        else:
+            row['img'] = '#'
+            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の画像はどの推測ショップからも検出できませんでした。")
 
     current_kws = []
 
