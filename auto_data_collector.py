@@ -6,6 +6,8 @@ import csv
 import io
 import requests
 import time
+import re
+
 
 def load_config():
     """.envファイルから環境変数を読み込む"""
@@ -46,26 +48,49 @@ def fetch_rakuten_official_data(jan):
         return None
     
     # ⭕ 2026年最新のマイクロサービス版URL
-    url = "https://rakuten.co.jp"
+    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
     params = {
+        "applicationId": RAKUTEN_APP_ID.strip(),
+        "accessKey": RAKUTEN_ACCESS_KEY.strip(),
         "keyword": jan,
-        "hits": 1
+        "hits": 1,
+        "format": "json",
+        "formatVersion": 2
     }
+    
+    YOUR_REGISTERED_DOMAIN = "https://kyuni-f.github.io/pet925/"
     headers = {
-        "Authorization": RAKUTEN_ACCESS_KEY.strip(),
-        "X-Rakuten-Application-Id": RAKUTEN_APP_ID.strip()
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Origin": YOUR_REGISTERED_DOMAIN,
+        "Referer": YOUR_REGISTERED_DOMAIN + "/"
     }
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         data = resp.json()
-        # RAP Native と Legacy 両方のレスポンス構造に対応
         items = data.get("items") or data.get("Items", [])
         if items:
             entry = items[0]
             item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
+            
+            raw_image = None
+            if isinstance(item, dict):
+                if item.get("image_url"):
+                    raw_image = item.get("image_url")
+                else:
+                    urls_list = item.get("medium_image_urls") or item.get("mediumImageUrls")
+                    if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
+                        first_item = urls_list[0]
+                        if isinstance(first_item, dict):
+                            raw_image = first_item.get("imageUrl")
+                        else:
+                            raw_image = first_item
+            
+            # 画像URLを高画質化 (パラメータ ?_ex=... を削除)
+            high_res_image = re.sub(r"\?_ex=.*$", "", raw_image) if raw_image else None
+
             return {
                 "name": item.get("itemName") or item.get("name"),
-                "image": item.get("image_url") or item.get("medium_image_urls", [None])[0] or item.get("mediumImageUrls", [{}])[0].get("imageUrl")
+                "image": high_res_image
             }
     except:
         return None

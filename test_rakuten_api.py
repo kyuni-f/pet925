@@ -63,19 +63,20 @@ else:
     test_jan = "4902418803128"
 
     # ⭕ 2026年最新のマイクロサービス版URL
-    url = "https://rakuten.co.jp"
+    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 
     params = {
+        "applicationId": app_id.strip(),
+        "accessKey": access_key.strip(),
         "keyword": test_jan,
         "hits": 1,
-        "format": "json"
+        "format": "json",
+        "formatVersion": 2
     }
 
     YOUR_REGISTERED_DOMAIN = "https://kyuni-f.github.io/pet925/"  # ←ご自身の登録ドメインに書き換えてください
 
     headers = {
-        "Authorization": access_key.strip(),
-        "X-Rakuten-Application-Id": app_id.strip(),
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Origin": YOUR_REGISTERED_DOMAIN,
         "Referer": YOUR_REGISTERED_DOMAIN + "/"
@@ -98,8 +99,22 @@ else:
                     print(f" 成功: 商品が見つかりました！")
                     print(f" 商品名: {item_name[:50]}...")
 
-                    # 画像URLの取得 (RAP Native の構造に対応)
-                    image_url = item.get("image_url") or item.get("medium_image_urls", [None])[0] or item.get("mediumImageUrls", [{}])[0].get("imageUrl")
+                    # 画像URLの取得 (RAP Native や新API の多様な構造に対応)
+                    image_url = None
+                    if isinstance(item, dict):
+                        # 直下の 'image_url' をチェック
+                        if item.get("image_url"):
+                            image_url = item.get("image_url")
+                        else:
+                            # 'medium_image_urls' または 'mediumImageUrls' リストをチェック
+                            urls_list = item.get("medium_image_urls") or item.get("mediumImageUrls")
+                            if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
+                                first_item = urls_list[0]
+                                if isinstance(first_item, dict):
+                                    image_url = first_item.get("imageUrl")
+                                else:
+                                    image_url = first_item
+
                     if image_url:
                         print(f" 画像URL: {image_url}")
                     else:
