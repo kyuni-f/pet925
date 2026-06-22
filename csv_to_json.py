@@ -119,7 +119,93 @@ def load_csv_dict_list(path):
         reader = csv.DictReader(f)
         return list(reader)
 
-def fetch_rakuten_data(jan):
+# NG ワード（これらが API の商品名に含まれていたら除外）
+_API_FORBIDDEN_WORDS = [
+    "セット", "ケース", "まとめ買い", "まとめ", "箱", "ボックス",
+    "set", "case", "box", "pack", "パック",
+    "24本", "48本", "12本", "6本",  # 本数入りセット商品を除外
+]
+
+def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -> bool:
+    """
+    楽天 API から返ってきた商品名が、元の CSVデータと合致しているか簡易判定する。
+
+    - 禁止ワードが含まれていれば除外
+    - CSVの商品名・ブランド名から抽出したキーワードが
+      API 商品名に「1つも含まれない」場合は除外
+    """
+    api_name_norm = normalize_text(api_item_name)
+
+    # ① 禁止ワードチェック（元の形 + 正規化後、両方でチェック）
+    for fw in _API_FORBIDDEN_WORDS:
+        if fw in api_item_name or normalize_text(fw) in api_name_norm:
+            return False
+
+    # ② ブランド名や商品名からキーワードを抽出して照合
+    # 3文字以上のトークンのみを対象にする（「の」「で」などを除外）
+    def extract_keywords(text):
+        norm = normalize_text(text)
+        # 英数字・日本語トークン（スペース区切り）で分割し、長いものを優先
+        tokens = re.split(r'[\s・/\-_,()（）【】\[\]]+', norm)
+        return [t for t in tokens if len(t) >= 3]
+
+    csv_keywords = extract_keywords(product_name) + extract_keywords(brand_name)
+    if not csv_keywords:
+        return True  # キーワードが抽出できなければチェックをスキップ
+
+    # CSV から抽出したキーワードのうち、1つでも API 商品名に含まれていれば OK
+    matched = any(kw in api_name_norm for kw in csv_keywords)
+    return matched
+
+
+# ===== Layer 1: 画像URL パターン検査 =====
+
+# これらのパスが URL に含まれていたらロゴ・宣伝用画像の可能性が高い → スコアを下げる
+_IMAGE_URL_BAD_PATTERNS = [
+    "/logo/", "/banner/", "/promo/", "/promotion/", "/campaign/",
+    "/header/", "/footer/", "/top/",
+    "_logo", "logo_", "_banner", "banner_",
+    "free_ship", "freeship", "送料無料",
+    "point", "coupon", "sale_", "_sale",
+    "tokubai",   # 特売
+    "osusume",   # おすすめ帯
+    "ranking",
+]
+
+# これらのパスが URL に含まれていたら正規の商品画像の可能性が高い → スコアを上げる
+_IMAGE_URL_GOOD_PATTERNS = [
+    "/cabinet/jan/",   # JANコード管理画像（最も信頼性高）
+    "/item/",          # 商品個別画像
+    "/product/",
+    "thumbnail.image.rakuten.co.jp",  # 楽天画像CDN（商品画像が集中）
+]
+
+
+def _score_image_url(url: str) -> int:
+    """
+    画像URLのパターンから「クリーンな商品画像らしさ」をスコアリングする。
+
+    Returns:
+        int: スコア値。高いほど商品パッケージのみのクリーンな画像である可能性が高い。
+             NG パターンにヒットすると -10 の大きなペナルティ。
+    """
+    if not url:
+        return 0
+    url_lower = url.lower()
+    score = 0
+
+    for bad in _IMAGE_URL_BAD_PATTERNS:
+        if bad.lower() in url_lower:
+            score -= 10  # NG パターン1件につき大きなペナルティ
+
+    for good in _IMAGE_URL_GOOD_PATTERNS:
+        if good.lower() in url_lower:
+            score += 5   # Good パターン1件につきボーナス
+
+    return score
+
+
+def fetch_rakuten_data(jan, product_name="", brand_name=""):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
     if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY: return None
     
@@ -129,7 +215,7 @@ def fetch_rakuten_data(jan):
         "applicationId": RAKUTEN_APP_ID.strip(),
         "accessKey": RAKUTEN_ACCESS_KEY.strip(),
         "keyword": jan,
-        "hits": 1,
+        "hits": 5,  # 複数件取得して最適なものを選ぶ
         "format": "json",
         "formatVersion": 2
     }
@@ -156,11 +242,23 @@ def fetch_rakuten_data(jan):
                 data = resp.json()
                 items = data.get("items") or data.get("Items", [])
                 if not items: return None
-                entry = items[0]
-                item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
-                
-                raw_image = None
-                if isinstance(item, dict):
+
+                # --- 商品名 & URL パターンフィルタリング: 全候補にスコアを付けて最適な1件を選ぶ ---
+                candidates = []  # [(score, raw_image_url), ...]
+                for entry in items:
+                    item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
+                    if not isinstance(item, dict):
+                        continue
+
+                    api_item_name = item.get("itemName") or item.get("item_name") or ""
+
+                    # ① 商品名の合致チェック（NG ならスキップ）
+                    if api_item_name and not _is_api_item_valid(api_item_name, product_name, brand_name):
+                        print(f"   🚫 商品名不一致スキップ: 「{api_item_name[:40]}」(JAN:{jan})")
+                        continue
+
+                    # ② 画像URLの抽出
+                    raw_image = None
                     if item.get("image_url"):
                         raw_image = item.get("image_url")
                     else:
@@ -172,8 +270,26 @@ def fetch_rakuten_data(jan):
                             else:
                                 raw_image = first_item
 
+                    if not raw_image:
+                        continue
+
+                    # ③ [Layer 1] URL パターンスコアリング
+                    url_score = _score_image_url(raw_image)
+                    if url_score < -5:  # NG パターンが強い場合はスキップ
+                        print(f"   🚫 ロゴ/宣伝URL スキップ: {raw_image[:60]}... (score={url_score})")
+                        continue
+
+                    candidates.append((url_score, raw_image))
+
+                # スコアの高い順にソートして最上位を採用
+                candidates.sort(key=lambda x: x[0], reverse=True)
+                best_image = candidates[0][1] if candidates else None
+
+                if not best_image:
+                    return None
+
                 # 画像URLを高画質化 (パラメータ ?_ex=... を削除)
-                high_res_image = re.sub(r"\?_ex=.*$", "", raw_image) if raw_image else None
+                high_res_image = re.sub(r"\?_ex=.*$", "", best_image)
 
                 return {
                     "image": high_res_image,
@@ -234,7 +350,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     # 1. 楽天APIで画像の検索を試みる
     # API利用が有効 (use_api_for_imagesがTrue) で、かつJANコードがあり、img_valが未設定の場合のみAPIを試行
     if rak_config["use_api_for_images"] and img_val == '#' and jan_val != '#' and len(jan_val) == 13:
-        api_data = fetch_rakuten_data(jan_val) # API呼び出し
+        api_data = fetch_rakuten_data(jan_val, product_name=name, brand_name=brand_name)  # 商品名・ブランドも渡してフィルタリング
         if api_data and api_data["image"]:
             row['img'] = api_data["image"]
             img_val = api_data["image"]
