@@ -16,12 +16,14 @@
 ### 📂 Directory Structure
 - **`data/`** : `pet925_master.ods` (5シート構成のマスター), 各種CSV (products, categories, tags, brands, rules)
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
-- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト
+- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（画像フィルター含む）
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
-- **`product_data.json`** : 検索エンジンが読み込む商品データベース
+- **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
+- **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
 - **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
+- **`test_image_filter.py`** : 画像フィルター（年齢・URLスコアリング）の単体テスト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
 - **`package-lock.json`** : インストールされたライブラリのバージョンを完全に固定する「検品名簿」
 - **`docs/`** : `MANUAL.md` (運用手順書), `PROJECT_SUMMARY.md` (開発記録), `AI_INSTRUCTIONS.md` (AI用指示書)
@@ -35,24 +37,48 @@ npm install
 # 2. Pythonライブラリのインストール
 sudo apt install python3-requests
 
-# 2. データのビルド（CSV -> JSON 変換）
+# 3. データのビルド（CSV -> JSON 変換）
+npm run build
+# または
+python3 csv_to_json.py
+
+# 4. 画像フィルター更新後の再ビルド（既存 img URL を破棄して取り直す）
+python3 csv_to_json.py --force-refresh
+
+# 5. ファイル変更を監視しながらビルド（開発中）
 npm start
 
-# 3. データのビルド（明示的実行）
-npm run build
+# 6. 画像フィルターの単体テスト
+python3 -m unittest test_image_filter.py -v
 
-# 4. データの公開（デプロイ）
+# 7. データの公開（デプロイ）
 npm run deploy  # 検品、ビルド、コミット、プッシュを一括実行
 
-# 5. 強制同期（競合等でプッシュできない場合）
+# 8. 強制同期（競合等でプッシュできない場合）
 git push origin main --force
 
-# 6. VS Code 本体の更新 (Linux環境)
+# 9. VS Code 本体の更新 (Linux環境)
 sudo apt update && sudo apt install code
 
-# 7. APIで商品データを自動生成
+# 10. APIで商品データを自動生成
 python3 auto_data_collector.py ""
 ```
+
+> **画像フィルターを変更した場合**は、必ず `python3 csv_to_json.py --force-refresh` を実行してからデプロイしてください。通常の `npm run build` だけでは、CSVに既に保存された古い `img` URL は更新されません。
+
+## 🖼 画像自動取得フィルター（csv_to_json.py）
+
+楽天API・URL推測で商品画像を自動取得する際、以下の多層フィルターを適用しています。
+
+| レイヤー | 内容 |
+|---|---|
+| **商品名・サブ文字** | APIの `itemName` に加え `itemCaption` 等も照合。年齢（1歳/11歳）・容量（kg）・箱セット表記を検証 |
+| **年齢の厳密判定** | `(?<!\d)(\d+)歳` で部分一致を防止（「1歳」が「11歳」に誤マッチしない） |
+| **キーワード一致** | 1語だけの部分一致（サブ文字列）では通さず、複数キーワードの過半数一致を要求 |
+| **URLスコアリング** | ショップロゴ入りURL（pet oukoku 等）、`/cabinet/item/` 等の非JAN画像を大減点 |
+| **JAN優先** | `/cabinet/jan/{JAN}.jpg` 形式の画像を最優先採用 |
+
+**画像内の小さな文字（パッケージ印字の「11歳から」等）**はURLやAPIテキストだけでは判別できません。誤画像が残る場合は `img` 列に正しいURLを手動設定するか、ブックマークレットで取得してください（詳細は `docs/MANUAL.md`）。
 
 ## 🌐 カスタムドメインの導入手順
 将来的に独自ドメイン（例：www.pet925.com）を運用する際の手順です。
@@ -84,12 +110,13 @@ AI（Gemini等）を使用してデータ作成やコード修正を行う際は
 - **基盤**: 10万件対応 Web Worker 検索エンジン & Pythonビルドパイプラインの確立
 - **収益化**: もしもアフィリエイト統合 (Amazon/楽天/Yahoo!)
 - **UX**: モバイル最適化、お気に入り機能、GA4による検索分析
+- **画像品質**: 年齢・容量・ショップロゴを多層フィルタリングする画像自動取得
 
 ## 💡 便利な小技 (Tips)
 - **AIの差分適用（Apply）が失敗する場合**:
     1. ターミナルで `git checkout .` を実行して、中途半端な変更をリセットします。
     2. AIが出力したコードブロックを丸ごとコピーし、対象ファイルの内容を全選択して上書き貼り付けします。
-    3. 保存後、`npm run build` を実行してバリデーションが通るか確認します。
+    3. 保存後、`python3 csv_to_json.py --force-refresh` を実行してバリデーションと画像再取得を確認します。
 - **`package-lock.json` は手動で編集しない**: `npm install` 時に自動更新されます。常に Git に含めておくことで、どの環境でも全く同じように動作することを保証します。
 - **GitHubで全ファイルを見る**: リポジトリ画面で `.` (ピリオド) を押すとWebエディタが起動します。
 - **Linuxで隠しファイルを表示**: 

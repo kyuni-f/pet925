@@ -125,11 +125,19 @@ _API_FORBIDDEN_WORDS = [
     "セット", "ケース", "まとめ買い", "まとめ", "箱", "ボックス",
     "set", "case", "box", "pack", "パック",
     "24本", "48本", "12本", "6本",  # 本数入りセット商品を除外
+    "12袋", "×12", "x12", "500g×", "500g x", "個包装", "小分け包装", "小分け",
 ]
+
+# 箱売り・容量違いを検出（500g×12袋 等）
+_BULK_PACK_RE = re.compile(
+    r'500\s*g\s*[×x✕]\s*12|500\s*g\s*×\s*12\s*袋|6\s*kg\s*[\(（].*12',
+    re.IGNORECASE,
+)
 
 # 「1歳」と「11歳」を区別するため、直前に数字がない N歳 のみを抽出
 _AGE_TOKEN_RE = re.compile(r'(?<!\d)(\d+)歳')
 _AGE_FROM_RE = re.compile(r'(?<!\d)(\d+)歳から')
+_KG_VALUE_RE = re.compile(r'(\d+(?:\.\d+)?)\s*kg', re.IGNORECASE)
 
 
 def _extract_age_numbers(text: str) -> set:
@@ -137,6 +145,27 @@ def _extract_age_numbers(text: str) -> set:
     if not text:
         return set()
     return set(_AGE_TOKEN_RE.findall(text))
+
+
+def _extract_kg_values(text: str) -> set:
+    """テキストから kg 表記を抽出（'3kg' → {'3'}）"""
+    if not text:
+        return set()
+    norm = normalize_text(text)
+    return set(_KG_VALUE_RE.findall(norm))
+
+
+def _get_api_item_text(item: dict) -> str:
+    """API商品のメイン名＋サブ文字（キャプション等）を結合して返す"""
+    if not isinstance(item, dict):
+        return ""
+    parts = [
+        item.get("itemName") or item.get("item_name") or "",
+        item.get("itemCaption") or item.get("item_caption") or "",
+        item.get("catchcopy") or "",
+        item.get("itemSpec") or item.get("item_spec") or "",
+    ]
+    return " ".join(p for p in parts if p).strip()
 
 
 def _text_has_exact_age(text: str, age_num: str) -> bool:
@@ -147,60 +176,77 @@ def _text_has_exact_age(text: str, age_num: str) -> bool:
 
 
 def _keyword_matches_text(keyword: str, text: str) -> bool:
-    """キーワード照合。年齢を含む場合は厳密な境界マッチを使う。"""
+    """キーワード照合。年齢・英数字コードは厳密な境界マッチを使う。"""
     norm_kw = normalize_text(keyword)
     norm_text = normalize_text(text)
     age_in_kw = _AGE_TOKEN_RE.search(norm_kw)
     if age_in_kw:
         return _text_has_exact_age(text, age_in_kw.group(1))
+    # MCA-24 等の商品コードは部分一致（MCA-2 等）を防ぐ
+    if re.fullmatch(r'[a-z0-9\-]+', norm_kw):
+        return bool(re.search(rf'(?<![a-z0-9\-]){re.escape(norm_kw)}(?![a-z0-9\-])', norm_text))
     return norm_kw in norm_text
 
 
-def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -> bool:
+def _is_api_item_valid(
+    api_item_text: str,
+    product_name: str,
+    brand_name: str,
+    product_size: str = "",
+) -> bool:
     """
-    楽天 API から返ってきた商品名が、元の CSVデータと合致しているか簡易判定する。
+    楽天 API から返ってきた商品テキストが、元の CSVデータと合致しているか簡易判定する。
 
     - 禁止ワードが含まれていれば除外
     - CSVの商品名・ブランド名から抽出したキーワードが API 商品名に「1つも含まれない」場合は除外
     - 対象年齢（〇歳から）の数字が CSV と API で一致しない場合は除外
+    - 容量（kg）が CSV と矛盾する場合は除外
     """
-    api_name_norm = normalize_text(api_item_name)
+    if not api_item_text or not api_item_text.strip():
+        return False
+
+    api_name_norm = normalize_text(api_item_text)
 
     # ① 禁止ワードチェック（元の形 + 正規化後、両方でチェック）
     for fw in _API_FORBIDDEN_WORDS:
-        if fw in api_item_name or normalize_text(fw) in api_name_norm:
+        if fw in api_item_text or normalize_text(fw) in api_name_norm:
             return False
+    if _BULK_PACK_RE.search(api_item_text):
+        return False
 
     # ② 対象年齢チェック（「1歳」と「11歳」を正確に区別する）
-    # 例: CSV が「1歳から」の場合、API の「11歳から」は NG
     csv_age_nums = _extract_age_numbers(product_name)
     if csv_age_nums:
-        api_age_nums = _extract_age_numbers(api_item_name)
+        api_age_nums = _extract_age_numbers(api_item_text)
         # API側に年齢表記があるのに、CSV側と1つも一致しなければ除外
         if api_age_nums and csv_age_nums.isdisjoint(api_age_nums):
             return False
 
-        # CSV が「N歳から」と明示している場合、API 側にも同じ年齢の明示が必須
-        # （年齢表記のない箱セット画像などを除外）
+        # CSV が「N歳から」と明示している場合、API 側（サブ文字含む）にも同じ年齢の明示が必須
         required_from_ages = set(_AGE_FROM_RE.findall(product_name))
         if required_from_ages and not required_from_ages.issubset(api_age_nums):
             return False
 
+    # ②-b 容量チェック（1歳3kg 商品に 11歳6kg 箱セットが部分一致で通るのを防ぐ）
+    csv_kgs = _extract_kg_values(product_size)
+    api_kgs = _extract_kg_values(api_item_text)
+    if csv_kgs and api_kgs and csv_kgs.isdisjoint(api_kgs):
+        return False
+
     # ③ ブランド名や商品名からキーワードを抽出して照合
-    # 3文字以上のトークンのみを対象にする（「の」「で」などを除外）
     def extract_keywords(text):
         norm = normalize_text(text)
-        # 英数字・日本語トークン（スペース区切り）で分割し、長いものを優先
         tokens = re.split(r'[\s・/\-_,()（）【】\[\]]+', norm)
         return [t for t in tokens if len(t) >= 3]
 
     csv_keywords = extract_keywords(product_name) + extract_keywords(brand_name)
     if not csv_keywords:
-        return True  # キーワードが抽出できなければチェックをスキップ
+        return True
 
-    # CSV から抽出したキーワードのうち、1つでも API 商品名に含まれていれば OK
-    matched = any(_keyword_matches_text(kw, api_item_name) for kw in csv_keywords)
-    return matched
+    # サブ文字列1件一致では不十分。複数キーワードの過半数一致を要求
+    matched = sum(1 for kw in csv_keywords if _keyword_matches_text(kw, api_item_text))
+    min_required = max(1, (len(csv_keywords) + 1) // 2)
+    return matched >= min_required
 
 
 # ===== Layer 1: 画像URL パターン検査 =====
@@ -226,6 +272,12 @@ _IMAGE_URL_SHOP_EXCLUDE_PATTERNS = [
     "petoukokupremium",
     "/@0_mall/pet-oukoku/",
 ]
+
+# /cabinet/ 以下でも JAN 管理以外（item/shop 等）はショップロゴ合成の可能性大
+_IMAGE_URL_NON_JAN_CABINET_RE = re.compile(
+    r'/@0_mall/[^/]+/cabinet/(?!jan/)',
+    re.IGNORECASE,
+)
 
 # これらのパスが URL に含まれていたら正規の商品画像の可能性が高い → スコアを上げる
 _IMAGE_URL_GOOD_PATTERNS = [
@@ -253,6 +305,10 @@ def _score_image_url(url: str, product_name: str = "") -> int:
         if shop_bad.lower() in url_lower:
             return -100  # ショップロゴ入り画像は即除外
 
+    # 楽天ショップの cabinet/item 等（JAN管理外）はロゴ合成画像になりやすい
+    if _IMAGE_URL_NON_JAN_CABINET_RE.search(url):
+        score -= 50
+
     for bad in _IMAGE_URL_BAD_PATTERNS:
         if bad.lower() in url_lower:
             score -= 10  # NG パターン1件につき大きなペナルティ
@@ -271,7 +327,7 @@ def _score_image_url(url: str, product_name: str = "") -> int:
     return score
 
 
-def fetch_rakuten_data(jan, product_name="", brand_name=""):
+def fetch_rakuten_data(jan, product_name="", brand_name="", product_size=""):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
     if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY: return None
     
@@ -316,11 +372,12 @@ def fetch_rakuten_data(jan, product_name="", brand_name=""):
                     if not isinstance(item, dict):
                         continue
 
-                    api_item_name = item.get("itemName") or item.get("item_name") or ""
+                    api_item_text = _get_api_item_text(item)
 
-                    # ① 商品名の合致チェック（NG ならスキップ）
-                    if api_item_name and not _is_api_item_valid(api_item_name, product_name, brand_name):
-                        print(f"   🚫 商品名不一致スキップ: 「{api_item_name[:40]}」(JAN:{jan})")
+                    # ① 商品名＋サブ文字の合致チェック（NG ならスキップ）
+                    if not _is_api_item_valid(api_item_text, product_name, brand_name, product_size):
+                        label = api_item_text[:40] if api_item_text else "(テキストなし)"
+                        print(f"   🚫 商品名不一致スキップ: 「{label}」(JAN:{jan})")
                         continue
 
                     # ② 画像URLの抽出
@@ -346,6 +403,12 @@ def fetch_rakuten_data(jan, product_name="", brand_name=""):
                         continue
 
                     candidates.append((url_score, raw_image))
+
+                # JAN管理パスの画像を最優先（ロゴ合成の item/ 画像より信頼性が高い）
+                jan_path = f"/cabinet/jan/{jan.lower()}"
+                jan_candidates = [c for c in candidates if jan_path in c[1].lower()]
+                if jan_candidates:
+                    candidates = jan_candidates
 
                 # スコアの高い順にソートして最上位を採用
                 candidates.sort(key=lambda x: x[0], reverse=True)
@@ -421,7 +484,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     # 1. 楽天APIで画像の検索を試みる
     # API利用が有効 (use_api_for_imagesがTrue) で、かつJANコードがあり、img_valが未設定の場合のみAPIを試行
     if rak_config["use_api_for_images"] and img_val == '#' and jan_val != '#' and len(jan_val) == 13:
-        api_data = fetch_rakuten_data(jan_val, product_name=name, brand_name=brand_name)  # 商品名・ブランドも渡してフィルタリング
+        api_data = fetch_rakuten_data(jan_val, product_name=name, brand_name=brand_name, product_size=row.get('size', ''))
         if api_data and api_data["image"]:
             row['img'] = api_data["image"]
             img_val = api_data["image"]
