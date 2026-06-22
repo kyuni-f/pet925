@@ -10,6 +10,7 @@ import concurrent.futures
 import difflib
 import requests
 import random
+from urllib.parse import unquote
 
 
 
@@ -126,6 +127,35 @@ _API_FORBIDDEN_WORDS = [
     "24本", "48本", "12本", "6本",  # 本数入りセット商品を除外
 ]
 
+# 「1歳」と「11歳」を区別するため、直前に数字がない N歳 のみを抽出
+_AGE_TOKEN_RE = re.compile(r'(?<!\d)(\d+)歳')
+_AGE_FROM_RE = re.compile(r'(?<!\d)(\d+)歳から')
+
+
+def _extract_age_numbers(text: str) -> set:
+    """テキストから年齢数字を抽出（例: '11歳から' → {'11'}、'1' は含めない）"""
+    if not text:
+        return set()
+    return set(_AGE_TOKEN_RE.findall(text))
+
+
+def _text_has_exact_age(text: str, age_num: str) -> bool:
+    """指定年齢が単独トークンとして含まれるか（'1' が '11歳' に誤マッチしない）"""
+    if not text or not age_num:
+        return False
+    return bool(re.search(rf'(?<!\d){re.escape(age_num)}歳', normalize_text(text)))
+
+
+def _keyword_matches_text(keyword: str, text: str) -> bool:
+    """キーワード照合。年齢を含む場合は厳密な境界マッチを使う。"""
+    norm_kw = normalize_text(keyword)
+    norm_text = normalize_text(text)
+    age_in_kw = _AGE_TOKEN_RE.search(norm_kw)
+    if age_in_kw:
+        return _text_has_exact_age(text, age_in_kw.group(1))
+    return norm_kw in norm_text
+
+
 def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -> bool:
     """
     楽天 API から返ってきた商品名が、元の CSVデータと合致しているか簡易判定する。
@@ -143,11 +173,17 @@ def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -
 
     # ② 対象年齢チェック（「1歳」と「11歳」を正確に区別する）
     # 例: CSV が「1歳から」の場合、API の「11歳から」は NG
-    csv_ages = set(re.findall(r'\d+歳', product_name))
-    if csv_ages:
-        api_ages = set(re.findall(r'\d+歳', api_item_name))
+    csv_age_nums = _extract_age_numbers(product_name)
+    if csv_age_nums:
+        api_age_nums = _extract_age_numbers(api_item_name)
         # API側に年齢表記があるのに、CSV側と1つも一致しなければ除外
-        if api_ages and not csv_ages.intersection(api_ages):
+        if api_age_nums and csv_age_nums.isdisjoint(api_age_nums):
+            return False
+
+        # CSV が「N歳から」と明示している場合、API 側にも同じ年齢の明示が必須
+        # （年齢表記のない箱セット画像などを除外）
+        required_from_ages = set(_AGE_FROM_RE.findall(product_name))
+        if required_from_ages and not required_from_ages.issubset(api_age_nums):
             return False
 
     # ③ ブランド名や商品名からキーワードを抽出して照合
@@ -163,7 +199,7 @@ def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -
         return True  # キーワードが抽出できなければチェックをスキップ
 
     # CSV から抽出したキーワードのうち、1つでも API 商品名に含まれていれば OK
-    matched = any(kw in api_name_norm for kw in csv_keywords)
+    matched = any(_keyword_matches_text(kw, api_item_name) for kw in csv_keywords)
     return matched
 
 
@@ -181,6 +217,16 @@ _IMAGE_URL_BAD_PATTERNS = [
     "ranking",
 ]
 
+# 特定ショップのロゴ入り・宣伝画像（pet oukoku 等）→ 即除外レベルの大減点
+_IMAGE_URL_SHOP_EXCLUDE_PATTERNS = [
+    "pet-oukoku",
+    "petoukoku",
+    "pet_oukoku",
+    "pet oukoku",
+    "petoukokupremium",
+    "/@0_mall/pet-oukoku/",
+]
+
 # これらのパスが URL に含まれていたら正規の商品画像の可能性が高い → スコアを上げる
 _IMAGE_URL_GOOD_PATTERNS = [
     "/cabinet/jan/",   # JANコード管理画像（最も信頼性高）
@@ -190,7 +236,7 @@ _IMAGE_URL_GOOD_PATTERNS = [
 ]
 
 
-def _score_image_url(url: str) -> int:
+def _score_image_url(url: str, product_name: str = "") -> int:
     """
     画像URLのパターンから「クリーンな商品画像らしさ」をスコアリングする。
 
@@ -203,6 +249,10 @@ def _score_image_url(url: str) -> int:
     url_lower = url.lower()
     score = 0
 
+    for shop_bad in _IMAGE_URL_SHOP_EXCLUDE_PATTERNS:
+        if shop_bad.lower() in url_lower:
+            return -100  # ショップロゴ入り画像は即除外
+
     for bad in _IMAGE_URL_BAD_PATTERNS:
         if bad.lower() in url_lower:
             score -= 10  # NG パターン1件につき大きなペナルティ
@@ -210,6 +260,13 @@ def _score_image_url(url: str) -> int:
     for good in _IMAGE_URL_GOOD_PATTERNS:
         if good.lower() in url_lower:
             score += 5   # Good パターン1件につきボーナス
+
+    # URL 内の年齢表記が CSV 商品名と矛盾する場合も大減点
+    if product_name:
+        url_ages = _extract_age_numbers(unquote(url))
+        csv_ages = _extract_age_numbers(product_name)
+        if csv_ages and url_ages and csv_ages.isdisjoint(url_ages):
+            score -= 100
 
     return score
 
@@ -283,7 +340,7 @@ def fetch_rakuten_data(jan, product_name="", brand_name=""):
                         continue
 
                     # ③ [Layer 1] URL パターンスコアリング
-                    url_score = _score_image_url(raw_image)
+                    url_score = _score_image_url(raw_image, product_name)
                     if url_score < -5:  # NG パターンが強い場合はスキップ
                         print(f"   🚫 ロゴ/宣伝URL スキップ: {raw_image[:60]}... (score={url_score})")
                         continue
