@@ -131,8 +131,8 @@ def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -
     楽天 API から返ってきた商品名が、元の CSVデータと合致しているか簡易判定する。
 
     - 禁止ワードが含まれていれば除外
-    - CSVの商品名・ブランド名から抽出したキーワードが
-      API 商品名に「1つも含まれない」場合は除外
+    - CSVの商品名・ブランド名から抽出したキーワードが API 商品名に「1つも含まれない」場合は除外
+    - 対象年齢（〇歳から）の数字が CSV と API で一致しない場合は除外
     """
     api_name_norm = normalize_text(api_item_name)
 
@@ -141,7 +141,16 @@ def _is_api_item_valid(api_item_name: str, product_name: str, brand_name: str) -
         if fw in api_item_name or normalize_text(fw) in api_name_norm:
             return False
 
-    # ② ブランド名や商品名からキーワードを抽出して照合
+    # ② 対象年齢チェック（「1歳」と「11歳」を正確に区別する）
+    # 例: CSV が「1歳から」の場合、API の「11歳から」は NG
+    csv_ages = set(re.findall(r'\d+歳', product_name))
+    if csv_ages:
+        api_ages = set(re.findall(r'\d+歳', api_item_name))
+        # API側に年齢表記があるのに、CSV側と1つも一致しなければ除外
+        if api_ages and not csv_ages.intersection(api_ages):
+            return False
+
+    # ③ ブランド名や商品名からキーワードを抽出して照合
     # 3文字以上のトークンのみを対象にする（「の」「で」などを除外）
     def extract_keywords(text):
         norm = normalize_text(text)
@@ -314,7 +323,7 @@ def fetch_rakuten_data(jan, product_name="", brand_name=""):
             return None
     return None
 
-def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids):
+def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids, force_refresh=False):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
@@ -346,6 +355,11 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     img_val = row.get('img', '#').strip()
     rak_val = row.get('rak', '#').strip()
     jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
+
+    # --force-refresh 時は既存の画像URLを強制クリアして再取得する
+    if force_refresh and img_val != '#':
+        img_val = '#'
+        row['img'] = '#'
 
     # 1. 楽天APIで画像の検索を試みる
     # API利用が有効 (use_api_for_imagesがTrue) で、かつJANコードがあり、img_valが未設定の場合のみAPIを試行
@@ -429,7 +443,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     row['tags'] = tags
     return row, row_errors, row_warnings, norm_name, line_num
 
-def convert(exit_on_error=True):
+def convert(exit_on_error=True, force_refresh=False):
     print(f"--- 変換処理を開始します ---")
     start_time = time.perf_counter()
     global validation_errors, validation_warnings
@@ -529,7 +543,7 @@ def convert(exit_on_error=True):
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, DEFAULT_RAKUTEN_IMAGE_SHOPS) 
+        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, DEFAULT_RAKUTEN_IMAGE_SHOPS, force_refresh) 
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
@@ -640,10 +654,14 @@ def convert(exit_on_error=True):
         print(f"{COLOR_GREEN}{COLOR_BOLD}✅ すべてのデータが正常に処理されました。{COLOR_RESET}")
 
 if __name__ == '__main__':
+    force_refresh = "--force-refresh" in sys.argv
+    if force_refresh:
+        print(f"{COLOR_YELLOW}{COLOR_BOLD}🔄 --force-refresh モード: すべての画像を新フィルターで取り直します。{COLOR_RESET}")
+
     if "--watch" in sys.argv:
         print(f"{COLOR_BOLD}👀 監視モードを起動しました。CSVの変更を待機中... (Ctrl+C で終了){COLOR_RESET}")
         try:
-            convert(exit_on_error=False) # 初回実行
+            convert(exit_on_error=False, force_refresh=force_refresh) # 初回実行
         except Exception as e:
             print(f"{COLOR_RED}初回ビルド失敗: {e}{COLOR_RESET}")
         
@@ -677,7 +695,7 @@ if __name__ == '__main__':
                 print(f"{COLOR_RED}監視中にエラーが発生しました: {e}{COLOR_RESET}")
     else:
         try:
-            convert()
+            convert(force_refresh=force_refresh)
         except Exception as e:
             print(f"{COLOR_RED}{COLOR_BOLD}❌ 変換失敗: {e}{COLOR_RESET}")
             sys.exit(1)
