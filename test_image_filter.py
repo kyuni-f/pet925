@@ -73,7 +73,8 @@ class TestUrlScoring(unittest.TestCase):
 
     def test_penalize_non_jan_cabinet(self):
         url = "https://thumbnail.image.rakuten.co.jp/@0_mall/rakuten24/cabinet/item/mca24.jpg"
-        self.assertLess(_score_image_url(url, self.product_1), -5)
+        # 判定基準を緩和したため、-5未満で除外されず、救われることをテストする
+        self.assertGreaterEqual(_score_image_url(url, self.product_1), -5)
 
     def test_jan_cabinet_still_scores_well(self):
         url = "https://thumbnail.image.rakuten.co.jp/@0_mall/rakuten24/cabinet/jan/4902418002385.jpg"

@@ -39,7 +39,14 @@ DEFAULT_RAKUTEN_IMAGE_SHOPS = [
 
 # 楽天API・アフィリエイト設定の読み込み
 def load_rakuten_config():
-    config = {"app_id": None, "access_key": None, "affiliate_id": None, "use_api_for_images": True} # 新しい設定を追加
+    config = {
+        "app_id": None, 
+        "access_key": None, 
+        "affiliate_id": None, 
+        "use_api_for_images": True,
+        "traditional_app_id": None,
+        "yahoo_client_id": None
+    }
     base_dir = os.path.dirname(os.path.abspath(__file__))
     env_path = os.path.join(base_dir, ".env")
 
@@ -47,6 +54,8 @@ def load_rakuten_config():
     config["app_id"] = os.getenv("RAKUTEN_APP_ID")
     config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
     config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
+    config["traditional_app_id"] = os.getenv("RAKUTEN_TRADITIONAL_APP_ID")
+    config["yahoo_client_id"] = os.getenv("YAHOO_CLIENT_ID")
     if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"): 
         config["use_api_for_images"] = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
     
@@ -63,16 +72,51 @@ def load_rakuten_config():
                         config["app_id"] = val_clean
                     elif key_clean in ["RAKUTEN_ACCESS_KEY", "RAKUTEN_APPLICATION_SECRET"]:
                         config["access_key"] = val_clean
+                    elif key_clean == "RAKUTEN_TRADITIONAL_APP_ID":
+                        config["traditional_app_id"] = val_clean
+                    elif key_clean == "YAHOO_CLIENT_ID":
+                        config["yahoo_client_id"] = val_clean
                     elif key.strip() == "RAKUTEN_AFFILIATE_ID":
-                        config["affiliate_id"] = value.strip().strip("'").strip('"')
-                    elif key_clean == "USE_RAKUTEN_API_FOR_IMAGES": # 新しい設定を読み込む
-                        config["use_api_for_images"] = value.strip().lower() == "true"
+                        config["affiliate_id"] = val_clean
+                    elif key_clean == "USE_RAKUTEN_API_FOR_IMAGES":
+                        config["use_api_for_images"] = val_clean.lower() == "true"
     return config
 
 rak_config = load_rakuten_config()
 RAKUTEN_APP_ID = rak_config["app_id"]
 RAKUTEN_ACCESS_KEY = rak_config["access_key"]
 RAKUTEN_AFFILIATE_ID = rak_config["affiliate_id"]
+RAKUTEN_TRADITIONAL_APP_ID = rak_config["traditional_app_id"]
+YAHOO_CLIENT_ID = rak_config["yahoo_client_id"]
+
+# Google Custom Search API の設定読み込み
+def load_google_config():
+    config = {"cx": None, "api_key": None}
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(base_dir, ".env")
+
+    # ターミナル環境変数を最優先
+    config["cx"] = os.getenv("GOOGLE_CSE_ID")
+    config["api_key"] = os.getenv("GOOGLE_API_KEY")
+    
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.split('#')[0].strip()
+                if not line: continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key_clean = key.strip()
+                    val_clean = value.strip().strip("'").strip('"')
+                    if key_clean == "GOOGLE_CSE_ID":
+                        config["cx"] = val_clean
+                    elif key_clean == "GOOGLE_API_KEY":
+                        config["api_key"] = val_clean
+    return config
+
+google_config = load_google_config()
+GOOGLE_CSE_ID = google_config["cx"]
+GOOGLE_API_KEY = google_config["api_key"]
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
@@ -152,7 +196,15 @@ def _extract_kg_values(text: str) -> set:
     if not text:
         return set()
     norm = normalize_text(text)
-    return set(_KG_VALUE_RE.findall(norm))
+    vals = _KG_VALUE_RE.findall(norm)
+    res = set()
+    for v in vals:
+        try:
+            # 2 と 2.0 が一致するように float に変換して丸める
+            res.add(str(float(v)))
+        except ValueError:
+            res.add(v)
+    return res
 
 
 def _get_api_item_text(item: dict) -> str:
@@ -237,15 +289,15 @@ def _is_api_item_valid(
     def extract_keywords(text):
         norm = normalize_text(text)
         tokens = re.split(r'[\s・/\-_,()（）【】\[\]]+', norm)
-        return [t for t in tokens if len(t) >= 3]
+        return [t for t in tokens if len(t) >= 2] # 3文字以上から2文字以上に条件を緩和
 
     csv_keywords = extract_keywords(product_name) + extract_keywords(brand_name)
     if not csv_keywords:
         return True
 
-    # サブ文字列1件一致では不十分。複数キーワードの過半数一致を要求
+    # サブ文字列1件一致では不十分。複数キーワードの過半数一致を要求 → 1/3以上のキーワードが一致すればOKに緩和
     matched = sum(1 for kw in csv_keywords if _keyword_matches_text(kw, api_item_text))
-    min_required = max(1, (len(csv_keywords) + 1) // 2)
+    min_required = max(1, len(csv_keywords) // 3)
     return matched >= min_required
 
 
@@ -285,6 +337,7 @@ _IMAGE_URL_GOOD_PATTERNS = [
     "/item/",          # 商品個別画像
     "/product/",
     "thumbnail.image.rakuten.co.jp",  # 楽天画像CDN（商品画像が集中）
+    "r.r10s.jp",       # 楽天商品画像CDN（高品質・カタログ画像）
 ]
 
 
@@ -307,7 +360,7 @@ def _score_image_url(url: str, product_name: str = "") -> int:
 
     # 楽天ショップの cabinet/item 等（JAN管理外）はロゴ合成画像になりやすい
     if _IMAGE_URL_NON_JAN_CABINET_RE.search(url):
-        score -= 50
+        score -= 2 # 50から2に大幅緩和して、JAN管理画像を優先するだけに留める。
 
     for bad in _IMAGE_URL_BAD_PATTERNS:
         if bad.lower() in url_lower:
@@ -326,6 +379,118 @@ def _score_image_url(url: str, product_name: str = "") -> int:
 
     return score
 
+
+def fetch_rakuten_product_data_v2(jan):
+    """
+    楽天商品検索API（マイクロサービス版 商品（Product）Search）を使用して、
+    白バックのきれいな公式カタログ画像を取得する。
+    同じRAKUTEN_APP_IDで利用可能（別途 traditional_app_id 不要）。
+    """
+    if not RAKUTEN_APP_ID or jan == '#' or not RAKUTEN_ACCESS_KEY:
+        return None
+    
+    # ⭕ 2026年 マイクロサービス版 Product Search API
+    url = "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801"
+    params = {
+        "applicationId": RAKUTEN_APP_ID.strip(),
+        "accessKey": RAKUTEN_ACCESS_KEY.strip(),
+        "keyword": jan,
+        "format": "json"
+    }
+    
+    YOUR_REGISTERED_DOMAIN = "https://kyuni-f.github.io/pet925/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Origin": YOUR_REGISTERED_DOMAIN,
+        "Referer": YOUR_REGISTERED_DOMAIN + "/"
+    }
+    
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            products = data.get("Products", [])
+            if products and isinstance(products, list) and len(products) > 0:
+                first_entry = products[0]
+                # レスポンス構造: {"Product": { ... }}
+                product = first_entry.get("Product", first_entry) if isinstance(first_entry, dict) else first_entry
+                
+                # mediumImageUrl または smallImageUrl を取得
+                img_url = product.get("mediumImageUrl") or product.get("smallImageUrl")
+                if img_url:
+                    # パラメータを除去して高画質化
+                    high_res_image = re.sub(r"\?_ex=.*$", "", img_url)
+                    return high_res_image
+    except Exception as e:
+        print(f"   ⚠️ 楽天商品検索API(Product)通信エラー: {e}")
+    return None
+
+
+def fetch_rakuten_product_data(jan):
+    """楽天商品価格ナビ製品検索API（従来のProduct Search API）を使用して白バックのきれいな公式画像を取得する"""
+    if not RAKUTEN_TRADITIONAL_APP_ID or jan == '#' or RAKUTEN_TRADITIONAL_APP_ID == "YOUR_RAKUTEN_TRADITIONAL_APP_ID":
+        return None
+    url = "https://app.rakuten.co.jp/services/api/Product/Search/20170426"
+    params = {
+        "applicationId": RAKUTEN_TRADITIONAL_APP_ID.strip(),
+        "keyword": jan,
+        "format": "json"
+    }
+    
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            products = data.get("Products", [])
+            if products and isinstance(products, list):
+                # 最初の製品
+                first_prod_entry = products[0]
+                if isinstance(first_prod_entry, dict) and "Product" in first_prod_entry:
+                    product = first_prod_entry.get("Product", {})
+                    img_url = product.get("productImageUrl")
+                    if img_url:
+                        # パラメータを除去して高画質化
+                        high_res_image = re.sub(r"\?_ex=.*$", "", img_url)
+                        return high_res_image
+        else:
+            print(f"   ⚠️ 楽天価格ナビAPIエラー: {resp.status_code}")
+    except Exception as e:
+        print(f"   ⚠️ 楽天価格ナビAPI通信エラー: {e}")
+    return None
+
+def fetch_yahoo_shopping_data(jan):
+    """Yahoo!ショッピング商品検索APIを使用してクリアな商品画像を取得する"""
+    if not YAHOO_CLIENT_ID or jan == '#' or YAHOO_CLIENT_ID == "YOUR_YAHOO_CLIENT_ID":
+        return None
+    url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
+    params = {
+        "appid": YAHOO_CLIENT_ID.strip(),
+        "jan_code": jan,
+        "results": 1
+    }
+    
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            hits = data.get("hits", [])
+            if hits and isinstance(hits, list):
+                first_hit = hits[0]
+                if isinstance(first_hit, dict) and "image" in first_hit:
+                    img_obj = first_hit.get("image", {})
+                    img_url = img_obj.get("medium") or img_obj.get("small")
+                    if img_url:
+                        # Yahooの画像URLに含まれるサイズを表すフォルダ文字を「g」(最大・高画質)に変換して高画質化
+                        if "/i/c/" in img_url:
+                            img_url = img_url.replace("/i/c/", "/i/g/")
+                        elif "/i/d/" in img_url:
+                            img_url = img_url.replace("/i/d/", "/i/g/")
+                        return img_url
+        else:
+            print(f"   ⚠️ Yahoo!ショッピングAPIエラー: {resp.status_code}")
+    except Exception as e:
+        print(f"   ⚠️ Yahoo!ショッピングAPI通信エラー: {e}")
+    return None
 
 def fetch_rakuten_data(jan, product_name="", brand_name="", product_size=""):
     """楽天APIを使用してJANコードから画像URLを取得する（アフィリエイトリンクは将来用に温存）"""
@@ -443,6 +608,92 @@ def fetch_rakuten_data(jan, product_name="", brand_name="", product_size=""):
             return None
     return None
 
+def fetch_google_image(jan, brand_name="", product_name=""):
+    """Google Custom Search JSON API (image search) を利用してメーカー公式等から単品画像を検索し、ダウンロードしてローカルキャッシュに保存する"""
+    if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
+        return None
+
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # 既存のキャッシュ画像があるかチェック
+    for ext in ["jpg", "jpeg", "png", "webp", "gif"]:
+        test_path = os.path.join(cache_dir, f"{jan}.{ext}")
+        if os.path.exists(test_path):
+            return f"images/{jan}.{ext}"
+
+    # クエリの作成。基本は「ブランド名 + JANコード」または「JANコード + 商品名」など、または単に「JANコード」
+    query = f"{brand_name} {jan}".strip() if brand_name else jan
+    
+    # サーバーに迷惑をかけないよう、APIリクエスト前に3秒ウェイト
+    time.sleep(3)
+
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": GOOGLE_API_KEY,
+        "cx": GOOGLE_CSE_ID,
+        "q": query,
+        "searchType": "image",
+        "num": 3  # 上位3件を取得して有効なものを探す
+    }
+
+    try:
+        resp = requests.get(search_url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get("items", [])
+            if not items:
+                # JANコード単体でもう一度試す
+                if brand_name:
+                    time.sleep(3)
+                    params["q"] = jan
+                    resp2 = requests.get(search_url, params=params, timeout=10)
+                    if resp2.status_code == 200:
+                        items = resp2.json().get("items", [])
+            
+            for item in items:
+                img_url = item.get("link")
+                if not img_url:
+                    continue
+                
+                # 直リンクは規約違反やブロックのリスクがあるため、絶対に行わずダウンロードしてキャッシュする
+                ext = "jpg"
+                url_lower = img_url.lower()
+                if ".png" in url_lower:
+                    ext = "png"
+                elif ".webp" in url_lower:
+                    ext = "webp"
+                elif ".gif" in url_lower:
+                    ext = "gif"
+                elif ".jpeg" in url_lower:
+                    ext = "jpeg"
+
+                dest_filename = f"{jan}.{ext}"
+                dest_path = os.path.join(cache_dir, dest_filename)
+
+                # サーバーに迷惑をかけないよう、ダウンロード前に3秒ウェイト
+                time.sleep(3)
+
+                try:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+                    }
+                    img_resp = requests.get(img_url, headers=headers, timeout=10)
+                    if img_resp.status_code == 200:
+                        with open(dest_path, "wb") as f:
+                            f.write(img_resp.content)
+                        print(f"   📥 Google APIで見つかった画像を保存しました: {img_url} -> images/{dest_filename}")
+                        return f"images/{dest_filename}"
+                except Exception as ex:
+                    print(f"   ⚠️ 画像のダウンロードに失敗しました ({img_url}): {ex}")
+                    continue
+        else:
+            print(f"   ⚠️ Google Custom Search APIエラー: {resp.status_code} - {resp.text[:200]}")
+    except Exception as e:
+        print(f"   ⚠️ Google Custom Search API接続エラー: {e}")
+
+    return None
+
 def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, rakuten_shop_ids, force_refresh=False):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
@@ -480,39 +731,6 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     if force_refresh and img_val != '#':
         img_val = '#'
         row['img'] = '#'
-
-    # 1. 楽天APIで画像の検索を試みる
-    # API利用が有効 (use_api_for_imagesがTrue) で、かつJANコードがあり、img_valが未設定の場合のみAPIを試行
-    if rak_config["use_api_for_images"] and img_val == '#' and jan_val != '#' and len(jan_val) == 13:
-        api_data = fetch_rakuten_data(jan_val, product_name=name, brand_name=brand_name, product_size=row.get('size', ''))
-        if api_data and api_data["image"]:
-            row['img'] = api_data["image"]
-            img_val = api_data["image"]
-        else:
-            # APIからの画像取得に失敗した場合、警告を出して推測モードに切り替える
-            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の楽天APIからの画像取得に失敗しました。推測モード（実在確認付き）に切り替えます。")
-
-
-    # 2. APIで見つからなかった場合のフォールバック（推測リストから実在する画像を事前確認）
-    if img_val == '#' and len(jan_val) == 13 and jan_val.isdigit():
-        found_img_url = None
-        for shop_id in rakuten_shop_ids:
-            test_url = f"https://thumbnail.image.rakuten.co.jp/@0_mall/{shop_id}/cabinet/jan/{jan_val}.jpg"
-            try:
-                # タイムアウトは短めに設定(2秒)し、実在するかHEADリクエストで確認
-                resp = requests.head(test_url, timeout=2.0)
-                if resp.status_code == 200:
-                    found_img_url = test_url
-                    row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の画像をショップ '{shop_id}' から検出しました！")
-                    break
-            except Exception:
-                pass
-        
-        if found_img_url:
-            row['img'] = found_img_url
-        else:
-            row['img'] = '#'
-            row_warnings.append(f"行 {line_num}: JANコード '{jan_val}' の画像はどの推測ショップからも検出できませんでした。")
 
     current_kws = []
 
@@ -716,9 +934,118 @@ def convert(exit_on_error=True, force_refresh=False):
         res_row['id'] = jan_val if jan_val != '#' else dup_key.replace('|', '_')
 
     # products リストは既に上で作成済み
+    # 画像キャッシュ用フォルダの確認と自動補完処理（シーケンシャルに3秒ウェイトを挟む）
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+    os.makedirs(cache_dir, exist_ok=True)
 
-    # products リストは既に上で作成済み
-    # products = [r[1] for r in processed_results]
+    print("   - 画像自動補完・キャッシュ処理（1件ずつウェイトを挟みながら実行します）...")
+    for idx, row in enumerate(products):
+        img_val = row.get('img', '#').strip()
+        jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
+        name = row.get('name', '').strip()
+        brand_name = row.get('brand', '').strip()
+        product_size = row.get('size', '').strip()
+
+        if force_refresh:
+            img_val = '#'
+            row['img'] = '#'
+
+        if jan_val != '#' and len(jan_val) == 13 and jan_val.isdigit():
+            # 1. まずローカルのキャッシュ画像があるかチェック
+            cached_found = False
+            for ext in ["jpg", "jpeg", "png", "webp", "gif"]:
+                test_path = os.path.join(cache_dir, f"{jan_val}.{ext}")
+                if os.path.exists(test_path):
+                    row['img'] = f"images/{jan_val}.{ext}"
+                    img_val = f"images/{jan_val}.{ext}"
+                    cached_found = True
+                    break
+
+            if cached_found:
+                continue
+
+            # キャッシュがなく、img_valが '#' の場合のみ各種API/推測を試行する
+            if img_val == '#':
+                api_success = False
+
+                # ① [最優先] 楽天商品検索API v2（マイクロサービス版 Product Search）- 高品質カタログ画像
+                if RAKUTEN_APP_ID and RAKUTEN_ACCESS_KEY:
+                    print(f"   [楽天Product Search API(v2)] 検索中: JAN={jan_val} ({name[:20]})")
+                    prod_img = fetch_rakuten_product_data_v2(jan_val)
+                    if prod_img:
+                        row['img'] = prod_img
+                        img_val = prod_img
+                        api_success = True
+                        print(f"   ✅ 楽天Product Search API(v2)から公式カタログ画像を取得しました: {prod_img}")
+                    # 連続アクセス防止のため必ず3秒スリープ
+                    time.sleep(3)
+
+                # ② [第2優先] 楽天商品価格ナビ（カタログ製品検索）APIで検索（従来版）
+                if not api_success and RAKUTEN_TRADITIONAL_APP_ID and RAKUTEN_TRADITIONAL_APP_ID != "YOUR_RAKUTEN_TRADITIONAL_APP_ID":
+                    print(f"   [楽天価格ナビAPI(従来)] 検索中: JAN={jan_val} ({name[:20]})")
+                    prod_img = fetch_rakuten_product_data(jan_val)
+                    if prod_img:
+                        row['img'] = prod_img
+                        img_val = prod_img
+                        api_success = True
+                        print(f"   ✅ 楽天価格ナビAPIから公式画像を取得しました: {prod_img}")
+                    # 連続アクセス防止のため必ず3秒スリープ
+                    time.sleep(3)
+
+                # ③ [第3優先] Yahoo!ショッピング商品検索APIで検索
+                if not api_success and YAHOO_CLIENT_ID and YAHOO_CLIENT_ID != "YOUR_YAHOO_CLIENT_ID":
+                    print(f"   [Yahoo!ショッピングAPI] 検索中: JAN={jan_val} ({name[:20]})")
+                    yahoo_img = fetch_yahoo_shopping_data(jan_val)
+                    if yahoo_img:
+                        row['img'] = yahoo_img
+                        img_val = yahoo_img
+                        api_success = True
+                        print(f"   ✅ Yahoo!ショッピングAPIから画像を取得しました: {yahoo_img}")
+                    # 連続アクセス防止のため必ず3秒スリープ
+                    time.sleep(3)
+
+                # ④ [第4優先] 楽天商品検索API（店舗画像、スコアリング付き）で検索
+                if not api_success and rak_config["use_api_for_images"] and RAKUTEN_APP_ID and RAKUTEN_ACCESS_KEY:
+                    print(f"   [楽天商品検索API(IchibaItem)] 検索中: JAN={jan_val} ({name[:20]})")
+                    api_data = fetch_rakuten_data(jan_val, product_name=name, brand_name=brand_name, product_size=product_size)
+                    if api_data and api_data["image"]:
+                        row['img'] = api_data["image"]
+                        img_val = api_data["image"]
+                        api_success = True
+                        print(f"   ✅ 楽天商品検索APIから画像を取得しました: {api_data['image']}")
+                    # リクエスト後は必ず3秒のウエイト
+                    time.sleep(3)
+
+                # ⑤ 楽天APIで見つからなかった場合、推測ショップリストから実在する画像をヘッドリクエストで確認
+                if not api_success:
+                    print(f"   [楽天推測] 実在確認中: JAN={jan_val}")
+                    found_img_url = None
+                    for shop_id in DEFAULT_RAKUTEN_IMAGE_SHOPS:
+                        test_url = f"https://thumbnail.image.rakuten.co.jp/@0_mall/{shop_id}/cabinet/jan/{jan_val}.jpg"
+                        try:
+                            resp = requests.head(test_url, timeout=2.0)
+                            if resp.status_code == 200:
+                                found_img_url = test_url
+                                print(f"   ✅ 推測ショップ '{shop_id}' から画像を検出しました。")
+                                break
+                        except Exception:
+                            pass
+                        # 1リクエストごとに必ず3秒のウエイト
+                        time.sleep(3)
+                    
+                    if found_img_url:
+                        row['img'] = found_img_url
+                        img_val = found_img_url
+                        api_success = True
+
+                # ⑥ それでも見つからなかった場合はGoogle CSE（image search）を利用
+                if not api_success and GOOGLE_API_KEY and GOOGLE_CSE_ID:
+                    print(f"   [Google CSE] 検索中: JAN={jan_val} ({name[:20]})")
+                    local_img_path = fetch_google_image(jan_val, brand_name, name)
+                    if local_img_path:
+                        row['img'] = local_img_path
+                        img_val = local_img_path
+                        api_success = True
 
     if not validation_errors:
         # 7. エラーが一つもない場合のみファイル書き出しを実行
@@ -729,7 +1056,6 @@ def convert(exit_on_error=True, force_refresh=False):
             chunk_filename = f'product_data_{i}.json'
             with open(chunk_filename, 'w', encoding='utf-8') as f:
                 json.dump(chunk, f, ensure_ascii=False, separators=(',', ':'))
-        
         # メインのJSONにはメタデータのみを記述
         with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
             json.dump({"total": len(products), "chunks": num_chunks, "version": build_version}, f)

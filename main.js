@@ -603,16 +603,8 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
         const imageSrc = getProductImageSrc(item, defaultImg);
         
-        // ドメインから出典元を推測（注釈用）
-        let sourceNote = '';
-        if (imageSrc.includes('r10s.jp')) sourceNote = '出典: 楽天市場';
-        else if (imageSrc.includes('amazon.com') || imageSrc.includes('ssl-images-amazon')) sourceNote = '出典: Amazon';
-        else if (imageSrc.includes('top-seller.jp')) sourceNote = '提供: TopSeller';
-        else if (imageSrc.includes('moshimo.com')) sourceNote = '提供: もしもアフィリエイト';
-        else if (imageSrc !== defaultImg) sourceNote = '参考画像';
-
-        // 「参考用」であることを強調するラベルの有無
-        const referenceBadge = (imageSrc !== defaultImg) ? '<div class="reference-badge">参考画像</div>' : '';
+        // 楽天公式カタログ画像のため「参考画像」表記は不要
+        const referenceBadge = '';
 
         // brandLookupMap を使用して正式名称を取得
         const displayBrandName = brandLookupMap[item.brand_id] || item.brand;
@@ -646,7 +638,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
         const altName = String(item.name || "").replace(/"/g, '&quot;');
 
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"><div class="img-source-note">${sourceNote}</div></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +
