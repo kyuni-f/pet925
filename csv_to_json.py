@@ -54,7 +54,7 @@ def load_rakuten_config():
     config["app_id"] = os.getenv("RAKUTEN_APP_ID")
     config["access_key"] = os.getenv("RAKUTEN_ACCESS_KEY")
     config["affiliate_id"] = os.getenv("RAKUTEN_AFFILIATE_ID")
-    config["traditional_app_id"] = os.getenv("RAKUTEN_TRADITIONAL_APP_ID")
+    config["traditional_app_id"] = os.getenv("RAKUTEN_APP_ID")
     config["yahoo_client_id"] = os.getenv("YAHOO_CLIENT_ID")
     if os.getenv("USE_RAKUTEN_API_FOR_IMAGES"): 
         config["use_api_for_images"] = os.getenv("USE_RAKUTEN_API_FOR_IMAGES").lower() == "true"
@@ -72,7 +72,7 @@ def load_rakuten_config():
                         config["app_id"] = val_clean
                     elif key_clean in ["RAKUTEN_ACCESS_KEY", "RAKUTEN_APPLICATION_SECRET"]:
                         config["access_key"] = val_clean
-                    elif key_clean == "RAKUTEN_TRADITIONAL_APP_ID":
+                    elif key_clean == "RAKUTEN_APP_ID":
                         config["traditional_app_id"] = val_clean
                     elif key_clean == "YAHOO_CLIENT_ID":
                         config["yahoo_client_id"] = val_clean
@@ -86,7 +86,7 @@ rak_config = load_rakuten_config()
 RAKUTEN_APP_ID = rak_config["app_id"]
 RAKUTEN_ACCESS_KEY = rak_config["access_key"]
 RAKUTEN_AFFILIATE_ID = rak_config["affiliate_id"]
-RAKUTEN_TRADITIONAL_APP_ID = rak_config["traditional_app_id"]
+RAKUTEN_APP_ID = rak_config["traditional_app_id"]
 YAHOO_CLIENT_ID = rak_config["yahoo_client_id"]
 
 # Google Custom Search API の設定読み込み
@@ -426,38 +426,6 @@ def fetch_rakuten_product_data_v2(jan):
     return None
 
 
-def fetch_rakuten_product_data(jan):
-    """楽天商品価格ナビ製品検索API（従来のProduct Search API）を使用して白バックのきれいな公式画像を取得する"""
-    if not RAKUTEN_TRADITIONAL_APP_ID or jan == '#' or RAKUTEN_TRADITIONAL_APP_ID == "YOUR_RAKUTEN_TRADITIONAL_APP_ID":
-        return None
-    url = "https://app.rakuten.co.jp/services/api/Product/Search/20170426"
-    params = {
-        "applicationId": RAKUTEN_TRADITIONAL_APP_ID.strip(),
-        "keyword": jan,
-        "format": "json"
-    }
-    
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            products = data.get("Products", [])
-            if products and isinstance(products, list):
-                # 最初の製品
-                first_prod_entry = products[0]
-                if isinstance(first_prod_entry, dict) and "Product" in first_prod_entry:
-                    product = first_prod_entry.get("Product", {})
-                    img_url = product.get("productImageUrl")
-                    if img_url:
-                        # パラメータを除去して高画質化
-                        high_res_image = re.sub(r"\?_ex=.*$", "", img_url)
-                        return high_res_image
-        else:
-            print(f"   ⚠️ 楽天価格ナビAPIエラー: {resp.status_code}")
-    except Exception as e:
-        print(f"   ⚠️ 楽天価格ナビAPI通信エラー: {e}")
-    return None
-
 def fetch_yahoo_shopping_data(jan):
     """Yahoo!ショッピング商品検索APIを使用してクリアな商品画像を取得する"""
     if not YAHOO_CLIENT_ID or jan == '#' or YAHOO_CLIENT_ID == "YOUR_YAHOO_CLIENT_ID":
@@ -781,8 +749,10 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     row['tags'] = tags
     return row, row_errors, row_warnings, norm_name, line_num
 
-def convert(exit_on_error=True, force_refresh=False):
+def convert(exit_on_error=True, force_refresh=False, skip_api=False):
     print(f"--- 変換処理を開始します ---")
+    if skip_api:
+        print(f"{COLOR_YELLOW}{COLOR_BOLD}⏭️  --skip-api モード: 画像APIを呼び出さず、既存のimg列をそのまま使用します。{COLOR_RESET}")
     start_time = time.perf_counter()
     global validation_errors, validation_warnings
     validation_errors = []
@@ -938,7 +908,7 @@ def convert(exit_on_error=True, force_refresh=False):
     cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("   - 画像自動補完・キャッシュ処理（1件ずつウェイトを挟みながら実行します）...")
+    print("   - 画像自動補完・キャッシュ処理...")
     for idx, row in enumerate(products):
         img_val = row.get('img', '#').strip()
         jan_val = str(row.get('jan', '#')).strip().replace(" ", "").replace("-", "")
@@ -964,6 +934,10 @@ def convert(exit_on_error=True, force_refresh=False):
             if cached_found:
                 continue
 
+            # --skip-api モードの場合は画像APIを一切呼ばない
+            if skip_api:
+                continue
+
             # キャッシュがなく、img_valが '#' の場合のみ各種API/推測を試行する
             if img_val == '#':
                 api_success = False
@@ -980,19 +954,7 @@ def convert(exit_on_error=True, force_refresh=False):
                     # 連続アクセス防止のため必ず3秒スリープ
                     time.sleep(3)
 
-                # ② [第2優先] 楽天商品価格ナビ（カタログ製品検索）APIで検索（従来版）
-                if not api_success and RAKUTEN_TRADITIONAL_APP_ID and RAKUTEN_TRADITIONAL_APP_ID != "YOUR_RAKUTEN_TRADITIONAL_APP_ID":
-                    print(f"   [楽天価格ナビAPI(従来)] 検索中: JAN={jan_val} ({name[:20]})")
-                    prod_img = fetch_rakuten_product_data(jan_val)
-                    if prod_img:
-                        row['img'] = prod_img
-                        img_val = prod_img
-                        api_success = True
-                        print(f"   ✅ 楽天価格ナビAPIから公式画像を取得しました: {prod_img}")
-                    # 連続アクセス防止のため必ず3秒スリープ
-                    time.sleep(3)
-
-                # ③ [第3優先] Yahoo!ショッピング商品検索APIで検索
+                # ③ [第2優先] Yahoo!ショッピング商品検索APIで検索（旧価格ナビAPIは削除: 2017年版は機能しないため）
                 if not api_success and YAHOO_CLIENT_ID and YAHOO_CLIENT_ID != "YOUR_YAHOO_CLIENT_ID":
                     print(f"   [Yahoo!ショッピングAPI] 検索中: JAN={jan_val} ({name[:20]})")
                     yahoo_img = fetch_yahoo_shopping_data(jan_val)
@@ -1101,13 +1063,14 @@ def convert(exit_on_error=True, force_refresh=False):
 
 if __name__ == '__main__':
     force_refresh = "--force-refresh" in sys.argv
+    skip_api = "--skip-api" in sys.argv
     if force_refresh:
         print(f"{COLOR_YELLOW}{COLOR_BOLD}🔄 --force-refresh モード: すべての画像を新フィルターで取り直します。{COLOR_RESET}")
 
     if "--watch" in sys.argv:
         print(f"{COLOR_BOLD}👀 監視モードを起動しました。CSVの変更を待機中... (Ctrl+C で終了){COLOR_RESET}")
         try:
-            convert(exit_on_error=False, force_refresh=force_refresh) # 初回実行
+            convert(exit_on_error=False, force_refresh=force_refresh, skip_api=skip_api) # 初回実行
         except Exception as e:
             print(f"{COLOR_RED}初回ビルド失敗: {e}{COLOR_RESET}")
         
@@ -1133,7 +1096,7 @@ if __name__ == '__main__':
                 if changed:
                     print(f"\n{COLOR_YELLOW}🔄 変更を検知しました。再ビルドします...{COLOR_RESET}")
                     time.sleep(0.2) # ファイルの書き込み完了を少し待つ
-                    convert(exit_on_error=False)
+                    convert(exit_on_error=False, force_refresh=force_refresh, skip_api=skip_api)
             except KeyboardInterrupt:
                 print(f"\n{COLOR_YELLOW}監視モードを終了します。{COLOR_RESET}")
                 break
@@ -1141,7 +1104,7 @@ if __name__ == '__main__':
                 print(f"{COLOR_RED}監視中にエラーが発生しました: {e}{COLOR_RESET}")
     else:
         try:
-            convert(force_refresh=force_refresh)
+            convert(force_refresh=force_refresh, skip_api=skip_api)
         except Exception as e:
             print(f"{COLOR_RED}{COLOR_BOLD}❌ 変換失敗: {e}{COLOR_RESET}")
             sys.exit(1)

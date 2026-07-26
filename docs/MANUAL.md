@@ -11,7 +11,7 @@
 4.  **仕上げ**: 商品名（A列）、ブランド名（B列）、タグ（C列）を手動で入力または調整。
     - **画像について**: JANコードが入力されている場合、Pythonビルド時に以下の優先順位で自動取得します。
     1. **楽天Product Search API(v2)**（最優先）- 透かし・ロゴなしの公式カタログ画像（`r.r10s.jp`）
-    2. **楽天商品価格ナビAPI(従来)** - 別途 `RAKUTEN_TRADITIONAL_APP_ID` が必要
+    2. **楽天商品価格ナビAPI(従来)** - `RAKUTEN_APP_ID` が必要
     3. **Yahoo!ショッピングAPI** - 一部ショップロゴが入る場合あり
     4. **楽天商品検索API(IchibaItem)** - スコアリングフィルター適用
     5. **推測ショップリスト** - `csv_to_json.py` の `DEFAULT_RAKUTEN_IMAGE_SHOPS` で設定
