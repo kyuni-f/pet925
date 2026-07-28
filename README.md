@@ -22,6 +22,9 @@
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
 - **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
+- **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
+- **`jan_data_collector.py`** : JANコードから画像・商品名・リンクのみを簡易取得するスクリプト（`auto_collect_all.py` の簡易版）
+- **`jan_list.csv`** : `auto_collect_all.py` / `jan_data_collector.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
 - **`test_image_filter.py`** : 画像フィルター（年齢・URLスコアリング）の単体テスト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
@@ -62,7 +65,14 @@ sudo apt update && sudo apt install code
 
 # 10. APIで商品データを自動生成
 python3 auto_data_collector.py ""
+
+# 11. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
+npm run collect:all   # データ収集 + JSONビルドまで一括実行
+# または
+npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
 ```
+
+> **JANコードからのCSV自動生成手順の詳細**（`jan_list.csv` の書き方、追加方式の仕組みなど）は `docs/MANUAL.md` の「A-2. JANコードからのCSV自動生成」を参照してください。
 
 > **画像フィルターを変更した場合**は、必ず `python3 csv_to_json.py --force-refresh` を実行してからデプロイしてください。通常の `npm run build` だけでは、CSVに既に保存された古い `img` URL は更新されません。
 
