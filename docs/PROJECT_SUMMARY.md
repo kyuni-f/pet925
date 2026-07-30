@@ -378,6 +378,7 @@
 - [x] 楽天Product Search API(v2)による高画質カタログ画像の自動取得（透かし・ロゴなし）
 - [x] 画像の「参考画像」バッジ・出典注釈の削除
 - [x] JANコード自動収集の運用手順をMANUAL.md/README.mdに明文化
+- [x] comments.csvに関する説明をMANUAL.md/PROJECT_SUMMARY.mdに追加
 
 ## 🤖 AI への指示用テンプレート (最新版)
 

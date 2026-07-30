@@ -497,28 +497,33 @@ function getCommentLookup() { // category:key -> [comment, comment, ...] のマ�
 }
 let commentLookupMap = null;
 
-function pickStoreComment() { // 選択中のcond/animalタグから、店員経験談をランダムに1つ選ぶ
+const MAX_STORE_COMMENTS = 2; // 複数タグ選択時に繋げて表示する経験談の最大数（増やしすぎると読みにくくなるため2件までに制限）
+
+function pickStoreComments() { // 選択中のcond/animalタグから、店員経験談を最大MAX_STORE_COMMENTS件ランダムに選ぶ
     if (!commentLookupMap) commentLookupMap = getCommentLookup();
 
-    // 優先度1: 選択中の cond（複数選択可）タグに紐づく経験談から候補を集める
+    // タグごとに候補リストを分けて保持（同じタグから複数採用されて偏らないようにする）
     const condVals = Array.isArray(activeFilters.cond) ? activeFilters.cond : [];
-    let candidates = [];
-    condVals.forEach(val => {
-        const list = commentLookupMap[`cond:${val}`];
-        if (list) candidates = candidates.concat(list);
-    });
+    let tagBuckets = condVals
+        .map(val => commentLookupMap[`cond:${val}`])
+        .filter(list => list && list.length > 0);
 
-    // 優先度2: condに該当がなければ animal（犬/猫）の経験談にフォールバック
-    if (candidates.length === 0) {
+    // condの選択がなければ animal（犬/猫）の経験談にフォールバック
+    if (tagBuckets.length === 0) {
         const animalVal = activeFilters.animal;
         if (animalVal && animalVal !== 'all') {
             const list = commentLookupMap[`animal:${animalVal}`];
-            if (list) candidates = candidates.concat(list);
+            if (list) tagBuckets = [list];
         }
     }
 
-    if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    if (tagBuckets.length === 0) return [];
+
+    // タグの選ばれた順をシャッフルし、各タグから1件ずつ、最大MAX_STORE_COMMENTS件を採用
+    const shuffledBuckets = [...tagBuckets].sort(() => Math.random() - 0.5);
+    return shuffledBuckets.slice(0, MAX_STORE_COMMENTS).map(list => {
+        return list[Math.floor(Math.random() * list.length)];
+    });
 }
 
 function renderResultComment(totalMatchCount) { // 結果画面上部に店員コメント＋件数コメントを表示（スマホのみCSSで表示）
@@ -536,14 +541,15 @@ function renderResultComment(totalMatchCount) { // 結果画面上部に店員�
         return;
     }
 
-    const storeComment = pickStoreComment();
+    const storeComments = pickStoreComments();
     let html = '';
-    if (storeComment) {
-        html += `<p class="store-comment">💬 ${storeComment}</p>`;
-    }
+    storeComments.forEach(comment => {
+        html += `<p class="store-comment">💬 ${comment}</p>`;
+    });
     html += `<p class="result-count-comment">今回は<strong>${totalMatchCount}件</strong>の商品が見つかりました。</p>`;
     container.innerHTML = html;
 }
+
 
 function removeSingleFilter(cat, val) { // 特定のフィルターを解除
 
@@ -678,17 +684,19 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
             productName = productName.replace(displayBrandName, '').trim();
         }
 
-        let descHtml = `<p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">${item.desc || ""}</p>`;
+        let descHtml = '';
         const fullDesc = item.desc || "";
         const TRUNCATE_LENGTH = 150; // 説明文を切り詰める長さ
 
         if (fullDesc.length > TRUNCATE_LENGTH) {
             const displayDesc = fullDesc.substring(0, TRUNCATE_LENGTH) + '...';
-            descHtml = `<p class="${(item.desc || "").length > 100 ? 'description is-long' : 'description'}">
+            descHtml = `<p class="description is-long">
                             <span class="short-desc">${displayDesc}</span>
                             <span class="full-desc" style="display:none;">${fullDesc}</span>
                             <button class="read-more-btn" onclick="toggleDescription(this)">続きを読む</button>
                         </p>`;
+        } else {
+            descHtml = `<p class="description">${fullDesc}</p>`;
         }
 
         const isFav = favorites.includes(item.id);
