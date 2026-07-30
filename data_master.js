@@ -1,4 +1,4 @@
-const siteVersion = '20260728193009';
+const siteVersion = '20260730181405';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -69,6 +69,78 @@ const tagKeywords = {
         "歯"
     ]
 };
+const comments = [
+    {
+        "category": "animal",
+        "key": "dog",
+        "comment": "わんちゃんは涙やけや食いつきのご相談がお店でも本当に多いです。フード選びで改善するケースをたくさん見てきました"
+    },
+    {
+        "category": "animal",
+        "key": "dog",
+        "comment": "犬種によって食いつきの好みがかなり違うので、まずは小袋タイプから試してみるのもおすすめですよ"
+    },
+    {
+        "category": "animal",
+        "key": "cat",
+        "comment": "猫ちゃんは腎臓・尿路のケアで来店される方が年齢とともに増えてくる印象です。早めのケアがおすすめです"
+    },
+    {
+        "category": "animal",
+        "key": "cat",
+        "comment": "猫は好みが変わりやすいので、いくつかローテーションできるフードを用意しておくと安心という声をよく聞きます"
+    },
+    {
+        "category": "cond",
+        "key": "tear",
+        "comment": "涙やけの相談は本当に多いです。フードだけでなく食器の材質が原因のこともあるので、両方見直す方が多いですよ"
+    },
+    {
+        "category": "cond",
+        "key": "diet",
+        "comment": "体重管理は『量を減らす』より『満腹感が続くフード』に変える方が、ストレスなく続けられている子が多い印象です"
+    },
+    {
+        "category": "cond",
+        "key": "kidney",
+        "comment": "腎臓・尿路のケアは早めに始めるほど選択肢が広がるので、気になったタイミングで一度見直すのがおすすめです"
+    },
+    {
+        "category": "cond",
+        "key": "skin",
+        "comment": "皮膚が気になる子は、フードを変えて数週間で毛艶が良くなったという声をよくいただきます"
+    },
+    {
+        "category": "cond",
+        "key": "joint",
+        "comment": "関節ケアは中〜大型犬のシニア期に相談が増えますが、早めに切り替えている方も多いですよ"
+    },
+    {
+        "category": "cond",
+        "key": "tooth",
+        "comment": "歯の健康は毎日のケアが大変という方が多いので、フードの硬さで工夫するのも一つの方法です"
+    },
+    {
+        "category": "cond",
+        "key": "appetite",
+        "comment": "食いつきが悪い時は、フードそのものよりも温度や香りを変えるだけで食べてくれることもよくあります"
+    },
+    {
+        "category": "cond",
+        "key": "gf",
+        "comment": "穀物不使用に切り替えてから毛艶やお腹の調子が良くなったという声、お店でもよく聞きます"
+    },
+    {
+        "category": "cond",
+        "key": "digestive",
+        "comment": "お腹がゆるい子は、フードの切り替えペースをゆっくりにするだけで落ち着くことも多いです"
+    },
+    {
+        "category": "cond",
+        "key": "lamb",
+        "comment": "ラム肉は他のお肉でアレルギーが出た子にもよく選ばれている印象です"
+    }
+];
 const brands = [
     {
         "key": "nutro",

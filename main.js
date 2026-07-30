@@ -484,7 +484,69 @@ function renderActiveChips() { // 結果画面の「現在選択中の条件（�
     }
 }
 
+// comments.csv（data_master.js内 const comments）から、選択中の条件に合う店員経験談を1件選ぶ
+function getCommentLookup() { // category:key -> [comment, comment, ...] のマップを作成
+    const lookup = {};
+    if (typeof comments === 'undefined') return lookup;
+    comments.forEach(row => {
+        const mapKey = `${row.category}:${row.key}`;
+        if (!lookup[mapKey]) lookup[mapKey] = [];
+        lookup[mapKey].push(row.comment);
+    });
+    return lookup;
+}
+let commentLookupMap = null;
+
+function pickStoreComment() { // 選択中のcond/animalタグから、店員経験談をランダムに1つ選ぶ
+    if (!commentLookupMap) commentLookupMap = getCommentLookup();
+
+    // 優先度1: 選択中の cond（複数選択可）タグに紐づく経験談から候補を集める
+    const condVals = Array.isArray(activeFilters.cond) ? activeFilters.cond : [];
+    let candidates = [];
+    condVals.forEach(val => {
+        const list = commentLookupMap[`cond:${val}`];
+        if (list) candidates = candidates.concat(list);
+    });
+
+    // 優先度2: condに該当がなければ animal（犬/猫）の経験談にフォールバック
+    if (candidates.length === 0) {
+        const animalVal = activeFilters.animal;
+        if (animalVal && animalVal !== 'all') {
+            const list = commentLookupMap[`animal:${animalVal}`];
+            if (list) candidates = candidates.concat(list);
+        }
+    }
+
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function renderResultComment(totalMatchCount) { // 結果画面上部に店員コメント＋件数コメントを表示（スマホのみCSSで表示）
+    const container = document.getElementById('result-comment');
+    if (!container) return;
+
+    // お気に入り限定表示中は経験談は不要（文脈がすでに明確なため）
+    if (showFavoritesOnly) {
+        container.innerHTML = '';
+        return;
+    }
+
+    if (totalMatchCount === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const storeComment = pickStoreComment();
+    let html = '';
+    if (storeComment) {
+        html += `<p class="store-comment">💬 ${storeComment}</p>`;
+    }
+    html += `<p class="result-count-comment">今回は<strong>${totalMatchCount}件</strong>の商品が見つかりました。</p>`;
+    container.innerHTML = html;
+}
+
 function removeSingleFilter(cat, val) { // 特定のフィルターを解除
+
     const btn = document.querySelector(`.filter-btn[data-cat="${cat}"][data-val="${val}"]`);
     if (btn) toggleFilter(btn);
 }
@@ -589,11 +651,13 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
     if (submitBtn) submitBtn.textContent = `${totalMatchCount}件を表示`;
     currentTotalMatchCount = totalMatchCount; // 送信用に件数を保存
+    renderResultComment(totalMatchCount); // スマホ向け：店員の経験談＋件数コメントを表示
 
     if (totalMatchCount === 0) {
         if (list) list.innerHTML = `<div class="no-results">NO PRODUCTS FOUND<br>条件に合う商品が見つかりませんでした</div>`;
         return;
     }
+
 
     const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E";
 
@@ -638,7 +702,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
         const altName = String(item.name || "").replace(/"/g, '&quot;');
 
-        card.innerHTML = `<div class="img-container">${item.label ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

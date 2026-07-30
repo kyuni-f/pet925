@@ -148,6 +148,34 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 /* アクティブフィルターのチップ表示 */
 .active-chips-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; min-height: 32px; }
 
+/* 店員の経験談＋件数コメント（スマホでのみ表示。接客のような「間」を作る） */
+.result-comment-area {
+    display: none;
+    background: #faf7f0;
+    border: 1px solid #ece3d1;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+.result-comment-area:empty { display: none !important; padding: 0; margin: 0; border: none; }
+.result-comment-area .store-comment {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #5a4a2c;
+    margin: 0 0 8px 0;
+}
+.result-comment-area .result-count-comment {
+    font-size: 0.8rem;
+    color: #888;
+    margin: 0;
+}
+.result-comment-area .result-count-comment strong { color: var(--gold); }
+
+@media (max-width: 768px) {
+    .result-comment-area:not(:empty) { display: block; }
+}
+
+
 /* 結果画面の調整チップ：通常（選択中）は金背景、解除時は金枠 */
 .chip {
     background: var(--gold); color: #fff; border: 1.5px solid var(--gold);

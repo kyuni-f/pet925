@@ -39,6 +39,10 @@ RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 
 FIELD_NAMES = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
 
+# 既存JANが見つかった場合でも、この項目だけは自動取得結果で上書き更新する
+# （amz/yah/a8/label/promo/size/amz_p/yah_p などの手動編集項目は既存値を保持する）
+AUTO_UPDATE_FIELDS = ['name', 'brand', 'tags', 'desc', 'img', 'rak', 'rak_p']
+
 # ─────────────────────────────────────────────
 # 設定読み込み
 # ─────────────────────────────────────────────
@@ -379,9 +383,28 @@ def auto_assign_tags(product_name, maker_name, rules_map, allowed_tags):
     # 許可タグのみフィルタ
     return sorted([t for t in tags if t in allowed_tags])
 
+def merge_into_existing(existing_row, new_data, fieldnames):
+    """
+    既存行に対して、AUTO_UPDATE_FIELDS の項目だけ新データで上書きする。
+    新データの値が '#' や空文字の場合は既存値を維持する。
+    手動編集項目（amz/yah/a8/label/promo/size/amz_p/yah_p など）は変更しない。
+    """
+    for field in AUTO_UPDATE_FIELDS:
+        new_val = new_data.get(field)
+        if new_val is not None and new_val != '#' and str(new_val).strip() != '':
+            existing_row[field] = new_val
+    # jan は変わらないはずだが念のため保持
+    existing_row['jan'] = new_data.get('jan', existing_row.get('jan'))
+    # fieldnames に存在しないキーが無いことを保証
+    for f in fieldnames:
+        if f not in existing_row:
+            existing_row[f] = '#'
+    return existing_row
+
 # ─────────────────────────────────────────────
 # メイン処理
 # ─────────────────────────────────────────────
+
 def main(jan_list_path):
     if not os.path.exists(jan_list_path):
         print(f"エラー: JANコードリスト '{jan_list_path}' が見つかりません。")
@@ -427,42 +450,61 @@ def main(jan_list_path):
                 existing_rows.append(row)
     print(f"\n📂 既存 products.csv: {len(existing_rows)}行 ({len(existing_jans)}件のJAN)")
 
+    # JAN → 既存行 のインデックス（更新用マージに使用）
+    existing_row_index = {}
+    for row in existing_rows:
+        jan_key = normalize_jan(row.get('jan', ''))
+        if jan_key and jan_key != '#':
+            existing_row_index[jan_key] = row
+
     # ── JANリスト読み込み ──
     new_jans = []
+    update_jans = []
+    seen_in_list = set()
     with open(jan_list_path, 'r', encoding='utf-8-sig', newline='') as f:
         for i, row in enumerate(csv.reader(f)):
             if not row: continue
             jan = normalize_jan(row[0])
             if jan and jan != 'Undefined' and jan.isdigit() and len(jan) in [13, 14]:
                 jan13 = jan if len(jan) == 13 else jan[:13]
-                if jan13 not in existing_jans:
-                    new_jans.append(jan13)
-                    existing_jans.add(jan13)
+                if jan13 in seen_in_list:
+                    print(f"⏭️ 入力ファイル内で重複のためスキップ: JAN {jan13}")
+                    continue
+                seen_in_list.add(jan13)
+                if jan13 in existing_jans:
+                    update_jans.append(jan13)
+                    print(f"🔄 更新対象: JAN {jan13}")
                 else:
-                    print(f"⏭️ 重複スキップ: JAN {jan13}")
+                    new_jans.append(jan13)
             else:
                 print(f"⚠️ 無効な行 {i+1}: '{row[0]}'")
 
-    if not new_jans:
-        print("\n✅ 新しいJANコードはありません。処理を終了します。")
+    all_jans = new_jans + update_jans
+
+    if not all_jans:
+        print("\n✅ 処理対象のJANコードはありません。処理を終了します。")
         return
 
     print(f"\n{'='*60}")
-    print(f"🆕 新規JANコード: {len(new_jans)}件を処理します")
+    print(f"🆕 新規JANコード: {len(new_jans)}件 / 🔄 更新JANコード: {len(update_jans)}件 を処理します")
     print(f"{'='*60}")
 
     # ── 各JANを処理 ──
     collected = []
+    updated = []
     success_count = 0
+    update_jans_set = set(update_jans)
 
-    for idx, jan in enumerate(new_jans):
+    for idx, jan in enumerate(all_jans):
         if idx > 0:
             wait = 3.0 + random.uniform(0.5, 2.0)
             print(f"\n⏳ {wait:.0f}秒待機（レート制限回避）...")
             time.sleep(wait)
 
+        is_update = jan in update_jans_set
         print(f"\n{'─'*50}")
-        print(f"[{idx+1}/{len(new_jans)}] JAN: {jan}")
+        print(f"[{idx+1}/{len(all_jans)}] JAN: {jan} {'（更新）' if is_update else '（新規）'}")
+
 
         # Step 1: Product Search API v2（一発取得）
         prod_data = fetch_product_search_v2(jan)
@@ -513,9 +555,14 @@ def main(jan_list_path):
             new_row['rak'] = f"https://search.rakuten.co.jp/search/mall/{jan}/"  # 検索リンク
             new_row['rak_p'] = price_str
 
-            collected.append(new_row)
+            if is_update:
+                merged = merge_into_existing(existing_row_index[jan], new_row, fieldnames)
+                updated.append(merged)
+            else:
+                collected.append(new_row)
             success_count += 1
             continue
+
 
         # Step 1-b: Item Search API（フォールバック）
         print(f"  [フォールバック] Item Search API を試行...")
@@ -550,9 +597,14 @@ def main(jan_list_path):
             new_row['rak'] = item_url or f"https://search.rakuten.co.jp/search/mall/{jan}/"
             new_row['rak_p'] = '0'
 
-            collected.append(new_row)
+            if is_update:
+                merged = merge_into_existing(existing_row_index[jan], new_row, fieldnames)
+                updated.append(merged)
+            else:
+                collected.append(new_row)
             success_count += 1
             continue
+
 
         # Step 1-c: Yahoo! ショッピング（最終フォールバック）
         print(f"  [最終フォールバック] Yahoo!ショッピングAPI を試行...")
@@ -574,20 +626,25 @@ def main(jan_list_path):
             new_row['yah'] = f"https://shopping.yahoo.co.jp/search?p={jan}"
             new_row['rak_p'] = '0'
 
-            collected.append(new_row)
+            if is_update:
+                merged = merge_into_existing(existing_row_index[jan], new_row, fieldnames)
+                updated.append(merged)
+            else:
+                collected.append(new_row)
             success_count += 1
             continue
 
         print(f"  ❌ 全API失敗: JAN={jan}")
 
-    # ── products.csv に追記 ──
+    # ── products.csv に追記・更新 ──
     print(f"\n{'='*60}")
-    print(f"完了: {success_count}/{len(new_jans)}件取得成功")
+    print(f"完了: {success_count}/{len(all_jans)}件取得成功（新規 {len(collected)}件 / 更新 {len(updated)}件）")
 
-    if collected:
-        # 既存行に新規行を追加
+    if collected or updated:
+        # 新規行を既存行リストに追加
+        # （updated の内容は existing_row_index 経由で existing_rows 内のオブジェクトを
+        #   直接書き換えているため、既に existing_rows に反映済み）
         for item in collected:
-            # 既存のJANと重複しないか最終確認
             jan = item.get('jan', '')
             if jan:
                 existing_rows.append(item)
@@ -601,13 +658,14 @@ def main(jan_list_path):
             writer.writeheader()
             writer.writerows(existing_rows)
 
-        print(f"\n✅ products.csv を更新しました（全{len(existing_rows)}行）")
+        print(f"\n✅ products.csv を更新しました（全{len(existing_rows)}行、新規{len(collected)}件・更新{len(updated)}件）")
         print(f"💡 内容を確認するには ODS で開くか、以下のコマンドを実行:")
         print(f"   python3 csv_to_json.py")
         print(f"💡 手動で微調整したい場合は pet925_master.ods の products シートに貼り付けてください")
     else:
         print("どのAPIからもデータを取得できませんでした。")
         print("JANコードが正しいか確認してください。")
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
