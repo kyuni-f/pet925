@@ -361,7 +361,7 @@ def auto_assign_tags(product_name, maker_name, rules_map, allowed_tags):
         tags.add('puppy')
     elif re.search(r'シニア|senior|老[犬猫]|高齢', name_lower):
         tags.add('senior')
-    elif re.search(r'成[犬猫]|adult|1歳|2歳|3歳|4歳|5歳|6歳|7歳', name_lower):
+    elif re.search(r'成[犬猫]|adult|1歳|2歳|3歳|4歳|5歳|6歳', name_lower):
         tags.add('adult')
     else:
         # 「全年齢」「全齢」がなければall_agesにしない（デフォルトはadultと判断）
@@ -371,7 +371,7 @@ def auto_assign_tags(product_name, maker_name, rules_map, allowed_tags):
             tags.add('adult')
 
     # 3. 動物種判定
-    if re.search(r'[犬狗]|dog', name_lower):
+    if re.search(r'[犬]|dog', name_lower):
         tags.add('dog')
     if re.search(r'[猫]|cat', name_lower):
         tags.add('cat')

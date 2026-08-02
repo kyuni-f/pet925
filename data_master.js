@@ -1,4 +1,4 @@
-const siteVersion = '20260730233904';
+const siteVersion = '20260802213035';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -67,6 +67,42 @@ const tagKeywords = {
     ],
     "tooth": [
         "歯"
+    ],
+    "dog": [
+        "犬"
+    ],
+    "cat": [
+        "猫"
+    ],
+    "all_ages": [
+        "全年齢用"
+    ],
+    "puppy": [
+        "子犬・子猫"
+    ],
+    "adult": [
+        "成犬・成猫"
+    ],
+    "senior": [
+        "シニア"
+    ],
+    "tear": [
+        "涙ヤケ"
+    ],
+    "kidney": [
+        "腎臓・尿路"
+    ],
+    "skin": [
+        "皮膚",
+        "アレルギー"
+    ],
+    "joint": [
+        "関節",
+        "骨折"
+    ],
+    "appetite": [
+        "食イツキ",
+        "食ベムラ"
     ]
 };
 const comments = [
