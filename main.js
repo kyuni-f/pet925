@@ -559,8 +559,8 @@ function removeSingleFilter(cat, val) { // 特定のフィルターを解除
 }
 
 function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごとの検索・アフィリエイトURLを生成
-    // JANコードが13桁の有効な数値なら、検索精度を最大化するために最優先で使用
-    const searchVal = (jan && jan !== '#' && jan.length === 13) ? jan : `${brand} ${name}`;
+    // 商品名（ブランド名＋商品名）で検索することで、JANコード未対応の出品者もヒットさせる
+    const searchVal = `${brand} ${name}`;
     const q = encodeURIComponent(searchVal);
 
     // CSVにURLがあればそれを使用、なければ検索URLを生成
@@ -670,6 +670,15 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
     const defaultImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 380'%3E%3Crect width='400' height='380' fill='%23ffffff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' letter-spacing='2' fill='%23bbb'%3ENO IMAGE%3C/text%3E%3C/svg%3E";
 
+    // 商品名の「長い」判定閾値：スマホは2列グリッドでカード幅が狭くなるため、PCより低い閾値を使う
+    // （描画1回につき1回だけ判定するため、件数が増えてもコストは増えない）
+    const MOBILE_BREAKPOINT_PX = 768; // style.cssの @media (max-width: 768px) と合わせる
+    const NAME_LONG_THRESHOLD_PC = 45;
+    const NAME_LONG_THRESHOLD_MOBILE = 24;
+    const nameLongThreshold = window.innerWidth <= MOBILE_BREAKPOINT_PX
+        ? NAME_LONG_THRESHOLD_MOBILE
+        : NAME_LONG_THRESHOLD_PC;
+
     matchedItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
@@ -713,7 +722,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
         const altName = String(item.name || "").replace(/"/g, '&quot;');
 
-        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > 45 ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

@@ -552,7 +552,7 @@ def main(jan_list_path):
             new_row['tags'] = ' '.join(tags)
             new_row['desc'] = description
             new_row['img'] = image_url or '#'
-            new_row['rak'] = f"https://search.rakuten.co.jp/search/mall/{jan}/"  # 検索リンク
+            new_row['rak'] = '#'  # 表示時に商品名で検索URLを生成させる
             new_row['rak_p'] = price_str
 
             if is_update:
@@ -594,7 +594,7 @@ def main(jan_list_path):
             new_row['tags'] = ' '.join(tags)
             new_row['desc'] = description
             new_row['img'] = image_url or '#'
-            new_row['rak'] = item_url or f"https://search.rakuten.co.jp/search/mall/{jan}/"
+            new_row['rak'] = item_url or '#'  # 実商品URLがあれば使用、なければ表示時に商品名で生成
             new_row['rak_p'] = '0'
 
             if is_update:
@@ -623,7 +623,7 @@ def main(jan_list_path):
             new_row['name'] = product_name
             new_row['tags'] = ' '.join(tags)
             new_row['img'] = image_url or '#'
-            new_row['yah'] = f"https://shopping.yahoo.co.jp/search?p={jan}"
+            new_row['yah'] = '#'  # 表示時に商品名で検索URLを生成させる
             new_row['rak_p'] = '0'
 
             if is_update:

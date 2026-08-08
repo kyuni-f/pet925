@@ -381,7 +381,9 @@ footer a { color: var(--gold); text-decoration: none; }
     }
     .product-name {
         font-size: 0.9rem;
-        min-height: 3.6em;
+        line-clamp: 4;
+        -webkit-line-clamp: 4;
+        min-height: 4.8em; /* 4行分に合わせて調整 */
         margin: 6px 0;
     }
     .product-name.is-long {
