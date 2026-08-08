@@ -684,9 +684,6 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         card.className = 'product-card';
 
         const imageSrc = getProductImageSrc(item, defaultImg);
-        
-        // 楽天公式カタログ画像のため「参考画像」表記は不要
-        const referenceBadge = '';
 
         // brandLookupMap を使用して正式名称を取得
         const displayBrandName = brandLookupMap[item.brand_id] || item.brand;
@@ -722,7 +719,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
         const altName = String(item.name || "").replace(/"/g, '&quot;');
 
-        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}${referenceBadge}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +
@@ -739,15 +736,20 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 }
 
 function initializeApp() { // アプリ全体の初期化処理
+    // --- iframe埋め込み対策（他サイトにまるごと埋め込まれての無断転載を防止） ---
+    if (window.top !== window.self) {
+        window.top.location = window.self.location;
+        return;
+    }
+
     // --- 簡易的なドメインロック（疑似サイト対策） ---
     const authorizedDomains = ['kyuni-f.github.io', 'localhost', '127.0.0.1'];
     const currentHostname = window.location.hostname;
-    
+
     if (currentHostname && !authorizedDomains.includes(currentHostname)) {
-        console.warn("Unauthorized domain detected.");
-        // 警告を表示する、または本家へリダイレクトさせる（必要に応じて有効化）
-        // alert("このサイトは公式な pet925 ではありません。公式ページへ移動します。");
-        // window.location.href = "https://kyuni-f.github.io/pet925/";
+        console.warn("Unauthorized domain detected. Redirecting to official site.");
+        window.location.href = "https://kyuni-f.github.io/pet925/";
+        return;
     }
 
     if (typeof tagMaster === 'undefined') return;

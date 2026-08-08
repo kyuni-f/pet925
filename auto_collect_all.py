@@ -94,11 +94,6 @@ def normalize_jan(jan_str):
         return jan[:13]
     return jan
 
-def load_csv_simple(path):
-    if not os.path.exists(path): return []
-    with open(path, 'r', encoding='utf-8-sig') as f:
-        return list(csv.reader(f))
-
 def load_brands_map():
     brands_map = {}
     if os.path.exists(BRANDS_CSV):

@@ -23,8 +23,7 @@
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
 - **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
-- **`jan_data_collector.py`** : JANコードから画像・商品名・リンクのみを簡易取得するスクリプト（`auto_collect_all.py` の簡易版）
-- **`jan_list.csv`** : `auto_collect_all.py` / `jan_data_collector.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
+- **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
 - **`test_image_filter.py`** : 画像フィルター（年齢・URLスコアリング）の単体テスト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」

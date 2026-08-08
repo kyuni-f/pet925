@@ -675,7 +675,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
     if not name:
         return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
 
-    # 16列構成（JANコード対応版）
+    # 16列構成（必須列。17列目のexclude_tagsは任意列のためここには含めない）
     expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
     missing_keys = [k for k in expected_keys if k not in row or row[k] is None]
     if missing_keys:
@@ -700,22 +700,26 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
         img_val = '#'
         row['img'] = '#'
 
-    current_kws = []
-
-    # 外部ライブラリに頼らず、CSV側の「_keywords」フィールドや
-    # rules.csv からの情報を統合するのみに留める
-    row['_keywords'] = " ".join(list(set(current_kws)))
-
     tags = row.get('tags', '').replace(',', ' ').split()
     tags = [normalize_text(t) for t in tags if t]
     for t in tags:
         if t not in allowed_tags:
             row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
-            
-    # 1. rules.csv に基づく自動付与（候補を作成）
+
+    # 除外タグの読み込み（tags.csv/rules.csv と同じ英語タグID表記。例: appetite）
+    # これに含まれるタグIDは、キーワード一致による自動付与・提案の対象から除外する
+    exclude_tags_raw = str(row.get('exclude_tags', '#')).strip()
+    excluded_tag_ids = set()
+    if exclude_tags_raw and exclude_tags_raw != '#':
+        excluded_tag_ids = {normalize_text(t) for t in exclude_tags_raw.replace(',', ' ').split() if t}
+        for t in excluded_tag_ids:
+            if t not in allowed_tags:
+                row_warnings.append(f"行 {line_num}: exclude_tags に未登録タグ '{t}' が指定されています (商品: {name[:20]}...)")
+
+    # 1. rules.csv に基づく自動付与（候補を作成、除外タグは対象外）
     auto_added_info = []
     for tag_id, keywords in tag_keywords.items():
-        if tag_id not in tags:
+        if tag_id not in tags and tag_id not in excluded_tag_ids:
             found_kw = next((kw for kw in keywords if kw in check_text), None)
             if found_kw:
                 tags.append(tag_id)
@@ -724,7 +728,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
 
     # 3. タグ名そのものが説明文に含まれている場合の提案 (除外タグ適用後)
     for t_name_norm, t_id in tag_lookup_for_suggest.items():
-        if t_id not in tags and t_name_norm in check_text:
+        if t_id not in tags and t_id not in excluded_tag_ids and t_name_norm in check_text:
             row_warnings.append(f"行 {line_num}: 説明文に '{t_name_norm}' が含まれています。タグ '{t_id}' の付与を検討してください。")
 
     # 価格の数値形式チェック

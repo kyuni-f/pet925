@@ -86,8 +86,7 @@ function processChunk(data) {
         const brandDisplayName = brandLookupMap[item.brand_id] || "";
         const brandNorm = normalize(item.brand) + " " + normalize(item.brand_id || "") + " " + normalize(brandDisplayName);
         const descNorm = normalize(item.desc);
-        const keywordsNorm = normalize(item._keywords || "");
-        
+
         let tagsNorm = "";
         // セットを毎回作らず、検索時も配列のincludesを使用（タグ数が少なければこちらの方が速い）
         item.tags.forEach(t => {
@@ -102,7 +101,6 @@ function processChunk(data) {
             name: nameNorm,
             brand: brandNorm,
             tags: tagsNorm.trim(),
-            keywords: keywordsNorm,
             desc: descNorm
         };
 
@@ -112,8 +110,7 @@ function processChunk(data) {
             brandNorm, 
             tagsNorm, 
             descNorm, 
-            normalize(item.size || ""), 
-            keywordsNorm
+            normalize(item.size || "")
         ].join(' ');
 
         item._originalIndex = allProducts.length; // 元の順序を保持
@@ -225,7 +222,6 @@ self.onmessage = function(e) {
                 if (w.name === word) score += 500;
                 if (w.brand.indexOf(word) !== -1) score += 50;
                 if (w.tags.indexOf(word) !== -1) score += 20;
-                if (w.keywords.indexOf(word) !== -1) score += 40;
                 if (w.desc.indexOf(word) !== -1) score += 5;
             }
             item._tempScore = score;
