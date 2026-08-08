@@ -16,7 +16,7 @@
 ### 📂 Directory Structure
 - **`data/`** : `pet925_master.ods` (5シート構成のマスター), 各種CSV (products, categories, tags, brands, rules)
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
-- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（画像フィルター含む）
+- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
@@ -25,7 +25,6 @@
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
-- **`test_image_filter.py`** : 画像フィルター（年齢・URLスコアリング）の単体テスト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
 - **`package-lock.json`** : インストールされたライブラリのバージョンを完全に固定する「検品名簿」
 - **`docs/`** : `MANUAL.md` (運用手順書), `PROJECT_SUMMARY.md` (開発記録), `AI_INSTRUCTIONS.md` (AI用指示書)
@@ -39,33 +38,27 @@ npm install
 # 2. Pythonライブラリのインストール
 sudo apt install python3-requests
 
-# 3. データのビルド（CSV -> JSON 変換）
+# 3. データのビルド（CSV -> JSON 変換 + バリデーション）
 npm run build
 # または
 python3 csv_to_json.py
 
-# 4. 画像フィルター更新後の再ビルド（既存 img URL を破棄して取り直す）
-python3 csv_to_json.py --force-refresh
-
-# 5. ファイル変更を監視しながらビルド（開発中）
+# 4. ファイル変更を監視しながらビルド（開発中）
 npm start
 
-# 6. 画像フィルターの単体テスト
-python3 -m unittest test_image_filter.py -v
-
-# 7. データの公開（デプロイ）
+# 5. データの公開（デプロイ）
 npm run deploy  # 検品、ビルド、コミット、プッシュを一括実行
 
-# 8. 強制同期（競合等でプッシュできない場合）
+# 6. 強制同期（競合等でプッシュできない場合）
 git push origin main --force
 
-# 9. VS Code 本体の更新 (Linux環境)
+# 7. VS Code 本体の更新 (Linux環境)
 sudo apt update && sudo apt install code
 
-# 10. APIで商品データを自動生成
+# 8. APIで商品データを自動生成
 python3 auto_data_collector.py ""
 
-# 11. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
+# 9. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
 npm run collect:all   # データ収集 + JSONビルドまで一括実行
 # または
 npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
@@ -73,29 +66,20 @@ npm run collect jan_list.csv   # データ収集のみ（別途 npm run build �
 
 > **JANコードからのCSV自動生成手順の詳細**（`jan_list.csv` の書き方、追加方式の仕組みなど）は `docs/MANUAL.md` の「A-2. JANコードからのCSV自動生成」を参照してください。
 
-> **画像フィルターを変更した場合**は、必ず `python3 csv_to_json.py --force-refresh` を実行してからデプロイしてください。通常の `npm run build` だけでは、CSVに既に保存された古い `img` URL は更新されません。
+## 🖼 画像取得の仕組み
 
-## 🖼 画像自動取得パイプライン（csv_to_json.py）
-
-JANコードが入力された商品は、ビルド時に以下の優先順位で画像を自動取得します。
+画像取得は **`auto_collect_all.py`**（`npm run collect` / `npm run collect:all`）の役目です。JANコードから以下の優先順位でAPIを呼び出し、`img` 列に画像URLを書き込みます。
 
 | 優先度 | 取得元 | 特徴 |
 |---|---|---|
 | **①** | **楽天Product Search API(v2)** （商品価格ナビAPIのマイクロサービス版） | 透かし・ロゴなしの公式カタログ画像（`r.r10s.jp`）。**最優先** |
-| ② | Yahoo!ショッピングAPI | 一部ショップロゴが入る場合あり |
-| ③ | 楽天商品検索API(IchibaItem) | スコアリングフィルター適用 |
-| ④ | 推測ショップリスト | `DEFAULT_RAKUTEN_IMAGE_SHOPS` で設定 |
-| ⑤ | Google CSE | ローカルキャッシュにダウンロード保存 |
+| ② | 楽天Item Search API | フォールバック |
+| ③ | Yahoo!ショッピングAPI | 最終フォールバック |
 
-**多層フィルター**:
-- **商品名・サブ文字**: APIの `itemName` に加え `itemCaption` 等も照合。年齢（1歳/11歳）・容量（kg）・箱セット表記を検証
-- **年齢の厳密判定**: `(?<!\d)(\d+)歳` で部分一致を防止（「1歳」が「11歳」に誤マッチしない）
-- **キーワード一致**: 1語だけの部分一致では通さず、複数キーワードの過半数一致を要求
-- **URLスコアリング**: ショップロゴ入りURL、非JAN画像を大減点。`r.r10s.jp` を高スコア化
-- **JAN優先**: `/cabinet/jan/{JAN}.jpg` 形式の画像を最優先採用
+一方 **`csv_to_json.py`（ビルドスクリプト）は画像を取得しません**。純粋にCSV→JSON変換とデータ検証のみを行い、`img` 列については `images/{JANコード}.拡張子` というファイルがプロジェクト直下に手動で置かれていればそれを優先採用する「ローカルキャッシュ参照」機能のみを持ちます。
 
-> **画像の「参考画像」バッジや出典注釈は表示されません**（楽天公式カタログ画像のため不要と判断）。
-> 誤画像が残る場合は `img` 列に正しいURLを手動設定するか、ブックマークレットで取得してください（詳細は `docs/MANUAL.md`）。
+- **画像が見つからなかった場合**（`img` が `#` のまま）: フロントエンドが自動でプレースホルダー画像を表示するため、ビルドやデプロイが失敗することはありません。
+- **誤った画像や画像なしの商品を直したい場合**: `img` 列に正しいURLを直接貼り付けるか、ブックマークレットで取得してください（詳細は `docs/MANUAL.md`）。
 
 ## 🌐 カスタムドメインの導入手順
 将来的に独自ドメイン（例：www.pet925.com）を運用する際の手順です。
@@ -133,7 +117,7 @@ AI（Gemini等）を使用してデータ作成やコード修正を行う際は
 - **AIの差分適用（Apply）が失敗する場合**:
     1. ターミナルで `git checkout .` を実行して、中途半端な変更をリセットします。
     2. AIが出力したコードブロックを丸ごとコピーし、対象ファイルの内容を全選択して上書き貼り付けします。
-    3. 保存後、`python3 csv_to_json.py --force-refresh` を実行してバリデーションと画像再取得を確認します。
+    3. 保存後、`npm run build` を実行してバリデーションが通ることを確認します。
 - **`package-lock.json` は手動で編集しない**: `npm install` 時に自動更新されます。常に Git に含めておくことで、どの環境でも全く同じように動作することを保証します。
 - **GitHubで全ファイルを見る**: リポジトリ画面で `.` (ピリオド) を押すとWebエディタが起動します。
 - **Linuxで隠しファイルを表示**: 

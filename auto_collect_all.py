@@ -28,6 +28,17 @@ import random
 import requests
 from io import StringIO
 
+from pet_utils import (
+    normalize_text,
+    normalize_jan,
+    get_env_value,
+    load_dict_rows,
+    RAKUTEN_REQUEST_HEADERS,
+    RAKUTEN_PRODUCT_SEARCH_V2_URL,
+    RAKUTEN_ITEM_SEARCH_URL,
+    YAHOO_SHOPPING_SEARCH_URL,
+)
+
 # ─────────────────────────────────────────────
 # 設定
 # ─────────────────────────────────────────────
@@ -44,78 +55,32 @@ FIELD_NAMES = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'ra
 AUTO_UPDATE_FIELDS = ['name', 'brand', 'tags', 'desc', 'img', 'rak', 'rak_p']
 
 # ─────────────────────────────────────────────
-# 設定読み込み
+# 設定読み込み（.env読み込みの実処理は pet_utils.get_env_value に共通化）
 # ─────────────────────────────────────────────
-def load_config():
-    config = {"RAKUTEN_APP_ID": None, "RAKUTEN_ACCESS_KEY": None, "GEMINI_API_KEY": None, "YAHOO_CLIENT_ID": None}
-    # システム環境変数を優先
-    for key in config:
-        val = os.getenv(key)
-        if val:
-            config[key] = val
-    # .env で補完
-    if os.path.exists(".env"):
-        with open(".env", "r", encoding="utf-8-sig") as f:
-            for line in f:
-                line = line.split('#')[0].strip()
-                if not line: continue
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    k = k.strip(); v = v.strip().strip("'").strip('"')
-                    if k in config and not config[k]:
-                        config[k] = v
-    return config
-
-CONFIG = load_config()
-RAKUTEN_APP_ID = CONFIG["RAKUTEN_APP_ID"]
-RAKUTEN_ACCESS_KEY = CONFIG["RAKUTEN_ACCESS_KEY"]
-GEMINI_API_KEY = CONFIG["GEMINI_API_KEY"]
-YAHOO_CLIENT_ID = CONFIG["YAHOO_CLIENT_ID"]
+RAKUTEN_APP_ID = get_env_value("RAKUTEN_APP_ID")
+RAKUTEN_ACCESS_KEY = get_env_value("RAKUTEN_ACCESS_KEY")
+GEMINI_API_KEY = get_env_value("GEMINI_API_KEY")
+YAHOO_CLIENT_ID = get_env_value("YAHOO_CLIENT_ID")
 
 # ─────────────────────────────────────────────
-# 正規化ユーティリティ
+# マスターCSV読み込み（normalize_text / normalize_jan は pet_utils.py で共有）
 # ─────────────────────────────────────────────
-def normalize_text(s):
-    if not s: return ""
-    s = unicodedata.normalize('NFKC', str(s))
-    chars = []
-    for char in s:
-        cp = ord(char)
-        if 0x3041 <= cp <= 0x3096:
-            chars.append(chr(cp + 0x60))
-        else:
-            chars.append(char)
-    s = "".join(chars).lower()
-    return re.sub(r'\s+', ' ', s).strip()
-
-def normalize_jan(jan_str):
-    jan = str(jan_str).strip().replace(" ", "").replace("-", "")
-    if jan.isdigit() and len(jan) == 14:
-        return jan[:13]
-    return jan
-
 def load_brands_map():
     brands_map = {}
-    if os.path.exists(BRANDS_CSV):
-        with open(BRANDS_CSV, 'r', encoding='utf-8-sig', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if 'key' in row and 'name' in row:
-                    brands_map[row['key'].lower()] = row['name']
+    for row in load_dict_rows(BRANDS_CSV):
+        if 'key' in row and 'name' in row:
+            brands_map[row['key'].lower()] = row['name']
     return brands_map
 
 def load_rules_map():
     """rules.csv から {タグID: [キーワードリスト]} を読み込む"""
     rules = {}
-    if os.path.exists(RULE_CSV):
-        with open(RULE_CSV, 'r', encoding='utf-8-sig', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                tag = row.get('tag', '').strip()
-                kw_str = row.get('keywords', '').strip()
-                if tag and kw_str:
-                    kws = [normalize_text(k) for k in kw_str.replace(',', ' ').split() if k]
-                    rules[tag] = kws
+    for row in load_dict_rows(RULE_CSV):
+        tag = (row.get('tag') or '').strip()
+        kw_str = (row.get('keywords') or '').strip()
+        if tag and kw_str:
+            kws = [normalize_text(k) for k in kw_str.replace(',', ' ').split() if k]
+            rules[tag] = kws
     return rules
 
 def load_allowed_tags():
@@ -125,13 +90,10 @@ def load_allowed_tags():
     rules = load_rules_map()
     allowed.update(normalize_text(t) for t in rules.keys())
     # tags.csv の key
-    if os.path.exists(TAG_CSV):
-        with open(TAG_CSV, 'r', encoding='utf-8-sig', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                key = row.get('key', '').strip()
-                if key:
-                    allowed.add(normalize_text(key))
+    for row in load_dict_rows(TAG_CSV):
+        key = (row.get('key') or '').strip()
+        if key:
+            allowed.add(normalize_text(key))
     return allowed
 
 # ─────────────────────────────────────────────
@@ -151,20 +113,15 @@ def fetch_product_search_v2(jan):
     """
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
-    url = "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801"
+    url = RAKUTEN_PRODUCT_SEARCH_V2_URL
     params = {
         "applicationId": RAKUTEN_APP_ID.strip(),
         "accessKey": RAKUTEN_ACCESS_KEY.strip(),
         "keyword": jan,
         "format": "json"
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Origin": "https://kyuni-f.github.io/pet925/",
-        "Referer": "https://kyuni-f.github.io/pet925/"
-    }
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp = requests.get(url, params=params, headers=RAKUTEN_REQUEST_HEADERS, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             products = data.get("Products", [])
@@ -205,7 +162,7 @@ def fetch_item_search(jan):
     """
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
-    url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
+    url = RAKUTEN_ITEM_SEARCH_URL
     params = {
         "applicationId": RAKUTEN_APP_ID.strip(),
         "accessKey": RAKUTEN_ACCESS_KEY.strip(),
@@ -214,13 +171,8 @@ def fetch_item_search(jan):
         "format": "json",
         "formatVersion": 2
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Origin": "https://kyuni-f.github.io/pet925/",
-        "Referer": "https://kyuni-f.github.io/pet925/"
-    }
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp = requests.get(url, params=params, headers=RAKUTEN_REQUEST_HEADERS, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             items = data.get("items") or data.get("Items", [])
@@ -260,7 +212,7 @@ def fetch_yahoo_shopping(jan):
     """Yahoo!ショッピングAPIから商品名と画像を取得"""
     if not YAHOO_CLIENT_ID or not jan or jan == '#':
         return None
-    url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
+    url = YAHOO_SHOPPING_SEARCH_URL
     params = {"appid": YAHOO_CLIENT_ID.strip(), "jan_code": jan, "results": 1}
     try:
         resp = requests.get(url, params=params, timeout=10)

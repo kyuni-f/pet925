@@ -184,7 +184,19 @@ function closeImageModal() { // 商品画像の拡大モーダルを閉じる
 function openLegalModal() {
     const overlay = document.getElementById('legal-modal-overlay');
     if (overlay) overlay.style.display = 'flex';
+    setupContactMailLink();
     trackEvent('UI', 'legal_open', 'click');
+}
+
+function setupContactMailLink() {
+    // メールアドレスはリポジトリに平文で残さず、data_master.js（ビルド時に.envのCONTACT_EMAILから生成）の
+    // 文字コード配列 CONTACT_MAIL_CODES から実行時に復元する
+    if (typeof CONTACT_MAIL_CODES === 'undefined') return;
+    const link = document.getElementById('contact-mail-link');
+    if (!link || link.dataset.mailReady) return;
+    const address = String.fromCharCode(...CONTACT_MAIL_CODES);
+    link.href = 'mailto:' + address;
+    link.dataset.mailReady = 'true';
 }
 
 function closeLegalModal() { // 規約モーダルを閉じる

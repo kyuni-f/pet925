@@ -366,6 +366,27 @@
 - **対応内容**: `jan_data_collector.py` を削除し、`README.md`・`docs/MANUAL.md` に残っていた参照・比較セクションも合わせて削除。
 - **学び**: 「上位互換が既にある簡易版スクリプト」は、削除しても運用手順（`npm run collect` / `npm run collect:all`）に一切影響がないため、早めに整理したほうがドキュメントの分かりやすさを保てる。
 
+### 66. 問い合わせメールリンクのアドレス難読化（ビルド時 `.env` 注入方式）
+- **経過**: プライバシーポリシー・免責事項モーダル内の著作権削除依頼用リンク（`mailto:`）に、実際のメールアドレスを平文で `index.html` に直書きすると、HTMLソースを見ただけでスクレイピングボットや悪意あるユーザーに収集されてしまう懸念があった。一方で、この情報は最終的にブラウザ（訪問者側）で使われる必要があるため、Pythonスクリプト用の `.env`（サーバー/ビルド時のみ読み込まれ、GitHubにはpushされない秘密情報）とは性質が異なり、単純に「`.env`に入れれば安全」というわけにはいかない点を整理した。
+- **対応内容**:
+    - `index.html` の `mailto:` リンクから実アドレスを削除し、`id="contact-mail-link"` を付けた空リンク（`href="#"`）に変更。
+    - `csv_to_json.py` に `load_contact_config()` を追加し、既存の `RAKUTEN_APP_ID` 等と同じパターンで `.env` の `CONTACT_EMAIL` を読み込み。ビルド時（`data_master.js` 生成時）に、アドレスを平文ではなく文字コード配列 `CONTACT_MAIL_CODES`（`[ord(c) for c in CONTACT_EMAIL]`）として書き出すよう変更。
+    - `main.js` に `setupContactMailLink()` を新設し、`openLegalModal()`（モーダルを開くタイミング）で `CONTACT_MAIL_CODES` を `String.fromCharCode()` で実行時に復元し、`href` に `mailto:` リンクとしてセット。
+    - `.env` に `CONTACT_EMAIL=your-email@example.com`（プレースホルダー）を追加。実運用時はこの1行を実アドレスに書き換えて `npm run build` を実行するだけで反映される。
+- **学び**:
+    - `.env` は「サーバー/ビルド環境だけで完結し、ブラウザに配信されるファイルには一切含まれない秘密情報」の置き場所であり、最終的にクライアント側JSに含める必要がある値（メールアドレス等）を隠す用途には本質的に使えないという性質の違いを明確化。
+    - とはいえ、既存のビルドパイプライン（`.env` → Pythonスクリプト → `data_master.js` 自動生成）を再利用することで、「実アドレスをソースコードに手打ちしない」「`.env`を書き換えてビルドするだけで反映される」という運用上の安全性・利便性は確保できる。完全な秘匿ではなく、単純なHTML/JSスクレイピングに対する実利的な抑止策（ソフトな難読化）として位置づけることが重要。
+
+### 67. `csv_to_json.py` から画像取得ロジックを全廃（役割分担の明確化）
+- **経過**: `csv_to_json.py` には#56〜#59で追加した画像取得カスケード（楽天Product Search API(v2) → Yahoo!ショッピングAPI → 楽天商品検索API(IchibaItem・要検証スコアリング) → 推測ショップリストHEADリクエスト → Google CSE画像検索）が残っていたが、`package.json` の `build`/`start`/`collect:all` はいずれも `--skip-api` 付きで実行しており、実際には `build:refresh`（`--force-refresh`）を手動実行した場合にしか動いていなかった。一方、新規商品の画像取得は既に `auto_collect_all.py`（楽天Product Search API(v2) → Item Search API → Yahoo!ショッピングAPI の3段フォールバック）が担っており、`build:refresh` は一度も使われていなかったことが判明。
+- **対応内容**:
+    - `csv_to_json.py` から画像取得系のコード（`fetch_rakuten_product_data_v2` / `fetch_rakuten_data` / `fetch_yahoo_shopping_data` / `fetch_google_image`、商品名妥当性検証 `_is_api_item_valid`、URLスコアリング `_score_image_url`、関連の正規表現・定数・設定読み込み）を丸ごと削除し、`requests` / `random` / `urllib.parse.unquote` の依存も不要に。ファイル全体で約450行（4割強）を削減。
+    - 唯一、`images/{JANコード}.拡張子` を手動配置しておくと自動採用される「ローカルキャッシュ参照」処理のみは、API呼び出しを伴わない軽量な機能として残置。
+    - `process_row_task()` / `convert()` から `force_refresh` / `skip_api` 引数を除去し、`package.json` の `--skip-api` / `--force-refresh` フラグと `build:refresh` スクリプトを削除。
+    - `README.md` / `docs/MANUAL.md` の画像取得パイプライン説明を、実態（`auto_collect_all.py` が取得を担当し、`csv_to_json.py` は変換・検証のみ）に合わせて修正。
+- **安全性の確認**: `main.js` の `getProductImageSrc()` が `img === '#'` の場合に既定でプレースホルダー画像へフォールバックする実装になっているため、画像取得ロジックを削除しても画像欠落による表示崩れは発生しない。
+- **学び**: 「使われているかどうか」は静的なコードの存在だけでは分からず、実際に `package.json` のスクリプトや呼び出しフラグまで追わないと判断を誤る。似た目的の機能が2つのスクリプトに分散している場合、片方が実質的に呼ばれなくなっていないか定期的に確認し、「取得は収集スクリプト、変換はビルドスクリプト」のように責務を1箇所に集約すると、コード量・保守コストの両方を削減できる。
+
 ## ✅ 現在の進捗ステータス
 
 - [x] 基盤構築: ルートディレクトリ運用への移行とプロジェクト構造の整理
@@ -409,6 +430,8 @@
 - [x] デッドコードの整理（`referenceBadge` / `_keywords` 生成列 / `load_csv_simple`）
 - [x] 無断転載対策の強化（ドメインロックのリダイレクト有効化・iframe埋め込み対策）
 - [x] `jan_data_collector.py`（`auto_collect_all.py` の下位互換）を削除
+- [x] 問い合わせメールリンクのアドレス難読化（ビルド時に`.env`の`CONTACT_EMAIL`から`CONTACT_MAIL_CODES`を自動生成）
+- [x] `csv_to_json.py` から画像取得ロジックを全廃し、画像取得は `auto_collect_all.py` に一本化（役割分担の明確化）
 
 ## 🤖 AI への指示用テンプレート (最新版)
 
@@ -428,7 +451,7 @@ Gemini に相談する際は、以下の情報をコンテキストとして渡�
 - 列構成：`name,brand,tags,desc,size,jan,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p`
 
 ---
-**最終更新日**: 2026年8月8日（ショップ検索の商品名ベース化、exclude_tags実装、デッドコード整理、無断転載対策強化、jan_data_collector.py削除）
+**最終更新日**: 2026年8月9日（問い合わせメールリンクの難読化、`csv_to_json.py`から画像取得ロジックを全廃し`auto_collect_all.py`に一本化）
 
 **作者**: kyuni
 **職業的立ち位置**: フルスタック・個人開発者（Indie Hacker）
