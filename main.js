@@ -394,6 +394,7 @@ function clearAllFilters() {
     for (const cat in activeFilters) {
         activeFilters[cat] = (typeof tagMaster !== 'undefined' && tagMaster[cat]) ? getDefaultFilterValue(cat) : "all";
     }
+    visibleChipsInResults.clear();
     document.getElementById('search-input').value = '';
     document.querySelectorAll('.filter-btn').forEach(btn => {
         if (btn.getAttribute('data-val') === 'all') btn.classList.add('active');
@@ -620,13 +621,15 @@ window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更
     const searchVal = document.getElementById('search-input').value;
     const searchWords = searchVal.replace(/　/g, ' ').trim().split(/\s+/).filter(w => w !== '').map(w => normalize(w));
 
-    // 現在の検索状態をキー化して、前回と全く同じなら処理をスキップ（重複リクエスト防止）
+    // チップ・お気に入りボタンの表示は軽量なので、重複防止ガードより前に常に更新する
+    // （visibleChipsInResultsの変更はactiveFiltersに現れないため、ガードでスキップされると反映漏れが起きる）
+    renderActiveChips();
+    updateFavoriteButtonUI();
+
+    // 現在の検索状態をキー化して、前回と全く同じなら重い処理（Worker検索・URL更新）をスキップ（重複リクエスト防止）
     const currentStateKey = JSON.stringify({searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites});
     if (currentStateKey === lastRenderStateKey) return;
     lastRenderStateKey = currentStateKey;
-
-    renderActiveChips();
-    updateFavoriteButtonUI();
 
     searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
     updateURLAndGA4();
