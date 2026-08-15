@@ -562,17 +562,15 @@ function renderResultComment(totalMatchCount) { // 結果画面上部に店員�
 
     const storeComments = pickStoreComments();
     let html = '';
-    if (storeComments.length > 0) {
-        // 店員アイコン＋吹き出しで「会話」っぽく見せる（アイコンは複数用意し、表示のたびにランダムで1枚選ぶ）
+    storeComments.forEach(comment => {
+        // 店員アイコン＋吹き出しで「会話」っぽく見せる（コメントごとにランダムでアイコンを選び直す）
         const staffIcon = STAFF_ICON_IMAGES[Math.floor(Math.random() * STAFF_ICON_IMAGES.length)];
         html += '<div class="store-comment-group">';
         html += `<img src="${staffIcon}" alt="店員アイコン" class="store-comment-icon" onerror="this.style.display='none'">`;
         html += '<div class="store-comment-bubbles">';
-        storeComments.forEach(comment => {
-            html += `<p class="store-comment">${comment}</p>`;
-        });
+        html += `<p class="store-comment">${comment}</p>`;
         html += '</div></div>';
-    }
+    });
     html += `<p class="result-count-comment">今回は<strong>${totalMatchCount}件</strong>の商品が見つかりました。</p>`;
     container.innerHTML = html;
 }
