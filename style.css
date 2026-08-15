@@ -158,21 +158,72 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     margin-bottom: 18px;
 }
 .result-comment-area:empty { display: none !important; padding: 0; margin: 0; border: none; }
+
+/* 店員アイコン＋吹き出しの「会話」レイアウト */
+.result-comment-area .store-comment-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.result-comment-area .store-comment-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ece3d1;
+}
+.result-comment-area .store-comment-bubbles {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
 .result-comment-area .store-comment {
+    position: relative;
     font-size: 0.85rem;
     line-height: 1.6;
     color: #5a4a2c;
-    margin: 0 0 8px 0;
+    margin: 0;
+    background: #fff;
+    border: 1px solid #ece3d1;
+    border-radius: 4px 14px 14px 14px;
+    padding: 10px 12px;
 }
-.result-comment-area .store-comment + .store-comment {
-    padding-top: 8px;
-    border-top: 1px dashed #e3d8bd;
+/* 吹き出しの「しっぽ」はグループ内の最初のコメントにだけ付ける（連続発言はLINE風にまとめる） */
+.result-comment-area .store-comment-bubbles .store-comment:first-child::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 10px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 6px solid #ece3d1;
+}
+.result-comment-area .store-comment-bubbles .store-comment:first-child::after {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: 10px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 6px solid #fff;
 }
 
 .result-comment-area .result-count-comment {
     font-size: 0.8rem;
     color: #888;
     margin: 0;
+}
+/* アイコン分の幅だけ字下げして、吹き出しの下に続く一言として見せる */
+.result-comment-area .store-comment-group + .result-count-comment {
+    margin-left: 50px;
 }
 .result-comment-area .result-count-comment strong { color: var(--gold); }
 

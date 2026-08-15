@@ -556,9 +556,16 @@ function renderResultComment(totalMatchCount) { // 結果画面上部に店員�
 
     const storeComments = pickStoreComments();
     let html = '';
-    storeComments.forEach(comment => {
-        html += `<p class="store-comment">💬 ${comment}</p>`;
-    });
+    if (storeComments.length > 0) {
+        // 店員アイコン＋吹き出しで「会話」っぽく見せる（アイコンは images/staff_icon.png に配置）
+        html += '<div class="store-comment-group">';
+        html += '<img src="images/staff_icon.png" alt="店員アイコン" class="store-comment-icon" onerror="this.style.display=\'none\'">';
+        html += '<div class="store-comment-bubbles">';
+        storeComments.forEach(comment => {
+            html += `<p class="store-comment">${comment}</p>`;
+        });
+        html += '</div></div>';
+    }
     html += `<p class="result-count-comment">今回は<strong>${totalMatchCount}件</strong>の商品が見つかりました。</p>`;
     container.innerHTML = html;
 }
