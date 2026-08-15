@@ -510,6 +510,12 @@ function getCommentLookup() { // category:key -> [comment, comment, ...] のマ�
 }
 let commentLookupMap = null;
 
+// 店員コメントに添えるアイコン画像。表示のたびにこの中からランダムで1枚選ばれる
+const STAFF_ICON_IMAGES = [
+    'images/staff_icon_brown.png',
+    'images/staff_icon_pink.png'
+];
+
 const MAX_STORE_COMMENTS = 2; // 複数タグ選択時に繋げて表示する経験談の最大数（増やしすぎると読みにくくなるため2件までに制限）
 
 function pickStoreComments() { // 選択中のcond/animalタグから、店員経験談を最大MAX_STORE_COMMENTS件ランダムに選ぶ
@@ -557,9 +563,10 @@ function renderResultComment(totalMatchCount) { // 結果画面上部に店員�
     const storeComments = pickStoreComments();
     let html = '';
     if (storeComments.length > 0) {
-        // 店員アイコン＋吹き出しで「会話」っぽく見せる（アイコンは images/staff_icon.png に配置）
+        // 店員アイコン＋吹き出しで「会話」っぽく見せる（アイコンは複数用意し、表示のたびにランダムで1枚選ぶ）
+        const staffIcon = STAFF_ICON_IMAGES[Math.floor(Math.random() * STAFF_ICON_IMAGES.length)];
         html += '<div class="store-comment-group">';
-        html += '<img src="images/staff_icon.png" alt="店員アイコン" class="store-comment-icon" onerror="this.style.display=\'none\'">';
+        html += `<img src="${staffIcon}" alt="店員アイコン" class="store-comment-icon" onerror="this.style.display='none'">`;
         html += '<div class="store-comment-bubbles">';
         storeComments.forEach(comment => {
             html += `<p class="store-comment">${comment}</p>`;
