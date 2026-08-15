@@ -163,7 +163,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .result-comment-area .store-comment-group {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 14px;
     margin-bottom: 10px;
 }
 .result-comment-area .store-comment-icon {
@@ -197,17 +197,17 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .result-comment-area .store-comment-bubbles .store-comment:first-child {
     border-top-left-radius: 4px; /* アイコン側（上）の角を詰めて、そこから話しているように見せる */
 }
-/* しっぽの土台（吹き出しと同じ白色で丸みを付けて外側に張り出す） */
+/* しっぽの土台（吹き出しと同じ白色で丸みを付けて外側に張り出す。アイコンとの隙間(gap)からはみ出さないサイズに調整） */
 .result-comment-area .store-comment-bubbles .store-comment:first-child::before {
     content: "";
     position: absolute;
     z-index: 0;
     top: 0;
-    left: -8px;
-    width: 16px;
-    height: 14px;
+    left: -6px;
+    width: 12px;
+    height: 12px;
     background: #fff;
-    border-top-right-radius: 12px;
+    border-top-right-radius: 10px;
 }
 /* 背景色と同じ色で内側から欠けさせて、しっぽの先端を丸く見せる */
 .result-comment-area .store-comment-bubbles .store-comment:first-child::after {
@@ -215,11 +215,11 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     position: absolute;
     z-index: 1;
     top: 0;
-    left: -13px;
-    width: 10px;
-    height: 14px;
+    left: -10px;
+    width: 8px;
+    height: 12px;
     background: #faf7f0;
-    border-top-right-radius: 10px;
+    border-top-right-radius: 8px;
 }
 
 .result-comment-area .result-count-comment {
