@@ -195,31 +195,31 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 }
 /* 吹き出しの「しっぽ」はグループ内の最初のコメントにだけ付ける（連続発言はLINE風にまとめる） */
 .result-comment-area .store-comment-bubbles .store-comment:first-child {
-    border-bottom-left-radius: 4px; /* アイコン側の角を詰めて、そこから話しているように見せる */
+    border-top-left-radius: 4px; /* アイコン側（上）の角を詰めて、そこから話しているように見せる */
 }
 /* しっぽの土台（吹き出しと同じ白色で丸みを付けて外側に張り出す） */
 .result-comment-area .store-comment-bubbles .store-comment:first-child::before {
     content: "";
     position: absolute;
     z-index: 0;
-    bottom: 0;
+    top: 0;
     left: -8px;
     width: 16px;
     height: 14px;
     background: #fff;
-    border-bottom-right-radius: 12px;
+    border-top-right-radius: 12px;
 }
 /* 背景色と同じ色で内側から欠けさせて、しっぽの先端を丸く見せる */
 .result-comment-area .store-comment-bubbles .store-comment:first-child::after {
     content: "";
     position: absolute;
     z-index: 1;
-    bottom: 0;
+    top: 0;
     left: -13px;
     width: 10px;
     height: 14px;
     background: #faf7f0;
-    border-bottom-right-radius: 10px;
+    border-top-right-radius: 10px;
 }
 
 .result-comment-area .result-count-comment {
