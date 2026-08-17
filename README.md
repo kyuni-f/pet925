@@ -21,7 +21,7 @@
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
 - **`comment_logic.js`** : 「店員コメント」機能の選定ロジック（`pickStoreComments()` / `pickKeywordComments()`等）。DOM操作から分離し、Jestでのユニットテストを可能にしている
-- **`jsconfig.json`** : `common.js`/`comment_logic.js`/`main.js`/`data_master.js`に対するエディタ上の型チェック（`// @ts-check`+JSDoc）設定
+- **`jsconfig.json`** : エディタ上の型チェック設定。`checkJs`は全体では無効にし、ファイル先頭に`// @ts-check`があるファイル（`common.js`/`comment_logic.js`）だけがオプトインで検査される。`main.js`/`data_master.js`は`// @ts-check`を付けていないため検査対象外（ただしグローバル変数の補完・定義ジャンプのために`include`には含めている）
 - **`tests/`** : Jestによるユニットテスト（`npm test`で実行）
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
