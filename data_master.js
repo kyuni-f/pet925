@@ -1,4 +1,4 @@
-const siteVersion = '20260809020456';
+const siteVersion = '20260817231723';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -176,6 +176,16 @@ const comments = [
         "category": "cond",
         "key": "lamb",
         "comment": "ラム肉は他のお肉でアレルギーが出た子にもよく選ばれている印象です"
+    },
+    {
+        "category": "keyword",
+        "key": "心臓",
+        "comment": "心臓が気になる子には、塩分（ナトリウム）が調整されたフードを選ぶ方が多いです。持病がある場合は、必ず獣医師の指示に沿ったフード選びをおすすめします"
+    },
+    {
+        "category": "keyword",
+        "key": "納豆菌",
+        "comment": "納豆菌などの乳酸菌・善玉菌が配合されたフードは、お腹の調子を整えたい子によく選ばれている印象です"
     }
 ];
 const brands = [

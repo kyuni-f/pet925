@@ -5,16 +5,8 @@ const version = urlParams.get('v') || Date.now();
 // マスタデータを読み込む
 importScripts('data_master.js?v=' + version); 
 
-// 正規化ロジック (index.htmlと共通)
-const normalize = (str) => {
-    if (!str) return "";
-    return String(str)
-        .replace(/　/g, ' ')
-        .normalize('NFKC')
-        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
-        .toLowerCase()
-        .trim();
-};
+// 正規化ロジック（main.jsと共通。修正漏れ防止のためcommon.jsに集約）
+importScripts('common.js?v=' + version);
 
 let allProducts = [];
 let db = null;

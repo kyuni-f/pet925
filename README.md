@@ -18,6 +18,7 @@
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
 - **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
+- **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）

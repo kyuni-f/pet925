@@ -306,15 +306,7 @@ function updateURLAndGA4() { // URLパラメータの更新とページビュー
     }, 2000); // 2秒に延長して、より確実に入力停止を待つ
 }
 
-const normalize = (str) => { // 検索キーワードの正規化（全角半角・ひらがなカタカナの揺れを吸収）
-    if (!str) return "";
-    return String(str)
-        .replace(/　/g, ' ')
-        .normalize('NFKC')
-        .replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
-        .toLowerCase()
-        .trim();
-};
+// normalize() は common.js（main.jsとsearch_worker.js共通）で定義されている
 
 function initFilters() { // URLのパラメータからフィルター状態を初期化
     if (typeof tagMaster === 'undefined') return;
@@ -545,6 +537,18 @@ function pickStoreComments() { // 選択中のcond/animalタグから、店員�
     });
 }
 
+// comments.csv の category="keyword" 行から、検索ボックスの自由入力語に一致する経験談を最大1件だけ選ぶ
+// タグ選択（cond/animal）由来の pickStoreComments() とは完全に独立しており、常に「追加の1件」としてのみ使う
+function pickKeywordComments(searchVal) {
+    const normalizedSearch = normalize(searchVal);
+    if (!normalizedSearch || typeof comments === 'undefined') return [];
+
+    const matched = comments.filter(row => row.category === 'keyword' && normalizedSearch.includes(normalize(row.key)));
+    if (matched.length === 0) return [];
+
+    return [matched[Math.floor(Math.random() * matched.length)].comment];
+}
+
 function renderResultComment(totalMatchCount) { // 結果画面上部に店員コメント＋件数コメントを表示（スマホのみCSSで表示）
     const container = document.getElementById('result-comment');
     if (!container) return;
@@ -561,8 +565,13 @@ function renderResultComment(totalMatchCount) { // 結果画面上部に店員�
     }
 
     const storeComments = pickStoreComments();
+    // 検索ボックスの自由入力語に一致する経験談があれば、フィルター由来のコメントは変えずに追加で1件だけ載せる
+    const searchVal = document.getElementById('search-input').value.trim();
+    const keywordComments = searchVal ? pickKeywordComments(searchVal).filter(c => !storeComments.includes(c)) : [];
+    const allComments = storeComments.concat(keywordComments);
+
     let html = '';
-    storeComments.forEach(comment => {
+    allComments.forEach(comment => {
         // 店員アイコン＋吹き出しで「会話」っぽく見せる（コメントごとにランダムでアイコンを選び直す）
         const staffIcon = STAFF_ICON_IMAGES[Math.floor(Math.random() * STAFF_ICON_IMAGES.length)];
         html += '<div class="store-comment-group">';

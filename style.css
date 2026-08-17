@@ -88,7 +88,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     background: #fff; border: 1px solid #eee; padding: 10px 16px; 
     transition: 0.3s; cursor: pointer; white-space: nowrap; border-radius: 2px;
     -webkit-tap-highlight-color: transparent;
-    outline: none !important; /* ブラウザ標準の枠線を強制非表示 */
+    outline: none; /* ブラウザ標準の枠線を非表示（:focus-visibleは下で個別に指定するため!importantは付けない） */
     display: inline-flex;
     flex-direction: column;
     align-items: center;
@@ -233,11 +233,6 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 }
 .result-comment-area .result-count-comment strong { color: var(--gold); }
 
-@media (max-width: 768px) {
-    .result-comment-area:not(:empty) { display: block; }
-}
-
-
 /* 結果画面の調整チップ：通常（選択中）は金背景、解除時は金枠 */
 .chip {
     background: var(--gold); color: #fff; border: 1.5px solid var(--gold);
@@ -270,7 +265,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     font-size: 1.2rem; color: #ccc; transition: 0.3s; 
 }
 
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; animation: fadeIn 0.3s ease; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; animation: fadeIn 0.3s ease; }
 .modal-content { background: #fff; padding: 40px; border-radius: 20px; text-align: center; max-width: 320px; width: 85%; box-shadow: 0 20px 50px rgba(0,0,0,0.1); transform: scale(0.9); animation: modalPop 0.3s cubic-bezier(0.17, 0.89, 0.32, 1.28) forwards; }
 @keyframes modalPop { to { transform: scale(1); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -536,6 +531,12 @@ footer a { color: var(--gold); text-decoration: none; }
     .filter-group[data-multiselect="true"] .filter-btn:not([data-val="all"])::before {
         left: 10px;
     }
+
+    /* 店員コメント欄はスマホでのみ表示（接客のような「間」を作る） */
+    .result-comment-area:not(:empty) { display: block; }
+
+    /* お気に入りボタンのツールチップはスマホでは非表示 */
+    .card-fav-btn[data-tooltip]::after { display: none; }
 }
 
 /* --- Custom Tooltip (Cards Only) --- */
@@ -564,7 +565,4 @@ footer a { color: var(--gold); text-decoration: none; }
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
-}
-@media (max-width: 768px) {
-    .card-fav-btn[data-tooltip]::after { display: none; }
 }

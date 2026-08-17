@@ -63,6 +63,7 @@
         // これにより ReferenceError (render is not defined 等) を防ぎます
         const version = (typeof siteVersion !== 'undefined') ? siteVersion : timestamp;
         document.write('<link rel="stylesheet" href="style.css?v=' + version + '">');
+        document.write('<script src="common.js?v=' + version + '"><\/script>');
         document.write('<script src="main.js?v=' + version + '"><\/script>');
     </script>
 </head>
