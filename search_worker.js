@@ -1,3 +1,8 @@
+// このファイルはWebWorkerのグローバルスコープ（`self`）で動作するため、
+// jsconfig.json（DOMライブラリを前提にmain.js/common.js等をチェックする設定）には含めていない。
+// TypeScriptの checkJs は DOM と WebWorker の型定義を同時に読み込めないための実務上の判断。
+// 型チェックの強制はしていないが、可読性のためJSDocコメントは付けている。
+
 // Worker起動時のURLからバージョンを取得
 const urlParams = new URLSearchParams(self.location.search);
 const version = urlParams.get('v') || Date.now();
@@ -70,7 +75,10 @@ if (typeof brands !== 'undefined') {
     });
 }
 
-// チャンク（分割ファイル）を処理する関数
+/**
+ * チャンク（分割ファイル）1つ分の商品データを処理し、検索用インデックスを付与して allProducts に積む。
+ * @param {Array<Object>} data product_data_*.json 1ファイル分の商品配列
+ */
 function processChunk(data) {
     data.forEach(item => {
         // スコアリング用に各フィールドを個別に正規化して保持
@@ -155,7 +163,13 @@ async function initWorker() {
 
 initWorker();
 
-// メインスレッドからの検索リクエスト待機
+/**
+ * メインスレッドからの検索リクエスト待機。
+ * 受け取るメッセージ（main.jsのrender()が送信）:
+ *   { searchWords: string[], activeFilters: Object, visibleCount: number, showFavoritesOnly: boolean, favorites: string[] }
+ * 返すメッセージ:
+ *   { matchedItems: Object[], totalMatchCount: number, visibleCount: number }
+ */
 self.onmessage = function(e) {
     if (e.data.type === 'LOAD_CHUNK') {
         // ここで追加ファイルを読み込むロジックを追加可能

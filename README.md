@@ -17,8 +17,12 @@
 - **`data/`** : `pet925_master.ods` (5シート構成のマスター), 各種CSV (products, categories, tags, brands, rules)
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
 - **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
+- **`pet_utils.py`** : `csv_to_json.py`と`auto_collect_all.py`の両方から読み込まれる共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
+- **`comment_logic.js`** : 「店員コメント」機能の選定ロジック（`pickStoreComments()` / `pickKeywordComments()`等）。DOM操作から分離し、Jestでのユニットテストを可能にしている
+- **`jsconfig.json`** : `common.js`/`comment_logic.js`/`main.js`/`data_master.js`に対するエディタ上の型チェック（`// @ts-check`+JSDoc）設定
+- **`tests/`** : Jestによるユニットテスト（`npm test`で実行）
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
@@ -46,6 +50,9 @@ python3 csv_to_json.py
 
 # 4. ファイル変更を監視しながらビルド（開発中）
 npm start
+
+# 4.5. ユニットテストの実行（normalize()や店員コメント選定ロジックなど）
+npm test
 
 # 5. データの公開（デプロイ）
 npm run deploy  # 検品、ビルド、コミット、プッシュを一括実行

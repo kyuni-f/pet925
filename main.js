@@ -118,6 +118,12 @@ const getTagLookup = () => { // タグのIDから日本語名を取得するた�
     return lookup;
 };
 
+/**
+ * お気に入りの登録・解除を切り替える（localStorageへの永続化まで行う）。
+ * @param {string} id 商品の一意なID（JANコード優先、なければブランドID+商品名ハッシュ）
+ * @param {string} nameForLog GA4イベント送信用の商品名
+ * @param {HTMLElement} [btnElement] クリックされたボタン要素（渡された場合、全画面再描画せずボタンの見た目だけ更新する）
+ */
 function toggleFavorite(id, nameForLog, btnElement) { // お気に入りの登録・解除を切り替え
     const index = favorites.indexOf(id);
     let isFav = false;
@@ -204,6 +210,12 @@ function closeLegalModal() { // 規約モーダルを閉じる
     if (overlay) overlay.style.display = 'none';
 }
 
+/**
+ * もしもアフィリエイトの計測URLでラップする（IDが未設定なら元のURLをそのまま返す）。
+ * @param {'amazon'|'rakuten'|'yahoo'} shopKey AFFILIATE_CONFIGのキー
+ * @param {string} targetUrl 実際の遷移先URL
+ * @returns {string}
+ */
 function getMoshimoUrl(shopKey, targetUrl) {
     // IDを文字列として取得し、念のため余計な空白を削除（.trim()）
     const aid = String(AFFILIATE_CONFIG.shopAid[shopKey] || '').trim();
@@ -489,67 +501,15 @@ function renderActiveChips() { // 結果画面の「現在選択中の条件（�
     }
 }
 
-// comments.csv（data_master.js内 const comments）から、選択中の条件に合う店員経験談を1件選ぶ
-function getCommentLookup() { // category:key -> [comment, comment, ...] のマップを作成
-    const lookup = {};
-    if (typeof comments === 'undefined') return lookup;
-    comments.forEach(row => {
-        const mapKey = `${row.category}:${row.key}`;
-        if (!lookup[mapKey]) lookup[mapKey] = [];
-        lookup[mapKey].push(row.comment);
-    });
-    return lookup;
-}
-let commentLookupMap = null;
+// 店員コメントの選定ロジック（getCommentLookup / pickStoreComments / pickKeywordComments /
+// STAFF_ICON_IMAGES / MAX_STORE_COMMENTS）は comment_logic.js に分離済み（Jestでのテスト容易化のため）。
+// comment_logic.js は index.html で main.js より前に読み込まれるため、ここでは呼び出すだけでよい。
 
-// 店員コメントに添えるアイコン画像。表示のたびにこの中からランダムで1枚選ばれる
-const STAFF_ICON_IMAGES = [
-    'images/staff_icon_brown.png',
-    'images/staff_icon_pink.png'
-];
-
-const MAX_STORE_COMMENTS = 2; // 複数タグ選択時に繋げて表示する経験談の最大数（増やしすぎると読みにくくなるため2件までに制限）
-
-function pickStoreComments() { // 選択中のcond/animalタグから、店員経験談を最大MAX_STORE_COMMENTS件ランダムに選ぶ
-    if (!commentLookupMap) commentLookupMap = getCommentLookup();
-
-    // タグごとに候補リストを分けて保持（同じタグから複数採用されて偏らないようにする）
-    const condVals = Array.isArray(activeFilters.cond) ? activeFilters.cond : [];
-    let tagBuckets = condVals
-        .map(val => commentLookupMap[`cond:${val}`])
-        .filter(list => list && list.length > 0);
-
-    // condの選択がなければ animal（犬/猫）の経験談にフォールバック
-    if (tagBuckets.length === 0) {
-        const animalVal = activeFilters.animal;
-        if (animalVal && animalVal !== 'all') {
-            const list = commentLookupMap[`animal:${animalVal}`];
-            if (list) tagBuckets = [list];
-        }
-    }
-
-    if (tagBuckets.length === 0) return [];
-
-    // タグの選ばれた順をシャッフルし、各タグから1件ずつ、最大MAX_STORE_COMMENTS件を採用
-    const shuffledBuckets = [...tagBuckets].sort(() => Math.random() - 0.5);
-    return shuffledBuckets.slice(0, MAX_STORE_COMMENTS).map(list => {
-        return list[Math.floor(Math.random() * list.length)];
-    });
-}
-
-// comments.csv の category="keyword" 行から、検索ボックスの自由入力語に一致する経験談を最大1件だけ選ぶ
-// タグ選択（cond/animal）由来の pickStoreComments() とは完全に独立しており、常に「追加の1件」としてのみ使う
-function pickKeywordComments(searchVal) {
-    const normalizedSearch = normalize(searchVal);
-    if (!normalizedSearch || typeof comments === 'undefined') return [];
-
-    const matched = comments.filter(row => row.category === 'keyword' && normalizedSearch.includes(normalize(row.key)));
-    if (matched.length === 0) return [];
-
-    return [matched[Math.floor(Math.random() * matched.length)].comment];
-}
-
-function renderResultComment(totalMatchCount) { // 結果画面上部に店員コメント＋件数コメントを表示（スマホのみCSSで表示）
+/**
+ * 結果画面上部に店員コメント＋件数コメントを表示する（表示自体はスマホのみCSSで有効化）。
+ * @param {number} totalMatchCount 検索にヒットした総件数
+ */
+function renderResultComment(totalMatchCount) {
     const container = document.getElementById('result-comment');
     if (!container) return;
 
@@ -591,6 +551,15 @@ function removeSingleFilter(cat, val) { // 特定のフィルターを解除
     if (btn) toggleFilter(btn);
 }
 
+/**
+ * モールごとの検索・アフィリエイトURLを生成する。
+ * @param {'amz'|'rak'|'yah'} shop 対象ショップ
+ * @param {string} brand 商品のブランド名
+ * @param {string} name 商品名
+ * @param {string} fallbackUrl CSVに登録済みの実商品URL（'#'なら未設定）
+ * @param {string} jan JANコード（現状は未使用だが将来の拡張用に受け取っている）
+ * @returns {string} 生成されたURL（未対応ショップなら'#'）
+ */
 function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごとの検索・アフィリエイトURLを生成
     // 商品名（ブランド名＋商品名）で検索することで、JANコード未対応の出品者もヒットさせる
     const searchVal = `${brand} ${name}`;
@@ -613,7 +582,12 @@ function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごと�
     return '#';
 }
 
-// 画像URLのフォールバック処理
+/**
+ * 商品画像の読み込みに失敗した場合、候補URLリストの次の1件を試す（画像URLのフォールバック処理）。
+ * @param {HTMLImageElement} imgElement 対象のimg要素
+ * @param {string} allSourcesJson 候補URLのJSON配列文字列（例: '["https://a","https://b"]'）
+ * @param {string} defaultImg どの候補も失敗した場合に表示する既定画像（Data URI）
+ */
 function tryNextImageSource(imgElement, allSourcesJson, defaultImg) {
     let sources;
     try {
@@ -641,6 +615,12 @@ function tryNextImageSource(imgElement, allSourcesJson, defaultImg) {
     }
 }
 
+/**
+ * 商品画像のURLを決定する（JANコードによる自動生成対応）。
+ * @param {{ img?: string }} item 商品データ（imgは'#'・単一URL・URL配列のJSON文字列のいずれか）
+ * @param {string} defaultImg imgが未設定の場合に使う既定画像（Data URI）
+ * @returns {string}
+ */
 function getProductImageSrc(item, defaultImg) { // 商品画像のURLを決定（JANコードによる自動生成対応）
     // Python側で生成されたURLリストがある場合、最初のURLを返す
     if (item.img && item.img !== "#" && item.img.startsWith('[')) return JSON.parse(item.img)[0];

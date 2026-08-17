@@ -1,4 +1,4 @@
-const siteVersion = '20260817231723';
+const siteVersion = '20260818012323';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -105,7 +105,7 @@ const tagKeywords = {
         "食ベムラ"
     ]
 };
-const CONTACT_MAIL_CODES = [121, 111, 117, 114, 45, 101, 109, 97, 105, 108, 64, 101, 120, 97, 109, 112, 108, 101, 46, 99, 111, 109];
+const CONTACT_MAIL_CODES = [103, 110, 110, 109, 106, 57, 51, 52, 64, 121, 97, 104, 111, 111, 46, 99, 111, 46, 106, 112];
 const comments = [
     {
         "category": "animal",

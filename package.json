@@ -21,6 +21,9 @@
   ],
   "author": "kyuni",
   "license": "ISC",
+  "devDependencies": {
+    "jest": "^30.3.0"
+  },
   "bugs": {
     "url": "https://github.com/kyuni-f/pet925/issues"
   },

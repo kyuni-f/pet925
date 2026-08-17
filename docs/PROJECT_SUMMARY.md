@@ -414,6 +414,22 @@
     - `docs/MANUAL.md` の「9. コメントの追加（comments.csv）」が実態と異なる古い列構成（`product_id`/`author`）を記載していたため、実際の列構成（`category`/`key`/`comment`）と `keyword` カテゴリの使い方に合わせて修正した。
 - **学び**: 新しい要件が出たときに「まず新しいファイル・新しいタグを作る」のではなく、既存のデータ構造（今回は無検証で汎用的に読み込まれる `comments.csv`）を拡張できないか検討することで、ビルドパイプラインへの変更ゼロで機能追加できるケースがある。また、「既存機能を変えずに追加する」（フォールバックではなく常時追加スロット）という組み合わせ方針は、実装の見通しの良さと既存動作の安全性を両立させる選択として有効だった。
 
+### 71. JSDoc + `jsconfig.json` による型チェックの導入と、Jestユニットテストの追加
+- **経過**: フレームワーク（React等）やビルドツールの導入は「配信ファイルが重くなる」ため避けたいが、テスト・型安全性の欠如（`package.json`に`"test": "jest"`はあるが実体のテストファイルが皆無、型注釈も一切なし）は改善したいという要望があった。前者（配信ファイルの重さ）と後者（開発時の品質担保）は本来トレードオフではなく、テスト用ツール（Jest）やJSDoc型チェックはいずれも**開発時・エディタ上でのみ動作し、ビルド後の配信ファイルには一切含まれない**ため、両立可能であることを確認した上で着手した。
+- **対応内容**:
+    - `common.js` と、新設した `comment_logic.js`（下記#72）に `// @ts-check` プラグマとJSDocコメントを追加し、`jsconfig.json`（`checkJs: true`、DOMライブラリ込み）でエディタ上の型チェックを有効化。`data_master.js`（ビルド生成物）も`include`に加えることで、`tagMaster`/`comments`等のグローバル変数がTypeScriptの「グローバルスクリプトのスコープ統合」機能により自動的に型解決されることを確認（別途アンビエント型定義ファイルを書く必要がなかった）。
+    - `search_worker.js` はWebWorkerグローバルスコープ（`self`）で動作するため、DOMライブラリと共存させると型定義が競合しやすく、`jsconfig.json`の対象からは除外。JSDocコメントによる可読性向上のみ行い、型チェックの強制はしないという判断をコメントで明記した。
+    - `main.js` は既存コードの規模・DOM依存の多さ（`getElementById(...).value`のnullチェック省略など）を踏まえ、`// @ts-check`の強制は見送り、主要な純粋関数（`getSearchUrl` / `tryNextImageSource` / `getProductImageSrc` / `toggleFavorite` / `getMoshimoUrl`等）にJSDocのみ追加する現実的な範囲に留めた。
+    - `package.json` に `devDependencies: { "jest": "^30.3.0" }` を追加（既に`node_modules`にはインストール済みだったが`package.json`未記載だったため、`npm install`での再現性を確保）。TypeScript本体はインストールしていない（`// @ts-check`はエディタ内蔵のTypeScript言語サーバーで動作するため、プロジェクトの依存関係としては不要）。
+    - `tests/common.test.js`（`normalize()`の正規化パターン）、`tests/comment_logic.test.js`（`getCommentLookup()` / `pickStoreComments()` / `pickKeywordComments()`）を新設。計19件のテストケースが `npm test`（Jest）で全て通ることを確認。
+- **学び**: 「重さ」の議論をする際は、「ブラウザに配信されるもの」と「開発者のマシン上だけで完結するもの」を明確に切り分けることが重要。フレームワーク導入への慎重さと、テスト・型安全性への投資は対立しない。また、TypeScriptの`checkJs`はグローバルスクリプト（`<script>`タグで読み込む、`import`/`export`を使わないファイル）同士のスコープを自動的に統合してくれるため、レガシーな「グローバル変数共有」スタイルのコードベースでも、アンビエント型定義を大量に書かずに型チェックを導入できるケースがある。
+
+### 72. 店員コメント選定ロジックの`comment_logic.js`への分離（テスト容易化のためのモジュール分割）
+- **経過**: #71でJestテストを書く際、`pickStoreComments()` / `pickKeywordComments()`が`main.js`内に定義されていたため、これらをテストするには`main.js`全体を`require`する必要があり、ファイル末尾の自己実行コード（`initializeApp()`の自動呼び出し、`new Worker(...)`の生成等）が副作用として発生してしまい、Jest（Node環境）では正しく動かない・不必要な複雑さを生む問題があった。
+- **対応内容**: 店員コメントの選定に関わるロジック（`getCommentLookup` / `commentLookupMap` / `STAFF_ICON_IMAGES` / `MAX_STORE_COMMENTS` / `pickStoreComments` / `pickKeywordComments`）を`main.js`から`comment_logic.js`という新しいファイルに丸ごと移動。ブラウザでは`index.html`から`common.js`の直後・`main.js`の直前に読み込むことで、グローバル関数として今まで通り`main.js`から呼び出せるようにした（呼び出し側のコードは無変更）。テスト時に`activeFilters`/`comments`グローバルへの依存を弱めるため、`pickStoreComments(filters)`・`pickKeywordComments(searchVal, commentsData)`に「省略時はグローバル変数、指定時はそれを使う」というオプション引数を追加（既存の呼び出し方法との後方互換を保ったまま、テストからは任意のフィクスチャを直接渡せるようにした）。
+- **動作確認**: Node.jsの`vm`モジュールで実際のブラウザ読み込み順（`data_master.js`→`common.js`→`comment_logic.js`）を再現し、実データ（`comments.csv`由来）で`pickStoreComments`/`pickKeywordComments`が分割前と同じ結果を返すことを確認。`python3 csv_to_json.py`のビルドと`node --check`による構文チェックも通過。
+- **学び**: 「テストを書きたいのに書けない」原因の多くは、対象コードが「テストしたい純粋なロジック」と「アプリ起動時の副作用（DOM操作・通信・Worker起動）」が同じファイル・同じスコープに混在していることに起因する。両者を分離するのは大規模なアーキテクチャ変更ではなく、影響範囲を絞った小さなリファクタリングとして安全に行えることを実証した。
+
 ## ✅ 現在の進捗ステータス
 
 - [x] 基盤構築: ルートディレクトリ運用への移行とプロジェクト構造の整理
@@ -465,6 +481,8 @@
 - [x] `normalize()`正規化ロジックを`common.js`に共通化（`main.js`/`search_worker.js`の重複を解消）
 - [x] 検索ボックスの自由入力語に反応する「キーワードコメント」機能を追加（`comments.csv`の`category: keyword`を活用、常に追加スロットとして表示）
 - [x] `docs/MANUAL.md`の`comments.csv`列構成の説明を実態に合わせて修正
+- [x] JSDoc + `jsconfig.json`によるエディタ上の型チェックを`common.js`/`comment_logic.js`に導入（配信ファイルへの影響ゼロ）
+- [x] 店員コメント選定ロジックを`comment_logic.js`に分離し、Jestユニットテスト（19件）を追加
 
 ## 🤖 AI への指示用テンプレート (最新版)
 
@@ -484,7 +502,7 @@ Gemini に相談する際は、以下の情報をコンテキストとして渡�
 - 列構成：`name,brand,tags,desc,size,jan,img,amz,rak,yah,a8,label,promo,amz_p,rak_p,yah_p`
 
 ---
-**最終更新日**: 2026年8月17日（`normalize()`の共通化、検索ボックスの自由入力語に反応する「キーワードコメント」機能の追加）
+**最終更新日**: 2026年8月18日（JSDoc+jsconfig.jsonによる型チェックの導入、店員コメントロジックの`comment_logic.js`分離とJestユニットテストの追加）
 
 **作者**: kyuni
 **職業的立ち位置**: フルスタック・個人開発者（Indie Hacker）

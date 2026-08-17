@@ -64,6 +64,7 @@
         const version = (typeof siteVersion !== 'undefined') ? siteVersion : timestamp;
         document.write('<link rel="stylesheet" href="style.css?v=' + version + '">');
         document.write('<script src="common.js?v=' + version + '"><\/script>');
+        document.write('<script src="comment_logic.js?v=' + version + '"><\/script>');
         document.write('<script src="main.js?v=' + version + '"><\/script>');
     </script>
 </head>
