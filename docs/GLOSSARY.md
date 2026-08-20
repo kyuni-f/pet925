@@ -33,6 +33,7 @@ npm start              # CSVの変更を監視して自動ビルド
 npm run build          # 1回だけビルド
 npm test               # テスト実行
 npm run collect:all    # JANコードから商品データを自動収集してビルドまで
+npm run desc:helper    # 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run deploy         # 検品・ビルド・公開
 ```
 
@@ -49,6 +50,9 @@ npm run deploy         # 検品・ビルド・公開
 | `data_master.js` | タグ・カテゴリ・ブランド・店員コメントの設定と、問い合わせ用の `FORMSPREE_FORM_ID`。**ビルドが生成する。手編集しない。** |
 | `csv_to_json.py` | ビルド本体。CSV → JSON、検品。画像は取らない。 |
 | `auto_collect_all.py` | JANコードから商品名・画像・説明を API で集める。 |
+| `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。 |
+| `desc_helper.html` | その画面。`csv_helper.html` の見た目を流用した説明専用フォーム。 |
+| `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
 | `.env` | APIキーなど秘密情報。Git に上げない。 |
@@ -80,6 +84,7 @@ product_data.json + data_master.js
 | **エイリアス** | 別名。「グレインフリー」と書いたら `gf` タグを付ける、など。`rules.csv`。 |
 | **exclude_tags** | 自動タグ付けしてほしくないタグを、その商品だけ止める列。 |
 | **フォールバック** | 本命が失敗したときの予備。画像は 楽天v2 → 楽天Item → Yahoo の順。 |
+| **説明の取り直し** | `collect:all` の `desc` がいまいちなとき、`npm run desc:helper` で説明だけ作り、CSV に手で貼る作業。再収集は名前や画像も上書きするので使わない。 |
 
 タグのグループ（`tags.csv`）:
 
@@ -141,7 +146,8 @@ CSV の列の意味:
 | **push** | 手元の commit を GitHub に送る。これが公開につながる。 |
 | **GitHub Pages** | GitHub 上のファイルをウェブサイトとして出すサービス。 |
 | **`.gitignore`** | Git に入れないファイルのリスト。`.env` と `node_modules` が入っている。 |
-| **APIキー** | 楽天・Gemini などを使うためのパスワード相当。`.env` に置く。サイトの JS には出さない。 |
+| **APIキー** | 楽天・Gemini などを使うためのパスワード相当。`.env` に置く。サイトの JS には出さない。`desc_helper` も HTML からは呼ばず、ローカル Python だけが読む。 |
+| **ブックマークレット** | ブックマークバーに置く短い JavaScript。旧来の「楽天ページから CSV 1行／画像取得」用はリポジトリに無い。現行は `desc_helper` 用。**先に `npm run desc:helper` を起動**し、公式ページ上で押す。サーバーが止まっていると「接続が拒否されました」になる。手順は `docs/MANUAL.md` §2。 |
 | **Formspree** | 静的サイトから問い合わせを受け、指定メールへ転送する外部サービス。宛先アドレスはサイトに出ない。無料枠は月50件程度。 |
 | **`FORMSPREE_FORM_ID`** | Formspree の公開フォームID。`.env` に書き、ビルドで `data_master.js` に出る。メールアドレスそのものではない。 |
 | **`mailto:`** | クリックするとメールソフトが開くリンク。宛先がブラウザに渡るので、隠したまま送る用途には使えない。このサイトでは廃止。 |
@@ -184,6 +190,7 @@ CSV の列の意味:
 | 画面の動きを変えたい | `main.js` |
 | 見た目を変えたい | `style.css` / `index.html` |
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
+| 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
 | 公開したい | `npm run deploy` |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
 | 運用の手順 | `docs/MANUAL.md` |
@@ -202,7 +209,7 @@ CSV の列の意味:
 | **ソースコード** | 人間が書いたプログラムの本文。 | `main.js` や `csv_to_json.py` |
 | **実行する** | 書いた命令をコンピュータにやらせること。 | ブラウザが JS を動かす / ターミナルで `python3` を動かす |
 | **フロントエンド** | ユーザーのブラウザ側。画面・操作。 | `index.html`, `style.css`, `main.js` |
-| **バックエンド** | サーバー側。このサイトは本格的なサーバーを持たず、ビルド用の Python がその役割に近い。 | `csv_to_json.py`, `auto_collect_all.py` |
+| **バックエンド** | サーバー側。このサイトは本格的なサーバーを持たず、ビルド用の Python がその役割に近い。 | `csv_to_json.py`, `auto_collect_all.py`, 説明取り直し時の `desc_helper.py` |
 | **クライアント** | データを「使う側」。ここではブラウザ。 | 訪問者の Chrome など |
 | **サーバー** | データを「出す側」。 | GitHub Pages、楽天 API、Gemini API |
 | **ライブラリ** | 他人が作った便利な部品。自分のサイト本体には混ぜないことも多い。 | Python の `requests`、テスト用の Jest |

@@ -27,6 +27,7 @@
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
 - **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
+- **`desc_helper.py`** / **`desc_helper.html`** : 既存商品の説明文だけを作り直すローカルツール（`npm run desc:helper`）
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
@@ -70,6 +71,9 @@ python3 auto_data_collector.py ""
 npm run collect:all   # データ収集 + JSONビルドまで一括実行
 # または
 npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
+
+# 10. 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
+npm run desc:helper
 ```
 
 > **運用マップと手順の詳細**（商品の増やし方、JAN収集、マスターCSV、公開チェック）は `docs/MANUAL.md` を参照してください。

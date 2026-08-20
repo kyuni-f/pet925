@@ -20,7 +20,9 @@ flowchart TD
   collect --> csv["data/products.csv に追加または一部更新"]
   csv --> review[ODS か CSV で目視]
 
-  fix --> edit["data/*.csv または pet925_master.ods を編集"]
+  fix --> descRewrite["説明だけ: npm run desc:helper"]
+  descRewrite --> edit["data/*.csv または pet925_master.ods を編集"]
+  fix --> edit
   edit --> export[CSV を data/ に置く]
   review --> export
 
@@ -41,6 +43,7 @@ flowchart TD
 | 役割 | 担当 | やること | やらないこと |
 |---|---|---|---|
 | **集める** | `auto_collect_all.py`（`npm run collect`） | JAN から商品名・画像・説明・タグを取る | サイト用 JSON は作らない（`collect:all` なら続けてビルドする） |
+| **説明だけ取り直す** | `desc_helper.py`（`npm run desc:helper`） | 商品名＋任意の公式ページ事実から `desc` を生成 | CSV への自動書き込み、名前・画像の更新はしない |
 | **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用 | ネットから画像は取らない |
 | **画面で探す** | `main.js` + `search_worker.js` | 検索、フィルター、お気に入り、店員コメント | マスター CSV は読まない。ビルド済み JSON を読む |
 
@@ -49,6 +52,7 @@ flowchart TD
 | やりたいこと | 触る場所 | そのあと |
 |---|---|---|
 | 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら `npm run deploy` |
+| 説明文だけを作り直す | `npm run desc:helper`（商品名を貼って生成 → `desc` に貼る） | `npm run build` |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
 | 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
@@ -82,10 +86,40 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 
 ### ルートB: 既存データを直す
 
+説明文だけがいまいちなときは、`collect:all` を再実行しない（名前・タグ・画像も上書きされる）。下の「説明文だけを取り直す」で新しい `desc` を作り、CSV に貼ってから次へ進む。
+
 1. `data/*.csv` を直接編集する。または `data/pet925_master.ods` を直して CSV を書き出す（付録A）。
 2. `npm run build`（または監視中なら `npm start` が自動で再ビルド）。
 3. ブラウザで **Ctrl + F5**（IndexedDB が古いデータを持っているため）。
 4. 公開するなら `npm run deploy`。
+
+### 説明文だけを取り直す（`npm run desc:helper`）
+
+`collect:all` の説明が薄いとき用です。Gemini は公式文を写さず、独自の60字程度を出します。`products.csv` は自動では書き換わりません。
+
+**順番（ここを逆にすると接続拒否になります）**
+
+1. ターミナルで `npm run desc:helper` を実行する。`.env` の `GEMINI_API_KEY` が必要です。
+2. ブラウザで `http://127.0.0.1:8765` が開く。**このアドレスはツール画面であり、ブックマークレットの URL ではありません。**
+3. `data/products.csv` の `name` をそのまま貼る（完全一致）。
+4. 任意: 公式ページの URL を「参考 URL」に貼る。または公式ページを開いた状態でブックマークレットを押す。
+5. **GENERATE DESC** → 出てきた文を `desc` 列に貼る。
+6. ターミナルは使うあいだ開いたまま。`Ctrl+C` で止めると、また接続できなくなります。
+
+**ブックマークレットの入れ方**
+
+- 手軽: 起動したツール画面の「このリンクをブックマークバーへドラッグ」
+- 手貼り: ブックマークを新規作成し、**URL 欄**に次を貼る（アドレスバーに貼ると Chrome が `javascript:` を消すことがあります）
+
+```
+javascript:(function(){const el=document.querySelector('main,article,[role="main"],.product,.p-product')||document.body;const text=(el.innerText||'').replace(/\s+/g,' ').trim().slice(0,1800);const helper='http://127.0.0.1:8765/';try{const u=helper+'#facts='+encodeURIComponent(text);if(u.length<7000){window.open(u,'pet925-desc');return;}}catch(e){}function done(){window.open(helper,'pet925-desc');}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){alert('参考本文をコピーしました。ツールの参考本文欄に貼ってください。');done();}).catch(function(){prompt('参考本文（コピーしてツールに貼ってください）',text);done();});}else{prompt('参考本文（コピーしてツールに貼ってください）',text);done();}})();
+```
+
+押すのは **公式の商品ページ**です。ツール画面で押しても意味がありません。
+
+「このサイトにアクセスできません」「127.0.0.1 で接続が拒否されました」は、ブックマークレットは動いているがサーバーが止まっている印です。`npm run desc:helper` を起動してから、エラー画面を再読み込みするか、公式ページでもう一度押してください。
+
+公式ページの文は事実確認用です。転載しません。
 
 ### ルートC: 見た目やプログラムを直す
 
@@ -241,7 +275,7 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 2. または `images/4902418002415.jpg` のように置く。
 3. `npm run build`。
 
-ブックマークレットは現行リポジトリにありません。画像の正攻法は JAN 収集か、URL の手貼りです。
+画像用の旧ブックマークレット（楽天ページから画像URLを取るもの）は現行リポジトリにありません。画像の正攻法は JAN 収集か、`img` 列への URL の手貼りです。説明文取り直し用のブックマークレットは §2 の `desc:helper` を見てください。
 
 楽天 API 経由の画像は直リンク（自サーバーへ複製しない）です。アフィリエイト提携は停止中ですが、画像の出典は楽天市場のカタログです。
 
@@ -265,7 +299,7 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 | `RAKUTEN_APP_ID` | JAN 収集（必須） |
 | `RAKUTEN_ACCESS_KEY` | JAN 収集（必須） |
 | `YAHOO_CLIENT_ID` | 楽天が失敗したときの画像・商品フォールバック |
-| `GEMINI_API_KEY` | 説明文の自動生成（任意）。Google AI Studio で発行 |
+| `GEMINI_API_KEY` | 説明文の自動生成（`collect:all` と `desc:helper`）。Google AI Studio で発行 |
 | `FORMSPREE_FORM_ID` | 利用規約モーダルの問い合わせフォーム。`https://formspree.io/f/` の後ろのID。宛先メールは Formspree 側に置く |
 
 問い合わせ文面そのものは `index.html` のモーダル内です。提携状況や免責を変えるときはそこを直接編集します。
@@ -293,6 +327,7 @@ AI に商品 CSV を手で作らせるときは、`docs/AI_INSTRUCTIONS.md` を�
 
 補助ツール:
 
+- `npm run desc:helper` … 既存商品の説明文だけを作り直す。手順は §2「説明文だけを取り直す」
 - `csv_helper.html` … 1行分の CSV を手で作る入力補助
 - `python3 auto_data_collector.py [商品URL]` … URL から1件分の CSV 行を出す旧経路。通常は `collect:all` で足りる
 
@@ -371,6 +406,8 @@ npm run deploy
 | 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
 | 問い合わせが「準備中」のまま | `.env` の `FORMSPREE_FORM_ID` が空か、英数字以外。入れてから `npm run build` |
 | 問い合わせを送っても届かない | Formspree の初回確認メールを承認したか。無料枠（月50件）を超えていないか |
+| `127.0.0.1 で接続が拒否されました`（desc:helper） | `npm run desc:helper` が動いていない。先に起動する。ブックマークの URL は `http://127.0.0.1:8765` ではなく `javascript:...`（§2） |
+| desc:helper で商品名が見つからない | CSV の `name` をそのまま貼る。部分一致ではない |
 | CSV を上書きできない | LibreOffice を閉じる。`data/.~lock.products.csv#` を消す |
 | 権限エラー（Linux） | `sudo chown $USER:$USER data/products.csv` |
 | お気に入りが消えた | ドメインやブラウザを変えると localStorage は別物 |

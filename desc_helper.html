@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pet925 | Description Helper</title>
+    <style>
+        :root { --gold: #c5a059; --dark: #1a1a1a; --gray: #f8f9fa; --border: #eee; }
+        body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; padding: 60px 20px; background: var(--gray); color: var(--dark); line-height: 1.6; margin: 0; }
+        .container { max-width: 850px; margin: 0 auto; background: #fff; padding: 50px; border-radius: 4px; box-shadow: 0 20px 60px rgba(0,0,0,0.05); }
+
+        h1 { font-size: 1.8rem; letter-spacing: 10px; font-weight: 200; text-align: center; margin: 0 0 10px; text-transform: uppercase; }
+        h1 span { color: var(--gold); font-size: 0.7rem; display: block; letter-spacing: 3px; margin-top: 8px; font-weight: 700; border-bottom: 1px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
+
+        .section-title { font-size: 0.7rem; color: var(--gold); font-weight: bold; letter-spacing: 2px; text-transform: uppercase; margin: 40px 0 20px; border-left: 3px solid var(--gold); padding-left: 10px; }
+
+        .field { margin-bottom: 20px; }
+
+        label { display: block; font-size: 0.7rem; font-weight: bold; margin-bottom: 8px; color: #888; letter-spacing: 1px; text-transform: uppercase; }
+        input, textarea { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-size: 0.9rem; transition: all 0.3s ease; background: #fff; }
+        input:focus, textarea:focus { border-color: var(--gold); outline: none; background: #fafafa; }
+
+        .hint { font-size: 0.7rem; color: #999; margin-top: 3px; }
+        .hint a { color: var(--gold); font-weight: bold; text-decoration: none; }
+
+        .actions { display: flex; gap: 15px; margin-top: 30px; }
+        button { flex: 1; padding: 20px; background: var(--dark); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; transition: 0.3s; }
+        button.secondary { background: #eee; color: #666; flex: 0 0 150px; }
+        button:hover { background: var(--gold); color: #fff; transform: translateY(-2px); }
+        button.secondary:hover { background: #ddd; color: var(--dark); }
+        button:disabled { opacity: 0.5; cursor: wait; transform: none; }
+
+        .panel { margin-top: 24px; padding: 20px; background: var(--gray); border-radius: 4px; border: 1px dashed #ddd; display: none; }
+        .panel.visible { display: block; }
+        .panel h2 { font-size: 0.7rem; color: var(--gold); letter-spacing: 2px; text-transform: uppercase; margin: 0 0 10px; }
+        .panel p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+        .panel.error { border-color: #d9a; background: #fff6f2; }
+        .panel.error h2 { color: #a65; }
+
+        .copy-msg { color: var(--gold); font-size: 0.8rem; font-weight: bold; margin-top: 15px; text-align: center; letter-spacing: 1px; min-height: 1.2em; }
+        .intro { text-align: center; font-size: 0.8rem; color: #888; margin-bottom: 40px; letter-spacing: 1px; }
+        .match-ok { color: #6a8f4e; font-weight: bold; }
+        .match-miss { color: #a65; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>pet925<span>DESCRIPTION HELPER</span></h1>
+    <p class="intro">CSV の商品名を貼り、必要なら公式ページを参考にして説明文だけを作り直します。原文は使わず、独自の60字程度にします。</p>
+
+    <div class="section-title">01. Product</div>
+    <div class="field">
+        <label>商品名 (name)</label>
+        <input type="text" id="name" placeholder="products.csv の name 列をそのまま貼る">
+        <div class="hint" id="match-hint">完全一致で CSV を探します。見つかると今の説明と属性を参考にします。</div>
+    </div>
+    <div class="panel" id="current-area">
+        <h2>CSV の現在の説明文</h2>
+        <p id="current-desc"></p>
+    </div>
+
+    <div class="section-title">02. Reference (optional)</div>
+    <div class="field">
+        <label>参考 URL</label>
+        <input type="url" id="url" placeholder="https://... （任意）">
+        <div class="hint">公式ページのアドレス。こちらで本文を取得し、事実確認だけに使います。</div>
+    </div>
+    <div class="field">
+        <label>参考本文</label>
+        <textarea id="facts" rows="5" placeholder="ブックマークレット、またはページからコピーした本文（任意）"></textarea>
+        <div class="hint">
+            公式ページを開いた状態で
+            <a id="bookmarklet" href="#">このリンクをブックマークバーへドラッグ</a>
+            すると、本文がここに入ります。URL より本文が優先されます。
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="secondary" type="button" onclick="resetForm()">CLEAR</button>
+        <button type="button" id="generate-btn" onclick="generate()">GENERATE DESC</button>
+    </div>
+
+    <div class="panel error" id="error-area">
+        <h2>Error</h2>
+        <p id="error-text"></p>
+    </div>
+    <div class="panel" id="result-area">
+        <h2>新しい説明文 (desc)</h2>
+        <p id="new-desc"></p>
+        <div class="copy-msg" id="copy-msg"></div>
+    </div>
+</div>
+
+<script>
+const helperOrigin = '__HELPER_ORIGIN__';
+const bookmarkletCode = `javascript:(function(){const el=document.querySelector('main,article,[role="main"],.product,.p-product')||document.body;const text=(el.innerText||'').replace(/\\s+/g,' ').trim().slice(0,1800);const helper='${helperOrigin}/';try{const u=helper+'#facts='+encodeURIComponent(text);if(u.length<7000){window.open(u,'pet925-desc');return;}}catch(e){}function done(){window.open(helper,'pet925-desc');}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){alert('参考本文をコピーしました。ツールの参考本文欄に貼ってください。');done();}).catch(function(){prompt('参考本文（コピーしてツールに貼ってください）',text);done();});}else{prompt('参考本文（コピーしてツールに貼ってください）',text);done();}})();`;
+
+document.getElementById('bookmarklet').href = bookmarkletCode;
+
+function loadFactsFromHash() {
+    const raw = location.hash.startsWith('#facts=') ? location.hash.slice('#facts='.length) : '';
+    if (!raw) return;
+    document.getElementById('facts').value = decodeURIComponent(raw);
+    history.replaceState(null, '', location.pathname);
+}
+
+async function lookupName() {
+    const name = document.getElementById('name').value.trim().replace(/^"+|"+$/g, '');
+    const hint = document.getElementById('match-hint');
+    const currentArea = document.getElementById('current-area');
+    if (!name) {
+        hint.innerHTML = '完全一致で CSV を探します。見つかると今の説明と属性を参考にします。';
+        currentArea.classList.remove('visible');
+        return;
+    }
+    try {
+        const res = await fetch('/api/lookup?name=' + encodeURIComponent(name));
+        const data = await res.json();
+        if (!data.matched) {
+            hint.innerHTML = '<span class="match-miss">CSV にこの商品名はありません。</span> 名前だけで生成できます。';
+            currentArea.classList.remove('visible');
+            return;
+        }
+        hint.innerHTML = '<span class="match-ok">CSV で見つかりました。</span> ブランド / タグを事実として使います。';
+        document.getElementById('current-desc').textContent = data.current_desc || '（空）';
+        currentArea.classList.add('visible');
+        const urlEl = document.getElementById('url');
+        if (!urlEl.value.trim() && data.a8 && /^https?:\/\//i.test(data.a8)) {
+            urlEl.value = data.a8;
+        }
+    } catch (err) {
+        hint.textContent = 'CSV の照合に失敗しました。サーバーが起動しているか確認してください。';
+    }
+}
+
+function resetForm() {
+    if (!confirm('入力をすべてクリアしますか？')) return;
+    document.getElementById('name').value = '';
+    document.getElementById('url').value = '';
+    document.getElementById('facts').value = '';
+    document.getElementById('current-area').classList.remove('visible');
+    document.getElementById('result-area').classList.remove('visible');
+    document.getElementById('error-area').classList.remove('visible');
+    document.getElementById('match-hint').innerHTML = '完全一致で CSV を探します。見つかると今の説明と属性を参考にします。';
+    document.getElementById('copy-msg').textContent = '';
+}
+
+async function generate() {
+    const btn = document.getElementById('generate-btn');
+    const errArea = document.getElementById('error-area');
+    const resultArea = document.getElementById('result-area');
+    errArea.classList.remove('visible');
+    resultArea.classList.remove('visible');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/desc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: document.getElementById('name').value.trim().replace(/^"+|"+$/g, ''),
+                url: document.getElementById('url').value.trim(),
+                source_text: document.getElementById('facts').value.trim()
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            document.getElementById('error-text').textContent = data.error || '生成に失敗しました。';
+            errArea.classList.add('visible');
+            return;
+        }
+        document.getElementById('new-desc').textContent = data.desc;
+        resultArea.classList.add('visible');
+        try {
+            await navigator.clipboard.writeText(data.desc);
+            document.getElementById('copy-msg').textContent = '✓ クリップボードにコピーしました。products.csv の desc 列へ貼ってください。';
+        } catch (e) {
+            document.getElementById('copy-msg').textContent = '生成しました。上の文をコピーして desc 列へ貼ってください。';
+        }
+    } catch (err) {
+        document.getElementById('error-text').textContent = 'サーバーに接続できません。npm run desc:helper で起動してください。';
+        errArea.classList.add('visible');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.getElementById('name').addEventListener('blur', lookupName);
+document.getElementById('name').addEventListener('paste', () => setTimeout(lookupName, 0));
+loadFactsFromHash();
+</script>
+</body>
+</html>
