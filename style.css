@@ -332,6 +332,19 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 .modal-btn:active { transform: translateY(0); }
 .btn-cancel { background: #f4f4f4; color: #666; }
 .btn-confirm { background: var(--dark); color: #fff; }
+
+.contact-form { margin: 12px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.contact-gotcha { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.contact-label { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; font-weight: bold; color: #666; }
+.contact-input, .contact-textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #eee; border-radius: 8px;
+    font-size: 0.85rem; font-family: inherit; box-sizing: border-box; outline: none;
+}
+.contact-input:focus, .contact-textarea:focus { border-color: var(--dark); background: var(--gray); }
+.contact-textarea { resize: vertical; min-height: 88px; }
+.contact-submit { align-self: flex-start; margin-top: 4px; }
+.contact-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.contact-status { margin: 0; font-size: 0.75rem; color: #666; min-height: 1.2em; }
 .card-fav-btn.active { color: #ff4757; }
 .active-chips-label { font-size: 0.6rem; color: #bbb; font-weight: bold; margin-right: 5px; }
 

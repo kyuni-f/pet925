@@ -1,4 +1,4 @@
-const siteVersion = '20260818012323';
+const siteVersion = '20260820193407';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -105,7 +105,7 @@ const tagKeywords = {
         "食ベムラ"
     ]
 };
-const CONTACT_MAIL_CODES = [103, 110, 110, 109, 106, 57, 51, 52, 64, 121, 97, 104, 111, 111, 46, 99, 111, 46, 106, 112];
+const FORMSPREE_FORM_ID = "mdenyvoz";
 const comments = [
     {
         "category": "animal",

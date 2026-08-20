@@ -54,7 +54,8 @@ flowchart TD
 | 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
 | 英語ブランド名でも日本語検索したい | `data/brands.csv` | `npm run build` |
 | 店員コメントを足す | `data/comments.csv` | `npm run build` |
-| 問い合わせメールを変える | `.env` の `CONTACT_EMAIL` | `npm run build` |
+| 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
+| 問い合わせフォーム自体を有効化する | `.env` の `FORMSPREE_FORM_ID` | `npm run build` |
 | 見た目 | `style.css` / `index.html` | 保存して Ctrl+F5 |
 | 画面の動き | `main.js` | 保存して Ctrl+F5 |
 | 検索の当たり方 | `search_worker.js` / `common.js` | 保存して Ctrl+F5 |
@@ -265,9 +266,28 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 | `RAKUTEN_ACCESS_KEY` | JAN 収集（必須） |
 | `YAHOO_CLIENT_ID` | 楽天が失敗したときの画像・商品フォールバック |
 | `GEMINI_API_KEY` | 説明文の自動生成（任意）。Google AI Studio で発行 |
-| `CONTACT_EMAIL` | 利用規約モーダルの問い合わせリンク。ビルド時に文字コード配列へ変換される |
+| `FORMSPREE_FORM_ID` | 利用規約モーダルの問い合わせフォーム。`https://formspree.io/f/` の後ろのID。宛先メールは Formspree 側に置く |
 
 問い合わせ文面そのものは `index.html` のモーダル内です。提携状況や免責を変えるときはそこを直接編集します。
+
+### 問い合わせフォーム（Formspree）
+
+免責モーダルの「画像・著作権」欄から、掲載停止の依頼を送れます。サイト上に運営者のメールアドレスは出ません。Formspree が本文を預かり、登録したアドレスへ転送します。
+
+**有効にする手順**
+
+1. [Formspree](https://formspree.io/) でアカウントを作り、New Form で受信したいメールアドレスを登録する（このアドレスはサイトに出ません）。
+2. 発行された URL `https://formspree.io/f/xxxxxxxx` の `xxxxxxxx` を `.env` の `FORMSPREE_FORM_ID` に書く。
+3. `npm run build` を実行する。初回送信時、Formspree から確認メールが届くので承認する。
+
+**運用上の注意**
+
+- 届き先を変えたいときは Formspree の管理画面だけ触る。サイト側のコードは不要。
+- ID が空、または英数字以外だと、画面には「問い合わせフォームは準備中です。」と出て送信できない。
+- 送れるのは返信先メールと本文の文字だけ。ファイル添付は無い（ウイルスファイルはフォーム経由では届かない）。
+- 無料枠は月50件程度。それを超えた分は届かない。
+- 本文に怪しい URL があっても、自分から開かなければ PC は感染しない。必要なら公式サイトから入り直す。
+- ボット対策として、画面に見えない `_gotcha`（ハニーポット）がある。機械が埋めると送信しない。
 
 AI に商品 CSV を手で作らせるときは、`docs/AI_INSTRUCTIONS.md` をプロンプトとして渡してください。日常の増やす作業はルートA（JAN 収集）の方が確実です。
 
@@ -321,6 +341,7 @@ npm run deploy
 - [ ] ショップボタンが新しいタブで開き、「○○で検索」になっている。アフィリエイト ID は空でよい
 - [ ] URL が `#` の商品でも、商品名検索のページへ飛ぶ
 - [ ] 画像。無い商品は No Image になる
+- [ ] フッターの「プライバシーポリシー・免責事項」から問い合わせフォームが見える。ID 設定済みなら送信できる（未設定なら「準備中」）
 
 **見た目**
 
@@ -348,6 +369,8 @@ npm run deploy
 | `価格 amz_p は半角数字のみ` | カンマや「円」を消す |
 | ボタンが `データを読み込み中` のまま / `データの読み込みに失敗` | まず `npm run build`。コンソールの `Worker data load failed` は `product_data.json` が古い・無い |
 | 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
+| 問い合わせが「準備中」のまま | `.env` の `FORMSPREE_FORM_ID` が空か、英数字以外。入れてから `npm run build` |
+| 問い合わせを送っても届かない | Formspree の初回確認メールを承認したか。無料枠（月50件）を超えていないか |
 | CSV を上書きできない | LibreOffice を閉じる。`data/.~lock.products.csv#` を消す |
 | 権限エラー（Linux） | `sudo chown $USER:$USER data/products.csv` |
 | お気に入りが消えた | ドメインやブラウザを変えると localStorage は別物 |

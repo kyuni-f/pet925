@@ -190,19 +190,68 @@ function closeImageModal() { // 商品画像の拡大モーダルを閉じる
 function openLegalModal() {
     const overlay = document.getElementById('legal-modal-overlay');
     if (overlay) overlay.style.display = 'flex';
-    setupContactMailLink();
+    setupContactForm();
     trackEvent('UI', 'legal_open', 'click');
 }
 
-function setupContactMailLink() {
-    // メールアドレスはリポジトリに平文で残さず、data_master.js（ビルド時に.envのCONTACT_EMAILから生成）の
-    // 文字コード配列 CONTACT_MAIL_CODES から実行時に復元する
-    if (typeof CONTACT_MAIL_CODES === 'undefined') return;
-    const link = document.getElementById('contact-mail-link');
-    if (!link || link.dataset.mailReady) return;
-    const address = String.fromCharCode(...CONTACT_MAIL_CODES);
-    link.href = 'mailto:' + address;
-    link.dataset.mailReady = 'true';
+function setupContactForm() {
+    const form = document.getElementById('contact-form');
+    if (!form || form.dataset.ready) return;
+
+    const statusEl = document.getElementById('contact-form-status');
+    const submitBtn = form.querySelector('.contact-submit');
+    const formId = (typeof FORMSPREE_FORM_ID !== 'undefined') ? String(FORMSPREE_FORM_ID).trim() : '';
+
+    if (!formId || !/^[A-Za-z0-9]+$/.test(formId)) {
+        if (submitBtn) submitBtn.disabled = true;
+        if (statusEl) statusEl.textContent = '問い合わせフォームは準備中です。';
+        form.dataset.ready = 'true';
+        return;
+    }
+
+    form.dataset.ready = 'true';
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (form.querySelector('[name="_gotcha"]')?.value) return;
+
+        const email = form.querySelector('[name="email"]')?.value.trim() || '';
+        const message = form.querySelector('[name="message"]')?.value.trim() || '';
+        if (!email || !message) {
+            if (statusEl) statusEl.textContent = 'メールアドレスと内容を入力してください。';
+            return;
+        }
+
+        if (submitBtn) submitBtn.disabled = true;
+        if (statusEl) statusEl.textContent = '送信中...';
+
+        try {
+            const resp = await fetch('https://formspree.io/f/' + formId, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email,
+                    message,
+                    _subject: 'pet925 掲載停止のご依頼'
+                })
+            });
+            if (resp.ok) {
+                form.reset();
+                if (statusEl) statusEl.textContent = '送信しました。ご連絡ありがとうございました。';
+                trackEvent('UI', 'contact_form_submit', 'success');
+            } else {
+                if (statusEl) statusEl.textContent = '送信に失敗しました。時間をおいて再度お試しください。';
+                trackEvent('UI', 'contact_form_submit', 'error');
+            }
+        } catch (e) {
+            if (statusEl) statusEl.textContent = '送信に失敗しました。通信環境をご確認ください。';
+            trackEvent('UI', 'contact_form_submit', 'error');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    });
 }
 
 function closeLegalModal() { // 規約モーダルを閉じる

@@ -28,12 +28,14 @@ OUTPUT_JSON = 'product_data.json'
 CHUNK_SIZE = 5000  # 1ファイルあたりの最大件数
 OUTPUT_MASTER_JS = 'data_master.js'
 
-# サイト上の問い合わせメールリンク難読化用のアドレス読み込み（.envのCONTACT_EMAILのみを使用し、リポジトリには平文で残さない）
+# 問い合わせフォーム（Formspree）のフォームID。宛先メールは Formspree 側にだけ置き、サイトには出さない
 def load_contact_config():
-    return {"email": get_env_value("CONTACT_EMAIL")}
+    raw = (get_env_value("FORMSPREE_FORM_ID") or "").strip()
+    form_id = raw if re.fullmatch(r"[A-Za-z0-9]+", raw) else ""
+    return {"form_id": form_id}
 
 contact_config = load_contact_config()
-CONTACT_EMAIL = contact_config["email"] or "your-email@example.com"
+FORMSPREE_FORM_ID = contact_config["form_id"]
 
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
@@ -322,8 +324,8 @@ def convert(exit_on_error=True):
             f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
-            # 問い合わせメールアドレスは平文で書き出さず、文字コード配列としてのみ出力する（main.jsのsetupContactMailLinkが実行時に復元）
-            f.write(f"const CONTACT_MAIL_CODES = {json.dumps([ord(c) for c in CONTACT_EMAIL])};\n")
+            # 宛先メールは書き出さず、Formspree の公開フォームIDのみ渡す（main.js が送信先URLを組み立てる）
+            f.write(f"const FORMSPREE_FORM_ID = {json.dumps(FORMSPREE_FORM_ID)};\n")
             # 動的に読み込んだマスターデータを追記
             for var_name, data in other_masters_data.items():
                 f.write(f"const {var_name} = {json.dumps(data, ensure_ascii=False, indent=4)};\n")
