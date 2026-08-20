@@ -1,4 +1,4 @@
-const siteVersion = '20260820193407';
+const siteVersion = '20260821024017';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
