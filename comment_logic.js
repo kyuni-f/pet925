@@ -17,6 +17,7 @@
  */
 function getCommentLookup(commentsData) {
     const rows = commentsData || (typeof comments !== 'undefined' ? comments : []);
+    /** @type {Record<string, string[]>} */
     const lookup = {};
     rows.forEach(row => {
         const mapKey = `${row.category}:${row.key}`;
@@ -44,20 +45,22 @@ const MAX_STORE_COMMENTS = 2;
  * @returns {string[]}
  */
 function pickStoreComments(filters) {
+    /** @type {{ cond?: string[], animal?: string }} */
     const activeFiltersRef = filters || (typeof activeFilters !== 'undefined' ? activeFilters : {});
     if (!commentLookupMap) commentLookupMap = getCommentLookup();
+    const lookupMap = commentLookupMap;
 
     // タグごとに候補リストを分けて保持（同じタグから複数採用されて偏らないようにする）
     const condVals = Array.isArray(activeFiltersRef.cond) ? activeFiltersRef.cond : [];
     let tagBuckets = condVals
-        .map(val => commentLookupMap[`cond:${val}`])
+        .map(val => lookupMap[`cond:${val}`])
         .filter(list => list && list.length > 0);
 
     // condの選択がなければ animal（犬/猫）の経験談にフォールバック
     if (tagBuckets.length === 0) {
         const animalVal = activeFiltersRef.animal;
         if (animalVal && animalVal !== 'all') {
-            const list = commentLookupMap[`animal:${animalVal}`];
+            const list = lookupMap[`animal:${animalVal}`];
             if (list) tagBuckets = [list];
         }
     }
@@ -80,10 +83,14 @@ function pickStoreComments(filters) {
  */
 function pickKeywordComments(searchVal, commentsData) {
     const rows = commentsData || (typeof comments !== 'undefined' ? comments : []);
+    // @ts-ignore common.js のグローバル。module.exports があると型上は見えない
     const normalizedSearch = normalize(searchVal);
     if (!normalizedSearch) return [];
 
-    const matched = rows.filter(row => row.category === 'keyword' && normalizedSearch.includes(normalize(row.key)));
+    const matched = rows.filter(row => row.category === 'keyword' && normalizedSearch.includes(
+        // @ts-ignore
+        normalize(row.key)
+    ));
     if (matched.length === 0) return [];
 
     return [matched[Math.floor(Math.random() * matched.length)].comment];

@@ -175,7 +175,10 @@ CSV の列の意味:
 | **DRY** | Don't Repeat Yourself。同じ処理を2箇所に書かない。`common.js` / `pet_utils.py` が典型。 |
 | **リファクタリング** | 動きは変えず、読みやすく直すこと。 |
 | **ユニットテスト** | 小さな関数単体のテスト。`tests/`、`npm test`（Jest）。 |
-| **JSDoc / `@ts-check`** | コメントで「この関数は文字列を返す」と書いて、エディタに間違いを指摘させる。 |
+| **JSDoc** | 関数の上に書くコメント。`@param` は引数、`@returns` は戻り値、`@type` は変数の型。プログラムは無視し、エディタだけが読む。 |
+| **`@ts-check`** | ファイル先頭に書くと、そのファイルだけ型を検査する。今は `common.js` と `comment_logic.js`。`jsconfig.json` の `checkJs` は `false`（全体オフ、個別にオン）。 |
+| **`@ts-ignore`** | 次の1行の型警告を無視する。実行は変わらない。ブラウザでは見えるが型上は見えない名前（`normalize`）に使う。 |
+| **問題パネル** | Cursor 下部の「問題」タブ。型の警告が並ぶ。**ブラウザの赤いエラーではない**ので、件数があってもサイトは動くことがある。 |
 | **ガードレール** | 壊れたデータを公開しない仕組み。バリデーション失敗で `sys.exit(1)`。 |
 | **難読化** | 中身を読みにくくすること。#66 の文字コード配列がそれ。ボット避けにはなるが、人の目や `mailto:` では隠せない。 |
 | **ReferenceError** | 「その関数/変数はまだ存在しない」エラー。読み込み順が原因になりやすい。 |
@@ -193,6 +196,7 @@ CSV の列の意味:
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
 | 公開したい | `npm run deploy` |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
+| エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
 | 運用の手順 | `docs/MANUAL.md` |
 | 「なぜこう作ったか」 | `docs/PROJECT_SUMMARY.md` |
 
@@ -259,6 +263,16 @@ CSV の列の意味:
 | **undefined** | JS 特有。「まだ入っていない」。 | 変数を宣言した直後など |
 | **関数 (function)** | 「後で実行できる処理のかたまり」も値として扱える。 | `normalize`、`render` |
 
+エディタが見る型（サイトの配信ファイルには含まれない）:
+
+| 用語 | 意味 | このプロジェクトでの例 |
+|---|---|---|
+| **型チェック** | 実行する前に「種類が合っているか」をエディタが見ること。動きは変わらない。 | `// @ts-check` 付きの `comment_logic.js` |
+| **型注釈** | 「これは文字列の配列です」とコメントで教えること。 | `/** @type {Record<string, string[]>} */` |
+| **Record** | 「キーの型 → 値の型」の対応表。 | `"cond:tear"` → `['コメントA', 'コメントB']` |
+| **any** | 「何でもあり」。型検査が効かない。空の `{}` に `lookup[key]` するとこれに落ちやすい。 | |
+| **チェック対象外（オプトイン）** | 全体はオフにして、検査したいファイルだけ `@ts-check` を付けるやり方。 | `jsconfig.json` の `checkJs: false` |
+
 配列とオブジェクトの違い（超重要）:
 
 - 配列は **順番** で取り出す → `favorites[0]`
@@ -277,7 +291,7 @@ CSV の列の意味:
 | **戻り値（return）** | 関数が出す答え。 | `normalize(str)` は整えた文字列を返す |
 | **呼び出し** | 関数を実際に動かすこと。末尾の `()`。 | `render(false)` |
 | **スコープ** | その変数が使える範囲。関数の中で作った変数は外から見えないことが多い。 | |
-| **グローバル変数** | どこからでも見える変数。 | `data_master.js` の `tagMaster`、`comments` |
+| **グローバル変数** | どこからでも見える変数。ブラウザの `<script>` 順で共有する。 | `data_master.js` の `tagMaster`、`comments`。`common.js` の `normalize` も実行時はグローバルだが、末尾の `module.exports` があると型チェックからは見えにくい |
 | **条件分岐** | 「もし〜なら」。 | `if (showFavoritesOnly) { ... } else { ... }` |
 | **ループ（繰り返し）** | 同じ処理を何回も。 | `for (const item of allProducts)`、Python の `for line in f:` |
 | **早期リターン** | 条件を満たさなければすぐ抜ける。 | `if (!str) return "";` |
@@ -406,6 +420,16 @@ def normalize_text(s):
 | `self.postMessage(result)` | Worker → メインへ結果を返す |
 | `importScripts('common.js')` | Worker 内で別 JS を読み込む |
 
+### ブラウザとテスト（Node）の両用
+
+同じ JS を、サイトでは `<script>`、テストでは `require` するときの定番です。
+
+| 書き方 | 意味 |
+|---|---|
+| `typeof x !== 'undefined' ? x : []` | その名前がまだ無いか確認してから使う。テスト環境にグローバルが無くても落ちない |
+| `typeof module !== 'undefined' && module.exports` | Node / Jest のときだけ書き出す。ブラウザでは `module` が無いので、この中は実行されない |
+| `module.exports = { normalize }` | テストから `require('../common.js')` できるようにする。**副作用**: TypeScript はそのファイルをモジュールとみなし、中の `const` が他ファイルの型から見えなくなることがある |
+
 ### よく見る演算子
 
 | 記号 | 意味 |
@@ -520,6 +544,10 @@ Python と JS の対応（同じことをするとき）:
 | **ENOENT** | ファイルが見つからない（Python/Node） | パスや作業ディレクトリが違う |
 | **Module not found** | 部品が無い | `npm install` 忘れ |
 | **バリデーションエラー（ビルド）** | CSV の中身がルール違反 | 未登録タグ、列不足、重複 |
+| **問題パネルの TS〜（型警告）** | エディタの型チェック。**ブラウザは落ちない** | `@ts-check` 付きファイル。空の `{}`、見えないグローバルなど |
+| **Cannot find name 'xxx'** | 型の世界にその名前が無い | `normalize`（`common.js` に `module.exports` があるため） |
+| **Property 'cond' does not exist on type '{}'** | 空オブジェクトにプロパティを読んだ | `let activeFilters = {}` のままだと型が空 |
+| **Element implicitly has an 'any' type** | `obj[key]` のとき、`obj` に「文字列キーで触ってよい」と書いていない | `const lookup = {}` に JSDoc の `Record` が無いとき |
 
 ## 設計でよく出る言葉
 
@@ -532,7 +560,7 @@ Python と JS の対応（同じことをするとき）:
 | **コールバック** | 「終わったら呼んでほしい関数」を渡すこと。 | `setTimeout` に渡す関数、`forEach` の中身 |
 | **副作用** | 戻り値以外に、画面やファイルを変えること。 | `localStorage.setItem`、`innerHTML =` |
 | **純関数** | 同じ入力なら同じ出力。外の世界を変えない。 | `normalize()` はこれに近い |
-| **モジュール** | 役割ごとに分けたファイル。 | `common.js`、`comment_logic.js`、`pet_utils.py` |
+| **モジュール** | 役割ごとに分けたファイル。ブラウザではグローバル、Jest では `module.exports`、という二面がある。 | `common.js`、`comment_logic.js`、`pet_utils.py` |
 | **インターフェース** | 「こう渡せばこう返る」という約束。 | Worker の `postMessage` の中身 |
 | **ハードコード** | 値をコードに直書きすること。設定ファイルに出した方が変えやすい場合がある。 | |
 | **マジックナンバー** | 意味の分からない数字。名前付き定数にする。 | `PAGE_SIZE = 20`、`MAX_STORE_COMMENTS = 2` |
