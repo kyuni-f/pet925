@@ -1,202 +1,415 @@
-# pet925 管理マニュアル
+# pet925 管理マニュアル（現行仕様）
 
-## 1. 運用ワークフロー（黄金のサイクル）
-
-### A. 効率的なデータ収集（推奨）
-1.  **供給源の選択**: 楽天市場の商品ページ、または提携している**ドロップシッピングサイト（TopSeller等）**のカタログから商品を探す。
-2.  **画像URL取得**: 
-    - 楽天の場合：ブックマークレットを使用して高画質URLを取得。
-    - ドロップシッピングの場合：提供されている画像URLを直接コピー。
-3.  **マスター反映**: `pet925_master.ods` の `img` 列（G列）に貼り付け。
-4.  **仕上げ**: 商品名（A列）、ブランド名（B列）、タグ（C列）を手動で入力または調整。
-    - **画像について**: 画像の自動取得は `auto_collect_all.py`（`npm run collect` / `npm run collect:all`）が担当します。JANコードから以下の優先順位で画像URLを取得し、`img` 列に書き込みます。
-    1. **楽天Product Search API(v2)**（最優先）- 透かし・ロゴなしの公式カタログ画像（`r.r10s.jp`）
-    2. **楽天Item Search API** - フォールバック
-    3. **Yahoo!ショッピングAPI** - 最終フォールバック（一部ショップロゴが入る場合あり）
-    - `csv_to_json.py`（ビルドスクリプト）は画像を取得しません。純粋にCSV→JSON変換とデータ検証のみを行い、`images/{JANコード}.拡張子` が手動で配置されていればそれをローカルキャッシュとして優先採用します。
-    - いずれの経路でも画像が見つからない場合は「No Image」プレースホルダーを表示します（ビルドは失敗しません）。
-    - 画像左上の「参考画像」バッジや出典注釈は表示されません（楽天公式カタログ画像のため）。
-    - 手動で特定の画像URLを指定したい場合は、`img` 列に直接URLを入力してください。
-
-
-### A-2. JANコードからのCSV自動生成（`jan_list.csv` 運用）
-JANコード（バーコード番号）だけが分かっている商品を、楽天・Yahoo!・Gemini の各APIを使って自動的に `products.csv` へ登録する方法です。
-
-#### 手順
-1.  **JANコードを記入**: プロジェクト直下の `jan_list.csv` を開き、**1行に1つ**、13桁または14桁のJANコードを記入します（見出し行は不要）。
-    ```
-    4902418002415
-    4902418002439
-    ```
-2.  **実行**: ターミナルで以下のいずれかを実行します。
-    - 推奨（説明文・タグまで全自動）: `npm run collect:all`
-    - データ収集のみ（JSON変換は別途行う）: `npm run collect`
-3.  **確認**: 処理が終わると `data/products.csv` に新しい行が追加されます。`npm run collect:all` の場合は自動で `csv_to_json.py` も実行されるため、続けて `npm start` や `npm run deploy` を行えます。
-
-#### 内部での自動処理（`auto_collect_all.py`）
-1. **楽天Product Search API (v2)** で商品名・メーカー名・説明文・価格・画像を一括取得。
-2. 上記が失敗した場合は **楽天Item Search API** → **Yahoo!ショッピングAPI** の順にフォールバック。
-3. 説明文が取得できない場合、`.env` に `GEMINI_API_KEY` が設定されていれば **Gemini API** が60字程度の説明文を自動生成。
-4. `data/rules.csv` のキーワードルールに基づき、タグ（動物種・年齢・こだわり等）を自動判定。
-5. `data/brands.csv` を参照してブランド名を正式表記に変換。
-6. 完成した行を既存の `products.csv` に追記し、JANコード順に並び替えて保存。
-
-#### ⚠️ 追加方式であることに関する重要ポイント
-- **`jan_list.csv`**: 使い切りの「今回処理したいJANコードの入力リスト」です。実行後は自動でクリアされないため、**次回は新しいJANコードだけに書き換えてから実行してください**（前回分が残っていても、既存JANは自動でスキップされるので害はありませんが、処理時間が無駄になります）。
-- **`data/products.csv`**: 既存のデータは消えず、**新規JANコードのみが追加**されます。同じJANコードが `jan_list.csv` に含まれていても「⏭️ 重複スキップ」と表示され、二重登録は起きません。
-- 自動生成された説明文・タグ・ブランド名は完璧とは限らないため、`pet925_master.ods` を開いて内容を必ず目視確認・修正してください。
-
----
-### B. 手動一括管理（メンテナンス時）
-
-（略）
-1.  **マスター更新**: `data/pet925_master.ods` を編集。
-2.  **CSV出力**: ツールバーの「CSV一括出力」ボタン（マクロ）をクリック。
-3.  **公開**: ターミナルで `npm run deploy` を実行。
-4.  **確認**: サイト上で **Ctrl + F5**。
-
-> **💡 開発中の自動ビルド**: `npm start` を実行すると、CSVの変更を自動で検知して JSON を再生成します。ブラウザは IndexedDB にデータをキャッシュしているため、最新のデータを反映させるには **Ctrl + F5**（キャッシュ破棄）が必要です。
-> **💡 バリデーション**: `npm run deploy` を実行すると、公開前にデータに不備がないか厳格にチェックします。
-
----
-## 2. タグマスターの管理方法 (tags.csv)
-フィルターボタンの種類や表示名は、`data/tags.csv` で一括管理しています。マスター（.ods）の「タグ一覧」シートを更新し、CSVとして書き出すことでサイトに反映されます。
-
-### tags.csv の列構成
-| 列名 | 説明 | 例 |
-| :--- | :--- | :--- |
-| **category** | フィルターの表示グループ | `animal`, `age`, `pref`, `cond` |
-| **key** | `products.csv` の `tags` 列に記入する英単語 | `lamb`, `tear`, `gf` |
-| **name** | サイトのボタンに表示される名前 | `ラム肉 (LAMB)` |
-
-### タグ・エイリアス設定 (rules.csv)
-特定の言葉が含まれている場合に、自動で正式なタグ（絞り込み用）を付与する「別名リスト」です。
-
-- **判定場所**: 商品名、説明文、およびタグ列のすべてが対象です。
-- **設定例**: 
-    - `gf,グレインフリー 穀物不使用` -> 商品名にこれらがあれば自動で「GF」タグを付与。
-    - `lamb,ラム肉` -> 商品名にこれらがあれば自動で「ラム肉 (LAMB)」に分類。
-
-キーワードは**スペース、カンマ、または読点**で区切って1行にまとめて記述できます。
-
-> **注意**: `グルテンフリー` という言葉での自動判定は廃止されました。
-
-### 自動タグ付与の除外設定 (`products.csv` の `exclude_tags` 列)
-`rules.csv` によるキーワード自動判定は便利な反面、意図しないタグが付いてしまう場合があります。特定の商品だけ自動付与を止めたいタグがある場合は、`products.csv` の **17列目 `exclude_tags`** にそのタグの `key`（`tags`列と同じ英単語表記、複数指定は半角スペース区切り）を入力してください。指定したタグは、キーワード一致による自動付与・付与提案の両方から除外されます。通常は使わない列なので、不要な場合は空欄または `#` のままで構いません。
-
-### カテゴリの役割
-- **animal**: 種類（犬・猫など。単一選択）
-- **age**: 年齢（成犬・シニアなど。単一選択）
-- **cond**: こだわり・お悩み（原材料や健康ケアの条件。**複数選択可**）
-
----
-## 3. ブランドエイリアスの管理 (brands.csv)
-「Nutro」を「ニュートロ」で検索できるようにする設定は `data/brands.csv` で行います。
-
-**💡 賢い名寄せ機能**:
-`products.csv` の `brand` 列に英語名（nutro等）を入力しても、`brands.csv` に登録があれば自動的に正式名称（ニュートロ）に変換してサイトに表示します。また、英語名でも日本語名でも検索にヒットするよう `brand_id` が内部で自動保持されます。
-
-**💡 ブランド名（Key）がわからない時は？**:
-- **海外ブランド**: Gemini に「公式の英語スペルを教えて」と聞く。
-- **国内ブランド**: 読み方をローマ字にする（例: `uchinogohan`）。
-- **どうしても不明**: 日本語のまま登録しても動作はします（半角英数の方が将来的に安全です）。
-
-**✅ ベストプラクティス**:
-サイト上の表示は `products.csv` に入力した文字がそのまま使われます（例: `Nutro`）。バリデーションエラーを防ぎ、日本語検索を最も安定させるため、`products.csv` のブランド名は、可能な限り `brands.csv` の `key` 列と（大文字小文字を含めて）表記を揃えることを推奨します。
-
-### brands.csv の列構成
-- **key**: CSVの `brand` 列に記入している英語名（小文字で判定されます）
-- **name**: 日本語での読み方
-
-**💡 楽天ショップID（英数字）の見つけ方**:
-楽天市場の店舗ページを開いた際のURL `https://www.rakuten.co.jp/○○○/` の **○○○** の部分がショップIDです。これを `main.js` の `rakutenImageShop` に設定します。
-※日本語で入力するとURLが「%E6%AD...」と化け、画像が表示されません。
-
----
-## 4. 価格・リンクの管理
-*   **価格**: 現在サイト上では非表示ですが、将来の機能拡張のため CSV (`amz_p`, `rak_p`, `yah_p`) には半角数字で保持し続けてください。
-*   **リンク**: URLが不明な場合は `#` を入力。システムが商品名から自動検索リンクを生成します。
-
----
-## 5. カスタムドメインの導入手順
-詳細は `README.md` の「🌐 カスタムドメインの導入手順」セクションを参照してください。
-
-> **注意**: ドメイン変更直後は、お気に入りデータ（localStorage）がリセットされます。旧ドメインと新ドメインはブラウザから見て「別の場所」と判断されるためです。
- 
-## 6. 注意事項（ここだけは気をつけて！）
-
-### ① ファイル名と場所
-- `data/` フォルダ内に `products.csv` や `categories.csv` 等が存在する必要があります。
-- `products (1).csv` などの余計なファイルがあれば削除してください。
-- **ファイル名の末尾に半角スペースが入らないよう注意してください。**（例：`products.csv ` はNG。プログラムが変更を検知できなくなる原因になります）
-
-### ② CSVの書き出し
-- `.~lock.products.csv#` などの一時ファイルは、編集ソフトを閉じれば消えます。
-- CSV保存時に「テキスト形式で保存しますか？」と聞かれたら **[はい]** を選んでください。
-
-### ③ 広告コードとリンク (img, amz, rak, yah, a8)
-- `img` 列には「画像のURL」のみ、`amz`, `rak`, `yah`, `a8` 列には「リンク先のURL」のみを貼り付けてください。
-- コードを丸ごと貼り付けると表示が崩れる原因になります。
-> **💡 ヒント**: 価格情報は表示されなくなりましたが、CSVにデータを残しておいても動作に影響はありません。
-
-**💡 画像URLの自動取得について**:
-1. JANコードが13桁で正しく入力されていれば、`npm run collect` / `npm run collect:all` 実行時に楽天Product Search API(v2)が自動的に高品質なカタログ画像（`r.r10s.jp`）を取得します。
-2. この画像は**ショップロゴや透かしが入っていない**クリーンな商品画像です。
-3. 自動取得が失敗する場合は、ブックマークレットを使って `img` 列にURLを直接貼り付けてください。
-
-**⚖️ 画像利用に関するガイドライン**:
-- 楽天Product Search APIを経由して取得した画像は、楽天のAPI利用規約の範囲内での適法な利用です。
-- 商品紹介（引用）の目的で使用し、各商品カードに出典元（楽天市場）へのリンクを併記しています。
-- 直リンク方式（自サーバーへの複製・再配信なし）を採用し、著作権者の配信管理権を尊重しています。
-- 現在、Amazon、楽天、Yahoo!ショッピングとのアフィリエイト提携は停止中です。
-
-### ④ ビルドエラーの確認
-- `npm run deploy` でエラー（❌ 変換失敗）が出た場合は、ターミナルのログを確認して CSV の不備を修正してください。
-- **警告（💡マーク）の確認**: `npm run deploy` 時に警告（💡マーク）が表示される場合があります。これはデプロイを停止しませんが、データ品質向上のための提案です。内容を確認し、必要に応じて修正してください。
-
-### ⑤ products.csv が上書きできない場合
-1. **LibreOfficeを閉じる**: 保存時に「エラー」が出る場合、Calcがロックファイルを生成しています。Calcを閉じ、フォルダ内の `.~lock.products.csv#` を削除してください。
-2. **ファイルを閉じる**: 他のソフトで CSV を開いていると上書きできないことがあります。
-3. **権限の確認**: Linuxの権限エラーが出る場合は、ターミナルで `sudo chown $USER:$USER data/products.csv` を実行してください。
-
----
-## 7. プライバシーポリシー・免責事項について
-- サイト下部の「プライバシーポリシー・免責事項」リンクをクリックすると表示されるモーダルの内容は、`index.html` に直接記述されています。
-- アフィリエイト提携状況や免責事項に変更があった場合は、`index.html` の該当箇所を直接編集してください。
-
----
-## 8. AI (Gemini) 連携の設定と依頼方法
-
-### A. API キーの設定
-1. Google AI Studio で **「Get API key」** を作成。
-2. プロジェクト直下の **`.env`** ファイルに `GEMINI_API_KEY=AIza...` を保存。
-
-### B. 商品データの作成依頼
-商品データを AI に作成させる際は、**`docs/AI_INSTRUCTIONS.md`** の内容をそのままプロンプトとして渡してください。これにより、16列のCSV形式とタグの整合性が保たれます。
+日々の運用手順です。言葉の意味は `docs/GLOSSARY.md`、なぜそう作ったかは `docs/PROJECT_SUMMARY.md`、AI に CSV を作らせるときのルールは `docs/AI_INSTRUCTIONS.md` を見てください。
 
 ---
 
-## 9. 店員コメントの追加（comments.csv）
-検索結果画面に表示される「店員の経験談」風コメント（アイコン＋吹き出しUI）を管理するファイルです。商品個別のレビューではなく、選択された条件や検索語に対して店員が話しかけるような一言を表示するための、汎用マスターCSVです（`csv_to_json.py` が products/categories/tags/rules 以外のCSVを自動でマスターとして読み込む仕組みに乗っているだけで、Pythonビルド側での内容チェックはありません）。
+## 1. 運用マップ
 
-### comments.csv の列構成
-| 列名       | 説明                                                         | 例                          |
-| :--------- | :----------------------------------------------------------- | :--------------------------- |
-| **category** | コメントの種類。`animal`（犬・猫）、`cond`（こだわり・お悩みタグ）、`keyword`（検索ボックスの自由入力語）のいずれか | `cond`                       |
-| **key**      | `animal`/`cond` の場合は `tags.csv` に登録済みのタグID。`keyword` の場合は自由な単語（フリーテキスト） | `tear` / `心臓`               |
-| **comment**  | 表示するコメント本文                                          | `涙やけの相談は本当に多いです...` |
+いまの正解はこれです。**集める作業**と**サイト用データにする作業**は別です。
 
-### 表示ロジック（main.js）
-- **`category: animal` / `cond`**: 検索画面で選択中の「こだわり・お悩み」タグ（未選択なら動物種タグにフォールバック）に一致する行から、`pickStoreComments()` が最大 `MAX_STORE_COMMENTS`（2件）をランダムに選んで表示します。
-- **`category: keyword`**: 検索ボックスに入力された自由文字列に `key` が部分一致した場合、`pickKeywordComments()` が最大1件を選び、上記のフィルター由来コメントに**追加で**表示します（フィルター由来コメントの内容・件数は変更しません）。タグ化するほどでもない話題（例:「心臓」「納豆菌」など特定の成分・症状のキーワード）を、フィルターやタグマスターを増やさずに扱えるのが利点です。
+```mermaid
+flowchart TD
+  start[やりたいこと] --> add[商品を増やす]
+  start --> fix[既存データを直す]
+  start --> code[見た目や動きを直す]
+  start --> pub[サイトに出す]
+
+  add --> jan["jan_list.csv に JAN を書く"]
+  jan --> collect["npm run collect:all"]
+  collect --> csv["data/products.csv に追加または一部更新"]
+  csv --> review[ODS か CSV で目視]
+
+  fix --> edit["data/*.csv または pet925_master.ods を編集"]
+  edit --> export[CSV を data/ に置く]
+  review --> export
+
+  export --> build["npm run build または npm start"]
+  build --> json["product_data.json と data_master.js が更新される"]
+  json --> preview["ブラウザで Ctrl+F5"]
+
+  code --> files["index.html / style.css / main.js などを保存"]
+  files --> preview
+
+  preview --> pub
+  pub --> deploy["npm run deploy"]
+  deploy --> live[GitHub Pages に公開]
+```
+
+### 役割の切り分け
+
+| 役割 | 担当 | やること | やらないこと |
+|---|---|---|---|
+| **集める** | `auto_collect_all.py`（`npm run collect`） | JAN から商品名・画像・説明・タグを取る | サイト用 JSON は作らない（`collect:all` なら続けてビルドする） |
+| **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用 | ネットから画像は取らない |
+| **画面で探す** | `main.js` + `search_worker.js` | 検索、フィルター、お気に入り、店員コメント | マスター CSV は読まない。ビルド済み JSON を読む |
+
+### 何を直すか早見表
+
+| やりたいこと | 触る場所 | そのあと |
+|---|---|---|
+| 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら `npm run deploy` |
+| 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
+| フィルターの名前を変える | `data/tags.csv` | `npm run build` |
+| 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
+| 英語ブランド名でも日本語検索したい | `data/brands.csv` | `npm run build` |
+| 店員コメントを足す | `data/comments.csv` | `npm run build` |
+| 問い合わせメールを変える | `.env` の `CONTACT_EMAIL` | `npm run build` |
+| 見た目 | `style.css` / `index.html` | 保存して Ctrl+F5 |
+| 画面の動き | `main.js` | 保存して Ctrl+F5 |
+| 検索の当たり方 | `search_worker.js` / `common.js` | 保存して Ctrl+F5 |
+| 公開 | 変更が保存されていること | `npm run deploy` |
 
 ---
 
-## 10. マスターファイルの一元管理（LibreOffice / Sheets）
-- **マルチシート運用**: `pet925_master.ods` 内に `products`, `tags`, `brands`, `rules`, `categories` の5シートを作成してください。
-- **一括出力・バリデーションマクロ**: 
-    1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic] を開く。
-    2. 以下の `ExportAllSheetsToCSV` と `CheckMandatoryFields` マクロを登録する。
+## 2. 日常の3ルート
+
+### ルートA: 商品を増やす（推奨）
+
+JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作ります。
+
+1. プロジェクト直下の `jan_list.csv` を、**今回処理したい JAN だけ**に書き換える（見出し行は不要）。
+   ```
+   4902418002415
+   4902418002439
+   ```
+2. ターミナルで `npm run collect:all` を実行する。
+3. `data/products.csv` の末尾付近を開き、商品名・タグ・説明・画像を目視する。
+4. 問題なければ `npm run deploy`。開発中の確認だけなら `npm start` のあとにブラウザで **Ctrl + F5**。
+
+`npm run collect` だけだと CSV 更新までです。サイトに出す JSON は別途 `npm run build` が必要です。`collect:all` はその両方を一度にやります。
+
+### ルートB: 既存データを直す
+
+1. `data/*.csv` を直接編集する。または `data/pet925_master.ods` を直して CSV を書き出す（付録A）。
+2. `npm run build`（または監視中なら `npm start` が自動で再ビルド）。
+3. ブラウザで **Ctrl + F5**（IndexedDB が古いデータを持っているため）。
+4. 公開するなら `npm run deploy`。
+
+### ルートC: 見た目やプログラムを直す
+
+1. `index.html` / `style.css` / `*.js` を保存する。
+2. ブラウザで **Ctrl + F5**。
+3. 検索ロジックを触った場合は `npm test` も実行する。
+4. 公開するなら `npm run deploy`。
+
+---
+
+## 3. JANコードからの自動収集
+
+担当は `auto_collect_all.py` です。必要な `.env` は §7 を見てください。
+
+### 内部の順番
+
+1. **楽天 Product Search API (v2)** … 商品名・メーカー・説明・価格・画像。透かしの少ない `r.r10s.jp` を最優先。
+2. 失敗したら **楽天 Item Search API**。
+3. それでも失敗したら **Yahoo!ショッピング API**（画像にショップロゴが入ることがある）。
+4. `.env` に `GEMINI_API_KEY` があれば、説明文を約60字で生成する。無い場合でも、楽天から取れた情報だけで行は作れる。
+5. `data/rules.csv` でタグを自動判定する。
+6. `data/brands.csv` にメーカー名と一致する `key` があれば、収集時点の `brand` 列をその `name`（日本語など）にする。
+7. `data/products.csv` に **新規追加**、または **既存 JAN の一部列を更新**する。最後に JAN 順へ並べ替えて保存する。
+
+### 新規と更新の違い（重要）
+
+`jan_list.csv` の JAN がすでに `products.csv` にある場合、**丸ごとスキップはしません。** 次の列だけ自動取得結果で上書きします。
+
+- 上書きする: `name`, `brand`, `tags`, `desc`, `img`, `rak`, `rak_p`
+- 残す: `size`, `amz`, `yah`, `a8`, `label`, `promo`, `amz_p`, `yah_p`, `exclude_tags`
+
+手で直した説明文や画像を、同じ JAN で再収集すると戻ってしまいます。再収集する前に、その JAN をリストから外してください。
+
+### `jan_list.csv` の注意
+
+- 実行後に自動では空になりません。**次回は新しい JAN だけに書き換える。**
+- 残したままでも動きますが、既存 JAN は上書き対象になるので処理時間と意図しない更新の元になります。
+
+### 収集後に必ず目視する理由
+
+自動の商品名・タグ・ブランドは完璧ではありません。`pet925_master.ods` か `products.csv` で直してから公開してください。
+
+---
+
+## 4. マスター CSV の編集
+
+ビルドが読むのは `data/` 内の CSV です。`data_master.js` と `product_data*.json` は **ビルドが上書きするので手編集しない。**
+
+不明な URL や値は `#` を入れます。
+
+### products.csv（商品）
+
+必須は16列。17列目 `exclude_tags` は任意です。
+
+| 列 | 意味 |
+|---|---|
+| `name` | 商品名。画面表示と検索の最重要 |
+| `brand` | **画面に出るブランド名そのもの**（ビルドでは変換しない） |
+| `tags` | `tags.csv` の `key`。半角スペース区切り（例: `dog adult tear`） |
+| `desc` | 説明文。検索対象 |
+| `size` | 内容量。画面には出さないが検索には使う |
+| `jan` | 13桁。お気に入り ID と画像キャッシュ名に使う |
+| `img` | 画像 URL。`#` ならプレースホルダー |
+| `amz` / `rak` / `yah` / `a8` | 各ショップや公式の URL。`#` なら商品名検索リンクを自動生成（`a8` は `#` のときボタン自体を出さない） |
+| `label` / `promo` | 将来用。今は画面に出さない |
+| `amz_p` / `rak_p` / `yah_p` | 価格。半角数字のみ。今は非表示 |
+| `exclude_tags` | 自動タグ付けしたくない `key`。例: `appetite` |
+
+`img` / `amz` / `rak` / `yah` / `a8` には **URL だけ**を入れてください。広告タグの HTML を丸ごと貼ると壊れます。
+
+### tags.csv（フィルターボタン）
+
+| 列 | 意味 | 例 |
+|---|---|---|
+| `category` | グループ。今は `animal` / `age` / `cond` のみ | `cond` |
+| `key` | `products.csv` の tags に書く英単語 | `gf` |
+| `name` | ボタンの表示名 | `穀物不使用 (GF)` |
+
+- **animal**: 犬・猫。単一選択
+- **age**: 年齢。単一選択
+- **cond**: こだわり・お悩み。複数選択可
+
+未登録の `key` を商品に書くと、ビルドがエラーで止まります。古いカテゴリ名 `pref` は使いません。
+
+### rules.csv（自動タグ）
+
+商品名・説明文にキーワードがあれば、そのタグを自動で付けます。
+
+| 列 | 例 |
+|---|---|
+| `tag` | `gf` |
+| `keywords` | `グレインフリー 穀物不使用` |
+
+区切りはスペース・カンマ・読点どれでも構いません。判定は収集時とビルド時の両方で行われます。特定商品だけ付けたくないタグは `exclude_tags` へ。
+
+### brands.csv（検索用の別名）
+
+| 列 | 意味 | 例 |
+|---|---|---|
+| `key` | 英語名など（小文字で照合） | `nutro` |
+| `name` | 日本語での呼び方 | `ニュートロ` |
+
+いまの動き:
+
+- **画面の表示**は `products.csv` の `brand` 列のままです。ビルドは日本語に自動変換しません。
+- **検索**では `key` と `name` の両方にヒットします（`nutro` でも「ニュートロ」でも見つかる）。
+- **収集時**だけ、メーカー名が `key` と一致すれば `brand` 列を `name` にします。
+
+未登録ブランドでもビルドは止まりません。日本語検索を安定させたいときだけ追加してください。
+
+### categories.csv（フィルターの枠）
+
+| 列 | 意味 |
+|---|---|
+| `key` | `animal` など |
+| `jp` / `en` | 見出し |
+| `type` | `single` または `multi` |
+
+通常は既存の3行を触らなくて大丈夫です。
+
+### comments.csv（店員コメント）
+
+検索結果に出す一言です。商品レビューではありません。ビルドは中身を検証せず、そのまま `data_master.js` の `comments` に載せます。
+
+| 列 | 意味 | 例 |
+|---|---|---|
+| `category` | `animal` / `cond` / `keyword` | `cond` |
+| `key` | タグ ID、または検索語 | `tear` / `心臓` |
+| `comment` | 本文 | `涙やけの相談は本当に多いです...` |
+
+表示ロジックは `comment_logic.js` です。
+
+- `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。
+- `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。
+
+---
+
+## 5. 画像
+
+**取得は収集スクリプトの仕事です。ビルドは取得しません。**
+
+優先順位は §3 と同じです（楽天 v2 → 楽天 Item → Yahoo）。
+
+ビルド（`csv_to_json.py`）がやるのは次だけです。
+
+- `images/{13桁JAN}.jpg`（または jpeg / png / webp / gif）がプロジェクト直下の `images/` にあれば、それを `img` より優先する。
+
+画像が `#` のままでもビルドは成功します。画面側が「No Image」の SVG を出します。
+
+直し方:
+
+1. 正しい URL を `img` 列に貼る。
+2. または `images/4902418002415.jpg` のように置く。
+3. `npm run build`。
+
+ブックマークレットは現行リポジトリにありません。画像の正攻法は JAN 収集か、URL の手貼りです。
+
+楽天 API 経由の画像は直リンク（自サーバーへ複製しない）です。アフィリエイト提携は停止中ですが、画像の出典は楽天市場のカタログです。
+
+---
+
+## 6. 価格とショップリンク
+
+- 価格列は画面に出していません。残しておいて構いませんが、半角数字のみ（カンマ禁止）。不明なら `0` または `#`。
+- `amz` / `rak` / `yah` が `#` のとき、画面は「ブランド名＋商品名」で各モールの検索ページへ飛ばします。JAN では検索しません。
+- ボタン文言は「Amazonで検索」「楽天市場で検索」「Yahoo!ショッピングで検索」です。
+- **アフィリエイト ID は空が正しい状態です。** `main.js` の `AFFILIATE_CONFIG` は空文字のままにしてください。公開前に「ID が入っているか」を確認する必要はありません。
+
+---
+
+## 7. `.env` の設定
+
+`.env` は Git に上げません。プロジェクト直下に置き、次のキーを使います。値はここに書かないでください。
+
+| キー | 使うとき |
+|---|---|
+| `RAKUTEN_APP_ID` | JAN 収集（必須） |
+| `RAKUTEN_ACCESS_KEY` | JAN 収集（必須） |
+| `YAHOO_CLIENT_ID` | 楽天が失敗したときの画像・商品フォールバック |
+| `GEMINI_API_KEY` | 説明文の自動生成（任意）。Google AI Studio で発行 |
+| `CONTACT_EMAIL` | 利用規約モーダルの問い合わせリンク。ビルド時に文字コード配列へ変換される |
+
+問い合わせ文面そのものは `index.html` のモーダル内です。提携状況や免責を変えるときはそこを直接編集します。
+
+AI に商品 CSV を手で作らせるときは、`docs/AI_INSTRUCTIONS.md` をプロンプトとして渡してください。日常の増やす作業はルートA（JAN 収集）の方が確実です。
+
+補助ツール:
+
+- `csv_helper.html` … 1行分の CSV を手で作る入力補助
+- `python3 auto_data_collector.py [商品URL]` … URL から1件分の CSV 行を出す旧経路。通常は `collect:all` で足りる
+
+---
+
+## 8. 開発中の確認
+
+```bash
+npm start          # data/*.csv の変更を監視して自動ビルド
+npm run build      # 1回だけビルド（不備があると終了コード 1）
+npm test           # normalize と店員コメントのユニットテスト
+```
+
+ブラウザで見るとき:
+
+- 反映されない → **Ctrl + F5**（IndexedDB とファイルキャッシュの両方を捨てる）
+- 実行ボタンの表示:
+  - 読み込み中: `データを読み込み中... 42%`
+  - 準備OK: `全123件を表示`
+  - 条件入力後: `45件を表示`
+  - 失敗: `エラー: データの読み込みに失敗しました`
+- `file://` で HTML を直接開くと Worker や計測が制限されることがあります。ローカル確認は簡易サーバー経由が安定です。
+
+---
+
+## 9. 公開
+
+```bash
+npm run deploy
+```
+
+中身は「ビルド → `git add .` → commit → `git push`」です。ビルドでデータ不備があると push まで進みません。
+
+独自ドメインの手順は `README.md` の「カスタムドメインの導入手順」です。ドメインを変えたら `index.html` の canonical と `main.js` の `authorizedDomains` を更新します。お気に入り（localStorage）はドメインが変わると消えます。
+
+### 公開前チェック
+
+**データと機能**
+
+- [ ] `npm run build` がエラーなく終わる
+- [ ] 実行ボタンが `全N件を表示` になり、件数が見積もりと合う（`データを読み込み中...` のままなら Worker 失敗）
+- [ ] 犬 / 猫 / 涙やけなどフィルターが効く。cond は複数選択できる
+- [ ] 「ニュートロ」「ねこ」「ネコ」など表記ゆれで検索できる
+- [ ] 0件のとき `NO PRODUCTS FOUND` が出る
+- [ ] お気に入りの追加・解除、件数、一括解除モーダル
+- [ ] ショップボタンが新しいタブで開き、「○○で検索」になっている。アフィリエイト ID は空でよい
+- [ ] URL が `#` の商品でも、商品名検索のページへ飛ぶ
+- [ ] 画像。無い商品は No Image になる
+
+**見た目**
+
+- [ ] PC とスマホでカードが崩れない
+- [ ] ヘッダー導入文が出ている
+
+**健全性**
+
+- [ ] F12 コンソールに赤いエラーが無い
+- [ ] `product_data.json` の `total` が最新件数
+- [ ] コンソールにコピー抑制の警告（STOP!）が出る
+
+---
+
+## 10. トラブルシューティング
+
+| 症状・メッセージ | 見ること |
+|---|---|
+| `products.csv が見つかりません` | `data/products.csv` があるか。ファイル名末尾の空白、`products (1).csv` の混入 |
+| `未登録タグ 'xxx'` | `tags.csv` に無い `key` を商品に書いている。追加するか tags 列を直す |
+| `列が足りません` | 16列そろっているか。広告 HTML の貼りすぎで列が崩れていないか |
+| `JANコード '…' が重複しています` | 同じ13桁が2行ある |
+| `商品名 '…' が重複しています` | 同じブランド＋同じ名前。別名にするか行を削除 |
+| `JANコードが標準的な13桁ではありません`（警告） | ビルドは通るが画像キャッシュ名に使えない |
+| `価格 amz_p は半角数字のみ` | カンマや「円」を消す |
+| ボタンが `データを読み込み中` のまま / `データの読み込みに失敗` | まず `npm run build`。コンソールの `Worker data load failed` は `product_data.json` が古い・無い |
+| 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
+| CSV を上書きできない | LibreOffice を閉じる。`data/.~lock.products.csv#` を消す |
+| 権限エラー（Linux） | `sudo chown $USER:$USER data/products.csv` |
+| お気に入りが消えた | ドメインやブラウザを変えると localStorage は別物 |
+| GA4 のリアルタイムにしか出ない | 標準レポートは 24〜48 時間遅れる |
+
+ブランド未登録でビルドが止まる、ということは **今はありません。** 日本語検索を足したいときだけ `brands.csv` を更新します。
+
+CSV 保存時に「テキスト形式で保存しますか？」と出たら **はい** です。
+
+---
+
+## 11. GA4 の推奨設定
+
+1. 「管理 > データ収集と修正 > データの保持」を **14ヶ月** にする（初期値は2ヶ月）。
+2. 「管理 > データ表示 > カスタム定義」でパラメータ `item_label` を登録する。`search_no_results` などの具体的な単語が見えるようになります。
+
+ローカル（`localhost` / `file://`）では Cookie を切っています。本番ドメインでの確認が正確です。
+
+---
+
+## 12. 開発環境のセットアップ
+
+Node.js と Python 3 が必要です。
+
+```bash
+sudo apt install nodejs npm python3-requests
+npm install
+python3 --version
+npm run build
+npm test
+```
+
+Python ライブラリの入れ方の選択肢:
+
+- 推奨（システム）: `sudo apt install python3-requests`
+- 仮想環境: `python3 -m venv venv && source venv/bin/activate && pip install requests`
+
+セットアップ後は §2 のルートAから使えます。
+
+---
+
+## 付録A. LibreOffice（ODS）からの CSV 書き出し
+
+`data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `brands`, `categories`, `rules` です。
+
+`comments.csv` はビルドが自動で読む追加マスターです。ODS に `comments` シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
+
+マクロの登録:
+
+1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic]
+2. 下の `ExportAllSheetsToCSV` / `ExportCurrentSheetOnly` / `CheckMandatoryFields` / `SyncBrandToMaster` を登録する
+3. [ツール] > [カスタマイズ] > [ツールバー] から `ExportAllSheetsToCSV` をボタンにする
+4. ODS は `data/` に保存する（書き出し先が同じフォルダになる）
+5. `npm start` が CSV 変更を検知して再ビルドする
+
+Google スプレッドシートの場合は [ファイル] > [ダウンロード] > [CSV] で `data/` の各ファイルへ上書きします。貼り付け後は「テキストを列に分割」を使ってください。
+
+Calc へ CSV を貼るとき:
+
+1. A1 を選んで貼り付け
+2. 区切りは **コンマのみ**、テキストの区切りは `"`
+3. `.ods` で保存する
 
 ```basic
 Sub ExportAllSheetsToCSV
@@ -207,26 +420,22 @@ Sub ExportAllSheetsToCSV
     
     oDoc = ThisComponent
 
-    ' 変更が保存されていない場合は警告
     If oDoc.isModified Then
         If MsgBox("ファイルに変更があります。保存してから実行しますか？", 4 + 32, "確認") = 6 Then oDoc.store()
     End If
 
-    ' ファイルが保存されているか（URLがあるか）チェック
     If (oDoc.URL = "") Then
         MsgBox "エラー: ファイルが保存されていません。" & Chr(13) & _
                "先に一度ファイルを保存してから実行してください。", 16, "実行失敗"
         Exit Sub
     End If
 
-    ' パス取得（InStrRevのエラーを避けるため、URLを分割して再結合する安全な方式を採用）
     aParts = Split(oDoc.URL, "/")
     aParts(UBound(aParts)) = ""
     sPath = Join(aParts, "/")
 
     oSheets = oDoc.Sheets
     
-    ' 必要なシートが存在するか一括チェック
     Dim requiredSheets As Variant, sNameCheck As String
     requiredSheets = Array("products", "tags", "brands", "categories", "rules")
     For Each sNameCheck In requiredSheets
@@ -236,26 +445,24 @@ Sub ExportAllSheetsToCSV
         End If
     Next sNameCheck
 
-    ' CSV出力の設定
     args(0).Name = "Overwrite"
     args(0).Value = True
     args(1).Name = "FilterName"
     args(1).Value = "Text - txt - csv (StarCalc)"
     args(2).Name = "FilterOptions"
-    args(2).Value = "44,34,76,1,,0,false,true,true" ' カンマ区切り, UTF-8
+    args(2).Value = "44,34,76,1,,0,false,true,true"
 
     Dim i As Long
     For i = 0 To oSheets.Count - 1
         oSheet = oSheets.getByIndex(i)
         sName = oSheet.Name
 
-        ' 書き出し前に必須項目の空欄チェックを実行
         If Not CheckMandatoryFields(oSheet, sName) Then
             MsgBox sName & " シートに不備があるため、書き出しを中断しました。", 48, "エラー"
             Exit Sub
         End If
 
-        If oSheet.IsVisible Then ' 非表示のシートは出力から除外
+        If oSheet.IsVisible Then
             oDoc.CurrentController.setActiveSheet(oSheet)
             sURL = sPath & sName & ".csv"
             oDoc.storeToURL(sURL, args)
@@ -265,9 +472,6 @@ Sub ExportAllSheetsToCSV
     MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
 End Sub
 
-'''
-''' 現在表示しているシートのみをCSV出力する（高速版）
-'''
 Sub ExportCurrentSheetOnly
     Dim oDoc As Object, oSheet As Object
     Dim sURL As String, sPath As String
@@ -298,24 +502,22 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     Dim mandatoryCols As Variant
     Dim sNameLower As String
     
-    sNameLower = LCase(sName) ' 小文字に統一
+    sNameLower = LCase(sName)
 
-    ' シートごとの必須列（A=0, B=1, C=2...）
     If sNameLower = "products" Then
-        mandatoryCols = Array(0, 1, 2) ' name, brand, tags
+        mandatoryCols = Array(0, 1, 2)
     ElseIf sNameLower = "tags" Then
-        mandatoryCols = Array(0, 1, 2) ' category, key, name
+        mandatoryCols = Array(0, 1, 2)
     ElseIf sNameLower = "brands" Then
-        mandatoryCols = Array(0, 1)    ' key, name
+        mandatoryCols = Array(0, 1)
     ElseIf sNameLower = "categories" Then
-        mandatoryCols = Array(0, 1, 2, 3) ' key, jp, en, type
+        mandatoryCols = Array(0, 1, 2, 3)
     Else
         mandatoryCols = Array()
     End If
 
-    i = 1 ' 2行目からチェック開始
+    i = 1
     Do
-        ' A列が空ならデータの終わりとみなす
         If oSheet.getCellByPosition(0, i).String = "" Then Exit Do
         
         For Each col In mandatoryCols
@@ -327,31 +529,25 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
             End If
         Next col
         i = i + 1
-        If i > 10000 Then Exit Do ' 無限ループ防止
+        If i > 10000 Then Exit Do
     Loop
     CheckMandatoryFields = True
 End Function
 
-'''
-''' products シートの変更を検知し、未登録のブランドやタグを brands/tags シートへ自動追加を促すマクロ。
-''' 一括貼り付け（Range）にも対応し、エラー耐性を高めた改良版。
-'''
 Sub SyncBrandToMaster(oEvent As Object)
-    On Error GoTo ErrorHandler ' エラーが発生しても異常終了させない
+    On Error GoTo ErrorHandler
     
     Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
     Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
     Dim iRow As Long, i As Long, bExists As Boolean
     Dim sValue As String, oCell As Object, oCellName As Object
 
-    ' 1回の貼り付けで何度も聞かないための記憶リスト
     Static sProcessedBrands As String
     Static sProcessedTags As String
 
     oDoc = ThisComponent
     oSheets = oDoc.Sheets
 
-    ' イベントの発生した範囲を特定
     If oEvent.supportsService("com.sun.star.sheet.SheetCell") Then
         startRow = oEvent.CellAddress.Row : endRow = startRow
         startCol = oEvent.CellAddress.Column : endCol = startCol
@@ -365,38 +561,30 @@ Sub SyncBrandToMaster(oEvent As Object)
         Exit Sub
     End If
 
-    ' products シート以外は無視
     If oSheet.Name <> "products" Then Exit Sub
 
-    ' 記憶リストの初期化（セッション開始時：1回の貼り付け単位で重複を防ぐ）
     sProcessedBrands = "|" 
     sProcessedTags = "|"
 
-    ' 変更された全行をチェック
     For iRow = startRow To endRow
-        If iRow = 0 Then GoTo NextRow ' ヘッダーはスキップ
+        If iRow = 0 Then GoTo NextRow
 
-        ' --- B列 (ブランド / Index 1) が変更範囲に含まれているか ---
         If startCol <= 1 And endCol >= 1 Then
             sValue = Trim(oSheet.getCellByPosition(1, iRow).String)
-            ' 既知のキーワードや空欄を除外
             If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" And sValue <> "#" And InStr(sProcessedBrands, "|" & sValue & "|") = 0 Then
                 oTargetSheet = oSheets.getByName("brands")
                 bExists = False
-                i = 1 ' 2行目から検索
+                i = 1
                 
-                ' brandsシートを最大5000行までスキャン（空行があっても飛ばさない）
                 Do While i < 5000
-                    oCell = oTargetSheet.getCellByPosition(0, i) ' Key列
-                    oCellName = oTargetSheet.getCellByPosition(1, i) ' Name列
+                    oCell = oTargetSheet.getCellByPosition(0, i)
+                    oCellName = oTargetSheet.getCellByPosition(1, i)
                     
-                    ' 完全一致チェック
                     If LCase(Trim(oCell.String)) = LCase(sValue) Or LCase(Trim(oCellName.String)) = LCase(sValue) Then
                         bExists = True
                         Exit Do
                     End If
                     
-                    ' 両方の列が空ならそこがデータの末尾
                     If oCell.String = "" And oCellName.String = "" Then Exit Do
                     i = i + 1
                 Loop
@@ -416,7 +604,6 @@ Sub SyncBrandToMaster(oEvent As Object)
             End If
         End If
 
-        ' --- C列 (タグ / Index 2) が変更範囲に含まれているか ---
         If startCol <= 2 And endCol >= 2 Then
             sValue = Trim(oSheet.getCellByPosition(2, iRow).String)
             If sValue <> "" And sValue <> "tags" And sValue <> "タグ" Then
@@ -429,7 +616,7 @@ Sub SyncBrandToMaster(oEvent As Object)
                         bExists = False
                         i = 1
                         Do While i < 5000
-                            oCell = oTargetSheet.getCellByPosition(1, i) ' Key列
+                            oCell = oTargetSheet.getCellByPosition(1, i)
                             If LCase(Trim(oCell.String)) = LCase(sTag) Then
                                 bExists = True
                                 Exit Do
@@ -438,7 +625,6 @@ Sub SyncBrandToMaster(oEvent As Object)
                             i = i + 1
                         Loop
                         If Not bExists Then
-                            ' カテゴリ入力を省き、デフォルトで 'cond'（こだわり・お悩み）として追加
                             If MsgBox("新タグ '" & sTag & "' を tags シートに追加しますか？", 4 + 32, "タグクイック追加") = 6 Then
                                 Dim sDisp As String
                                 sDisp = InputBox("サイトでの表示名:", "タグ追加", sTag)
@@ -457,100 +643,6 @@ NextRow:
     Exit Sub
 
 ErrorHandler:
-    ' エラーが起きた場合は無視して次へ（一括貼り付け時のクラッシュ防止）
     Resume Next
 End Sub
 ```
-
-    3. ボタンの配置**:
-        - [ツール] > [カスタマイズ] > [ツールバー] タブを開く。
-        - カテゴリから [LibreOffice マクロ] > [マイマクロ] > [Standard] > [Module1] を選択。
-        - `ExportAllSheetsToCSV` を「割り当てられたコマンド」に追加。
-        - 追加した項目を選択し、**右側の「歯車アイコン」または「修正」ボタン**をクリックして「名前の変更」や「アイコンの変更」を行う。（右クリックでも変更可能です）
-        - ツールバーの使いやすい位置に配置する。
-    4. 1クリックで全てのCSVが `data/` フォルダへ書き出されます。
-    5. `npm start` がそれらを検知し、即座にサイトが更新されます。
-
-### 💡 Google スプレッドシートでの運用
-1. **ダウンロード**: [ファイル] > [ダウンロード] > [CSV] を選択し、`data/` 内の各ファイルへ上書きします。
-2. **AIデータの貼り付け**: コピーしたCSVを貼り付けた後、右下のアイコンから「テキストを列に分割」を選択してください。
-
-### 💡 Calc (LibreOffice) のテクニック
-1. **入力補助**: `csv_helper.html` を使うと、正確なCSV行を生成できます。
-2. **データ連動**: `brands`シートのキー範囲に名前を付け、`products`シートのブランド列で「入力規則」を設定すると、リストから選択可能になります。
-3. **自動集計**: `=COUNTIF(products.C2:C1000, ".*gf.*")` で特定のタグの件数をリアルタイム把握できます。
-
-### 💡 CSVデータのインポート
-    1. CSV形式のテキストをすべてコピーする。
-    2. Calcの **A1セル** を選択して貼り付ける (`Ctrl + V`)。
-    3. 表示される「テキストインポート」ダイアログで、以下を設定する。
-        - **区切り記号のオプション**: **「コンマ」** のみチェック。
-        - **テキストの区切り記号**: **`"` (ダブルクォーテーション)** を選択。
-    4. プレビューを確認し、[OK] をクリック。
-    5. 貼り付け後、`.ods` 形式で保存する。
-
----
-## 10. 開発環境のセットアップ
-Node.js と Python 3 が必要です。
-
-0.  **Node.jsインストール**: `sudo apt install nodejs npm`
-1.  **Python環境**: `python3 --version` で Python 3 が入っていることを確認。
-2.  **ライブラリインストール**: 以下のいずれかを実行してください。
-    - 推奨（システム全体）: `sudo apt install python3-requests`
-    - 推奨（仮想環境）: `python3 -m venv venv && source venv/bin/activate && pip install requests`
-    - 強制実行（非推奨）: `pip install requests --break-system-packages`
-2.  **ビルドテスト**: `npm run build` で `product_data.json` が生成されるか確認。
-3.  **公開**: `npm run deploy`
-
----
-
-## 11. 公開前チェックリスト (Pre-flight Check)
-GitHub に push してサイトを公開する前に、以下の項目を必ず確認してください。
-
-### ① データと機能の確認
-- **ビルド確認**: ターミナルで `npm run build`（または `npm start`）を実行しエラーがないこと。
-- **全商品表示**: 実行ボタンに表示される件数が、ODSの商品数と一致するか？
-- **フィルター機能**: 「犬」「猫」「涙やけ」など、すべてのフィルターが正しく機能するか？ 複数選択もOKか？
-- **Web Worker**: 実行ボタンが「準備完了（XXX件）」となっているか？（これが「データを読み込み中...」のままならエラーです）
-- **検索機能**: 「ニュートロ」などの単語で検索し、正しく絞り込まれるか？ (全角/半角スペース、ひらがな/カタカナ/漢字で試す)
-- **検索結果0件**: 該当なしの場合、「NO PRODUCTS FOUND」が表示されるか？
-- **お気に入り機能**:
-    - 商品カードのハートアイコンをクリックすると登録・解除できるか？
-    - 「お気に入り」ボタンで絞り込み、件数が正しく表示されるか？
-    - 「CLEAR ❤ ×」ボタンで一括解除できるか？（カスタムモーダルが表示されるか？）
-- **ショップ横断検索**: 商品URLが未入力（#）の場合でも、ブランド名と商品名から各モールの検索結果へ正しく誘導されるか？
-- **リンクの動作**:
-    - 各ショップボタンをクリックし、正しいページに飛ぶか？
-    - リンクが新しいタブで開くか？ (`target="_blank"`)
-    - アフィリエイトIDが正しく含まれているか？ (URLをコピーして確認)
-    - URLが `#` の場合、商品名で検索結果ページに飛ぶか？
-- **画像表示**:
-    - すべての商品画像が正しく表示されるか？
-    - 画像が未設定（`#`）や読み込みエラーの場合、軽量な「no image」SVG（外部通信が発生しない仕組み）が表示されるか？
-
-### ② デザインとレスポンシブ対応
-- **PC表示**: レイアウトが崩れていないか？ 画像やテキストがはみ出していないか？
-- **モバイル表示**: スマホ実機またはブラウザのデベロッパーツールで確認し、デザインが崩れていないか？
-- **タイルレイアウト**: タグボタンが画面幅に合わせて適切に折り返されて表示されているか？
-
-### ③ 技術的な健全性
-- **ブラウザのコンソールエラー**: `F12` キーでコンソールを開き、赤いエラーメッセージが表示されていないか？
-- **`product_data.json` の確認**: ビルド後、このファイルに最新のデータが反映されているか？
-- **コンソール警告**: `F12` キーでコンソールを開いた際に「STOP!」という警告メッセージが表示されるか？
-
-### ④ SEO (検索エンジン最適化)
-- **タイトル**: ブラウザのタブに表示されるタイトルが適切か？
-- **紹介文**: ヘッダーの導入文が正しく表示されているか？
-
-## 12. トラブルシューティング
-- **「スプレッドシートの「見出し行」が見つかりません」**: `pet925_master.ods` の `products` シートの1行目または2行目に `name` や `brand` 列があるか確認してください。
-- **「products.csv が見つかりません」**: `data/` フォルダに `products.csv` が存在するか、またはマスターファイルからCSVを正しく書き出しているか確認してください。
-- **「タグに〇〇個の入力ミスが見つかりました」**: `tags.csv` に定義されていないタグが `products.csv` の `tags` 列に入力されています。許可タグリストを確認し、修正してください。
-- **「ブランド '〇〇' は brands.csv に未登録です」**: `brands.csv` に定義されていないブランド名が `products.csv` の `brand` 列に入力されています。`brands.csv` に追加するか、既存のブランド名に修正してください。
-- **「商品名 '◯◯' が重複しています」**: ODS 上で同じ商品名が複数回登録されています。名前をユニークにするか、重複行を削除してください。
-- **「Worker data load failed」**: ブラウザが `product_data.json` を見つけられていません。ビルドが成功しているか確認してください。
-- **「GA4で30分間のデータ（リアルタイム）しか見えない」**: 標準レポートへの反映には24-48時間の遅延があります。また、詳細な検索ワードを見るには、GA4管理画面の「カスタムディメンション」で `item_label` をカスタムディメンションとして登録する必要があります。
-
-## 13. GA4 の推奨設定
-1. **データ保持期間の変更**: 「管理 > データ収集と修正 > データの保持」を **14ヶ月** に変更してください（デフォルトは2ヶ月で、古いデータが消えてしまいます）。
-2. **カスタムディメンションの登録**: 「管理 > データ表示 > カスタム定義」から、パラメータ名 `item_label` を登録してください。これにより `search_no_results` 等で送信した具体的な単語がレポートに表示されます。

@@ -32,7 +32,7 @@
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
 - **`package-lock.json`** : インストールされたライブラリのバージョンを完全に固定する「検品名簿」
-- **`docs/`** : `MANUAL.md` (運用手順書), `PROJECT_SUMMARY.md` (開発記録), `AI_INSTRUCTIONS.md` (AI用指示書)
+- **`docs/`** : `GLOSSARY.md` (用語集), `MANUAL.md` (運用手順書), `PROJECT_SUMMARY.md` (開発記録), `AI_INSTRUCTIONS.md` (AI用指示書)
 - **`README.md`** : プロジェクトの全体概要（このファイル）
 
 ## 🛠 開発者コマンド
@@ -72,7 +72,7 @@ npm run collect:all   # データ収集 + JSONビルドまで一括実行
 npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
 ```
 
-> **JANコードからのCSV自動生成手順の詳細**（`jan_list.csv` の書き方、追加方式の仕組みなど）は `docs/MANUAL.md` の「A-2. JANコードからのCSV自動生成」を参照してください。
+> **運用マップと手順の詳細**（商品の増やし方、JAN収集、マスターCSV、公開チェック）は `docs/MANUAL.md` を参照してください。
 
 ## 🖼 画像取得の仕組み
 
@@ -87,7 +87,7 @@ npm run collect jan_list.csv   # データ収集のみ（別途 npm run build �
 一方 **`csv_to_json.py`（ビルドスクリプト）は画像を取得しません**。純粋にCSV→JSON変換とデータ検証のみを行い、`img` 列については `images/{JANコード}.拡張子` というファイルがプロジェクト直下に手動で置かれていればそれを優先採用する「ローカルキャッシュ参照」機能のみを持ちます。
 
 - **画像が見つからなかった場合**（`img` が `#` のまま）: フロントエンドが自動でプレースホルダー画像を表示するため、ビルドやデプロイが失敗することはありません。
-- **誤った画像や画像なしの商品を直したい場合**: `img` 列に正しいURLを直接貼り付けるか、ブックマークレットで取得してください（詳細は `docs/MANUAL.md`）。
+- **誤った画像や画像なしの商品を直したい場合**: `img` 列に正しいURLを直接貼り付けるか、`images/{JANコード}.jpg` を置いてから `npm run build` してください（詳細は `docs/MANUAL.md`）。
 
 ## 🌐 カスタムドメインの導入手順
 将来的に独自ドメイン（例：www.pet925.com）を運用する際の手順です。
@@ -108,9 +108,10 @@ npm run collect jan_list.csv   # データ収集のみ（別途 npm run build �
 
 ## 📖 AI・開発リファレンス
 AI（Gemini等）を使用してデータ作成やコード修正を行う際は、以下の専用ドキュメントを参照してください。
+- **用語集（初心者向け）**: プロジェクト固有の言葉と、HTML/CSS/JS/Python などの一般用語は `docs/GLOSSARY.md` を参照。
 - **商品データの作成依頼**: CSVデータの生成ルールとプロンプトは `docs/AI_INSTRUCTIONS.md` を参照。
 - **開発コンテキストの共有**: プロジェクトの技術スタックや設計思想をAIに伝えるためのサマリーは `docs/PROJECT_SUMMARY.md` を参照。
-- **運用マニュアル**: 日々の管理手順やトラブルシューティングは `docs/MANUAL.md` を参照。
+- **運用マニュアル（現行仕様・運用マップ）**: 日々の管理手順は `docs/MANUAL.md` を参照。
 
 ## ✅ プロジェクトの進捗 (Status)
 システムの全機能実装状況や詳細な改善履歴については、PROJECT_SUMMARY.md を参照してください。

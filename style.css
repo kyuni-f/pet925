@@ -56,6 +56,61 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 #search-input { width: 100%; padding: 18px; border: 1px solid #eee; border-radius: 0; font-size: 1rem; outline: none; transition: 0.3s; box-sizing: border-box; }
 #search-input:focus { border-color: var(--dark); background: var(--gray); }
 
+/* 検索欄の下の「店員コメント」予告バブル。結果画面の店員コメント（.store-comment系）と
+   同じ見た目にして、後で結果画面に本物のコメントが出たときに繋がりを感じてもらう狙い。
+   店員コメント本体と同様、スマホでのみ表示する */
+.search-hint-teaser {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 0 2px;
+}
+.search-hint-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ece3d1;
+    box-shadow: 0 2px 4px rgba(90, 74, 44, 0.1);
+}
+.search-hint-bubble {
+    position: relative;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #8a7a5c;
+    margin: 0;
+    background: #faf7f0;
+    border-radius: 14px;
+    border-top-left-radius: 4px; /* アイコン側（左上）の角を詰めて、そこから話しているように見せる */
+    padding: 8px 12px;
+    box-shadow: 0 2px 6px rgba(90, 74, 44, 0.08);
+}
+.search-hint-bubble::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    left: -6px;
+    width: 10px;
+    height: 10px;
+    background: #faf7f0;
+    border-top-right-radius: 8px;
+}
+.search-hint-bubble::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: -8px;
+    width: 8px;
+    height: 10px;
+    background: #fff; /* body背景色に合わせて、しっぽの先端を丸く見せる */
+    border-top-right-radius: 8px;
+}
+
 /* こだわり条件フィルターナビゲーション */
 .filter-nav { position: relative; background: #fff; z-index: 99; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
 .filter-group { margin-bottom: 25px; }
@@ -534,6 +589,9 @@ footer a { color: var(--gold); text-decoration: none; }
 
     /* 店員コメント欄はスマホでのみ表示（接客のような「間」を作る） */
     .result-comment-area:not(:empty) { display: block; }
+
+    /* 検索欄下の予告バブルもスマホでのみ表示 */
+    .search-hint-teaser { display: flex; }
 
     /* お気に入りボタンのツールチップはスマホでは非表示 */
     .card-fav-btn[data-tooltip]::after { display: none; }
