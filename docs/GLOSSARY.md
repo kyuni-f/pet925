@@ -23,7 +23,8 @@
 | **キャッシュ** | ブラウザが古いファイルを覚えてしまうこと。直したのに画面が変わらないときは **Ctrl + F5**。 |
 | **キャッシュバスティング** | `style.css?v=日付` のように URL にバージョンを付けて、古いキャッシュを使わせない仕組み。`siteVersion` がそれ。 |
 | **マスターデータ** | 人間が編集する原本。`pet925_master.ods` と、そこから出した `data/*.csv`。 |
-| **配信データ** | サイトが実際に読むファイル。`product_data.json`、`product_data_0.json`、`data_master.js`。手で直さない（ビルドが上書きする）。 |
+| **配信データ** | サイトが実際に読むファイル。`product_data.json`、`product_data_0.json`、`data_master.js`。手で直さない（ビルドが上書きする）。**Git には含める。** GitHub Pages がリポジトリをそのまま配信するため。 |
+| **生成物** | プログラムが作るファイル。手編集しない。このサイトでは配信データがそれ。一般論では Git に入れないことも多いが、**今の公開方法では入れる。** |
 | **パイプライン** | 「集める → 検品する → JSONにする → 公開する」という流れ全体。 |
 
 よく使うコマンド:
@@ -56,7 +57,10 @@ npm run deploy         # 検品・ビルド・公開
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
 | `.env` | APIキーなど秘密情報。Git に上げない。 |
-| `package.json` | プロジェクトの身分証明書。`npm run ○○` の定義もここ。 |
+| `package.json` | プロジェクトの身分証明書。`npm run ○○` の定義もここ。Git に含める。 |
+| `package-lock.json` | 入れたライブラリの版を固定する名簿。手編集しない。Git に含める。 |
+| `product_data.json` | 商品データの目次（件数・チャンク数・版）。Worker が最初に読む。ビルドが生成する。 |
+| `product_data_*.json` | 商品データの分割ファイル。ビルドが生成する。`.gitignore` に入れない。 |
 | `jsconfig.json` | エディタが JS の型を検査するための設定。サイト本体には含まれない。 |
 
 データの流れ:
@@ -144,8 +148,9 @@ CSV の列の意味:
 | **リポジトリ** | このプロジェクト一式。今は GitHub の `kyuni-f/pet925`。 |
 | **commit** | 「この時点のスナップショット」を記録すること。 |
 | **push** | 手元の commit を GitHub に送る。これが公開につながる。 |
-| **GitHub Pages** | GitHub 上のファイルをウェブサイトとして出すサービス。 |
-| **`.gitignore`** | Git に入れないファイルのリスト。`.env` と `node_modules` が入っている。 |
+| **GitHub Pages** | GitHub 上のファイルをウェブサイトとして出すサービス。**このリポジトリでは中身をそのまま出す。** サーバー側で CSV からビルドし直す工程（GitHub Actions）は無い。 |
+| **GitHub Actions / CI** | push のたびにサーバーでテストやビルドを走らせる仕組み。このリポジトリには無い。それが無いのに生成 JSON を Git から外すと、公開サイトに商品データが届かない。 |
+| **`.gitignore`** | Git に入れないファイルのリスト。今は `.env` と `node_modules` など。`*.json` や `product_data.json` は入れない（公開に必要。`package.json` まで消える）。 |
 | **APIキー** | 楽天・Gemini などを使うためのパスワード相当。`.env` に置く。サイトの JS には出さない。`desc_helper` も HTML からは呼ばず、ローカル Python だけが読む。 |
 | **ブックマークレット** | ブックマークバーに置く短い JavaScript。旧来の「楽天ページから CSV 1行／画像取得」用はリポジトリに無い。現行は `desc_helper` 用。**先に `npm run desc:helper` を起動**し、公式ページ上で押す。サーバーが止まっていると「接続が拒否されました」になる。手順は `docs/MANUAL.md` §2。 |
 | **Formspree** | 静的サイトから問い合わせを受け、指定メールへ転送する外部サービス。宛先アドレスはサイトに出ない。無料枠は月50件程度。 |
@@ -174,7 +179,10 @@ CSV の列の意味:
 |---|---|
 | **DRY** | Don't Repeat Yourself。同じ処理を2箇所に書かない。`common.js` / `pet_utils.py` が典型。 |
 | **リファクタリング** | 動きは変えず、読みやすく直すこと。 |
-| **ユニットテスト** | 小さな関数単体のテスト。`tests/`、`npm test`（Jest）。 |
+| **ユニットテスト** | 小さな関数単体のテスト。`tests/`、`npm test`（Jest）。今は `common.js` と `comment_logic.js` だけ。全ファイルには書かない。 |
+| **テストスイート** | テストファイル1つ分。`npm test` の `Test Suites: 2` はファイルが2つ、という意味。 |
+| **テストケース** | 個々の確認項目。今は19件。スイート数よりこちらが「何を守っているか」。 |
+| **モック** | 本物の代わりに用意する偽物（画面、API、Worker）。増やすとテスト自体が壊れやすいので、このサイトでは DOM や外部 API までモックしない。 |
 | **JSDoc** | 関数の上に書くコメント。`@param` は引数、`@returns` は戻り値、`@type` は変数の型。プログラムは無視し、エディタだけが読む。 |
 | **`@ts-check`** | ファイル先頭に書くと、そのファイルだけ型を検査する。今は `common.js` と `comment_logic.js`。`jsconfig.json` の `checkJs` は `false`（全体オフ、個別にオン）。 |
 | **`@ts-ignore`** | 次の1行の型警告を無視する。実行は変わらない。ブラウザでは見えるが型上は見えない名前（`normalize`）に使う。 |
@@ -197,6 +205,7 @@ CSV の列の意味:
 | 公開したい | `npm run deploy` |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
+| JSON を `.gitignore` した方がよいか迷う | 今はしない。Pages がリポジトリをそのまま出す。`product_data.json` が無いと検索が読めない |
 | 運用の手順 | `docs/MANUAL.md` |
 | 「なぜこう作ったか」 | `docs/PROJECT_SUMMARY.md` |
 
