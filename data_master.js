@@ -1,4 +1,4 @@
-const siteVersion = '20260821024614';
+const siteVersion = '20260825192649';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -106,6 +106,17 @@ const tagKeywords = {
     ]
 };
 const FORMSPREE_FORM_ID = "mdenyvoz";
+const popular_searches = [
+    {
+        "word": "心臓"
+    },
+    {
+        "word": "納豆菌"
+    },
+    {
+        "word": "涙やけ"
+    }
+];
 const comments = [
     {
         "category": "animal",

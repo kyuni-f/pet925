@@ -35,6 +35,7 @@ npm run build          # 1回だけビルド
 npm test               # テスト実行
 npm run collect:all    # JANコードから商品データを自動収集してビルドまで
 npm run desc:helper    # 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
+npm run check:links    # 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
 npm run deploy         # 検品・ビルド・公開
 ```
 
@@ -47,15 +48,18 @@ npm run deploy         # 検品・ビルド・公開
 | `main.js` | 画面の頭脳。ボタン、お気に入り、描画、GA4。 |
 | `search_worker.js` | 裏方の検索エンジン。件数多くても画面を固まらせない。 |
 | `common.js` | `normalize()` だけ。`main.js` と Worker の両方から読む共通処理。 |
-| `comment_logic.js` | 「店員コメント」をどれにするか決めるロジック。 |
-| `data_master.js` | タグ・カテゴリ・ブランド・店員コメントの設定と、問い合わせ用の `FORMSPREE_FORM_ID`。**ビルドが生成する。手編集しない。** |
+| `comment_logic.js` | 店員コメントと、検索画面の「よく検索されているワード」をどれにするか決めるロジック。 |
+| `data_master.js` | タグ・カテゴリ・ブランド・店員コメント・よく検索されているワードと、問い合わせ用の `FORMSPREE_FORM_ID`。**ビルドが生成する。手編集しない。** |
 | `csv_to_json.py` | ビルド本体。CSV → JSON、検品。画像は取らない。 |
 | `auto_collect_all.py` | JANコードから商品名・画像・説明を API で集める。 |
+| `check_links.py` | `img` と `a8` の URL が生きているか確認する。ビルドには使わない。CSV は書き換えない。 |
 | `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。 |
 | `desc_helper.html` | その画面。`csv_helper.html` の見た目を流用した説明専用フォーム。 |
 | `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
-| `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。 |
+| `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。`check_links.py` からも読む。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
+| `data/comments.csv` | 検索結果の店員コメント。`animal` / `cond` / `keyword`。 |
+| `data/popular_searches.csv` | 検索画面吹き出し用の語。GA4 を見て出してよい語だけ手で書く。`word` 列のみ。 |
 | `.env` | APIキーなど秘密情報。Git に上げない。 |
 | `package.json` | プロジェクトの身分証明書。`npm run ○○` の定義もここ。Git に含める。 |
 | `package-lock.json` | 入れたライブラリの版を固定する名簿。手編集しない。Git に含める。 |
@@ -87,6 +91,7 @@ product_data.json + data_master.js
 | **名寄せ** | 「nutro」でも「ニュートロ」でも検索できるようにする。画面の表示名は `products.csv` の `brand` 列そのもの。 |
 | **エイリアス** | 別名。「グレインフリー」と書いたら `gf` タグを付ける、など。`rules.csv`。 |
 | **exclude_tags** | 自動タグ付けしてほしくないタグを、その商品だけ止める列。 |
+| **追加マスター** | `data/` の CSV のうち、products / categories / tags / rules 以外。ビルドが検証せず `data_master.js` の同名変数にする。`comments.csv` と `popular_searches.csv` がそれ。 |
 | **フォールバック** | 本命が失敗したときの予備。画像は 楽天v2 → 楽天Item → Yahoo の順。 |
 | **説明の取り直し** | `collect:all` の `desc` がいまいちなとき、`npm run desc:helper` で説明だけ作り、CSV に手で貼る作業。再収集は名前や画像も上書きするので使わない。 |
 
@@ -121,6 +126,7 @@ CSV の列の意味:
 | **lazy loading** | 画面外の画像は後から読む。`loading="lazy"`。 |
 | **プレースホルダー** | 画像が無いときの「No Image」。外部サイトに頼らず SVG で出している。 |
 | **SPAっぽい動き** | ページ全体を再読み込みせず、検索 ↔ 結果を切り替える。URL の `?q=` も更新する。 |
+| **検索ヒント吹き出し** | スマホの検索欄下。店員アイコン＋吹き出しで「よく検索されているワードは〇〇、〇〇、〇〇です」。PC では出さない。語が無ければ隠す。 |
 
 ## 検索の仕組み
 
@@ -135,10 +141,12 @@ CSV の列の意味:
 | **IndexedDB** | ブラウザ内の大きめ倉庫。商品データを保存し、2回目以降は通信を減らす。 |
 | **localStorage** | 小さめ倉庫。お気に入り（`pet925_favs`）を保存。ドメインが変わると消える。 |
 
-店員コメント:
+店員コメントと検索ヒント:
 
-- `pickStoreComments()` … 選んだ cond / animal タグに応じた一言
-- `pickKeywordComments()` … 検索欄の言葉（「心臓」「納豆菌」など）に応じた追加の一言
+- `pickStoreComments()` … 選んだ cond / animal タグに応じた一言（結果画面）
+- `pickKeywordComments()` … 検索欄の言葉（「心臓」「納豆菌」など）に応じた追加の一言（結果画面）
+- `pickPopularSearchWords()` … `popular_searches.csv` から最大3語をランダムに選ぶ（検索画面）
+- `formatPopularSearchHint()` … 「よく検索されているワードは〇〇、〇〇、〇〇です」の文を作る
 
 ## Git・公開・秘密情報
 
@@ -167,7 +175,8 @@ CSV の列の意味:
 | **canonical** | 「本物のURLはこちら」と検索エンジンに伝えるタグ。コピーサイト対策。 |
 | **OGP** | SNS でシェアしたときのタイトル・画像。 |
 | **JSON-LD** | 検索結果にサイト情報を出すための構造化データ。 |
-| **GA4 / gtag** | Google アナリティクス。何が検索されたか、0件ヒットは何か、を見る。 |
+| **GA4 / gtag** | Google アナリティクス。何が検索されたか、0件ヒットは何か、を見る。ブラウザからは送るだけで、人気語を画面に直接は出せない。吹き出し用の語は GA4 を見て `popular_searches.csv` に手で写す。 |
+| **GA4 Data API** | GA4 の集計をプログラムで取る公式 API。認証が要る。このサイトでは使っていない（変な語がファイルに入るのを避けるため）。 |
 | **Cookie** | 計測用の小さな記録。ローカルでは `cookie_domain: none` にして警告を抑えている。 |
 | **アフィリエイト** | ショップへ送客して報酬を得る仕組み。**現在は全提携停止中。** ID は空。 |
 | **もしもアフィリエイト** | 複数モールをまとめるゲートウェイ。コード上は `getMoshimoUrl()` が残っている。 |
@@ -181,7 +190,7 @@ CSV の列の意味:
 | **リファクタリング** | 動きは変えず、読みやすく直すこと。 |
 | **ユニットテスト** | 小さな関数単体のテスト。`tests/`、`npm test`（Jest）。今は `common.js` と `comment_logic.js` だけ。全ファイルには書かない。 |
 | **テストスイート** | テストファイル1つ分。`npm test` の `Test Suites: 2` はファイルが2つ、という意味。 |
-| **テストケース** | 個々の確認項目。今は19件。スイート数よりこちらが「何を守っているか」。 |
+| **テストケース** | 個々の確認項目。今は25件（`normalize` 7 + 店員コメント12 + よく検索されているワード6）。スイート数よりこちらが「何を守っているか」。 |
 | **モック** | 本物の代わりに用意する偽物（画面、API、Worker）。増やすとテスト自体が壊れやすいので、このサイトでは DOM や外部 API までモックしない。 |
 | **JSDoc** | 関数の上に書くコメント。`@param` は引数、`@returns` は戻り値、`@type` は変数の型。プログラムは無視し、エディタだけが読む。 |
 | **`@ts-check`** | ファイル先頭に書くと、そのファイルだけ型を検査する。今は `common.js` と `comment_logic.js`。`jsconfig.json` の `checkJs` は `false`（全体オフ、個別にオン）。 |
@@ -202,10 +211,12 @@ CSV の列の意味:
 | 見た目を変えたい | `style.css` / `index.html` |
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
+| 画像や公式ページのリンク切れを探したい | `npm run check:links` → 切れた行だけ CSV を直す → ビルド |
 | 公開したい | `npm run deploy` |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
 | JSON を `.gitignore` した方がよいか迷う | 今はしない。Pages がリポジトリをそのまま出す。`product_data.json` が無いと検索が読めない |
+| 検索画面の「よく検索されているワード」を変えたい | `data/popular_searches.csv` → ビルド。GA4 は見るだけ。自動出力はしない |
 | 運用の手順 | `docs/MANUAL.md` |
 | 「なぜこう作ったか」 | `docs/PROJECT_SUMMARY.md` |
 

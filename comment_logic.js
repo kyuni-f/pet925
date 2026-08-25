@@ -96,7 +96,55 @@ function pickKeywordComments(searchVal, commentsData) {
     return [matched[Math.floor(Math.random() * matched.length)].comment];
 }
 
+/** 検索画面の吹き出しに並べる「よく検索されているワード」の最大数 */
+const MAX_POPULAR_SEARCH_WORDS = 3;
+
+/**
+ * popular_searches.csv（data_master.js の const popular_searches）から、吹き出し用の語を最大 max 件ランダムに選ぶ。
+ * 空行・重複は除く。語が max 件未満ならある分だけ返す。
+ * @param {{ word?: string }[]} [rows] 省略時はグローバルの `popular_searches` を使う
+ * @param {number} [max]
+ * @returns {string[]}
+ */
+function pickPopularSearchWords(rows, max) {
+    const limit = typeof max === 'number' ? max : MAX_POPULAR_SEARCH_WORDS;
+    const source = rows || (typeof popular_searches !== 'undefined' ? popular_searches : []);
+    const words = [];
+    const seen = new Set();
+    source.forEach(row => {
+        const word = (row && row.word ? String(row.word) : '').trim();
+        if (!word) return;
+        // @ts-ignore common.js のグローバル
+        const key = normalize(word);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        words.push(word);
+    });
+    if (words.length <= limit) return words;
+    const shuffled = [...words].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, limit);
+}
+
+/**
+ * 検索画面吹き出し用の一文を作る。語が無ければ空文字（呼び出し側で吹き出しを隠す）。
+ * @param {string[]} words
+ * @returns {string}
+ */
+function formatPopularSearchHint(words) {
+    if (!words || words.length === 0) return '';
+    return `よく検索されているワードは${words.join('、')}です`;
+}
+
 // Node/Jest環境でのテスト用エクスポート（ブラウザでは`module`が存在しないため、この分岐は実行されない）
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { getCommentLookup, pickStoreComments, pickKeywordComments, STAFF_ICON_IMAGES, MAX_STORE_COMMENTS };
+    module.exports = {
+        getCommentLookup,
+        pickStoreComments,
+        pickKeywordComments,
+        pickPopularSearchWords,
+        formatPopularSearchHint,
+        STAFF_ICON_IMAGES,
+        MAX_STORE_COMMENTS,
+        MAX_POPULAR_SEARCH_WORDS
+    };
 }

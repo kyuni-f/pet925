@@ -15,7 +15,7 @@ global.normalize = require('../common.js').normalize;
 // pickStoreComments() は内部で getCommentLookup() を引数なしで呼ぶため、
 // グローバルの `comments` も用意しておく（明示的に引数を渡すpickKeywordComments()のテストでは使われない）
 global.comments = sampleComments;
-const { getCommentLookup, pickStoreComments, pickKeywordComments } = require('../comment_logic.js');
+const { getCommentLookup, pickStoreComments, pickKeywordComments, pickPopularSearchWords, formatPopularSearchHint } = require('../comment_logic.js');
 
 describe('getCommentLookup()', () => {
     test('category:key をキーにしたコメント配列のマップを作る', () => {
@@ -78,5 +78,51 @@ describe('pickKeywordComments()', () => {
     test('category="keyword"以外の行（cond/animal）には反応しない', () => {
         expect(pickKeywordComments('dog', sampleComments)).toEqual([]);
         expect(pickKeywordComments('tear', sampleComments)).toEqual([]);
+    });
+});
+
+describe('pickPopularSearchWords()', () => {
+    test('空なら空配列を返す', () => {
+        expect(pickPopularSearchWords([])).toEqual([]);
+    });
+
+    test('空の word と重複は除き、3件未満ならある分だけ返す', () => {
+        const rows = [
+            { word: '心臓' },
+            { word: '  ' },
+            { word: '納豆菌' },
+            { word: '心臓' },
+        ];
+        const result = pickPopularSearchWords(rows);
+        expect(result.sort()).toEqual(['心臓', '納豆菌']);
+    });
+
+    test('3件を超えるときは最大3件だけ返す', () => {
+        const rows = [
+            { word: '心臓' },
+            { word: '納豆菌' },
+            { word: '涙やけ' },
+            { word: 'ラム肉' },
+        ];
+        const result = pickPopularSearchWords(rows);
+        expect(result).toHaveLength(3);
+        result.forEach(word => {
+            expect(['心臓', '納豆菌', '涙やけ', 'ラム肉']).toContain(word);
+        });
+    });
+});
+
+describe('formatPopularSearchHint()', () => {
+    test('語が無ければ空文字を返す', () => {
+        expect(formatPopularSearchHint([])).toBe('');
+    });
+
+    test('3語を読点でつなぐ', () => {
+        expect(formatPopularSearchHint(['心臓', '納豆菌', '涙やけ']))
+            .toBe('よく検索されているワードは心臓、納豆菌、涙やけです');
+    });
+
+    test('1語でも文として成立する', () => {
+        expect(formatPopularSearchHint(['心臓'])).toBe('よく検索されているワードは心臓です');
     });
 });

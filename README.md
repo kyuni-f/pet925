@@ -14,13 +14,13 @@
 
 ## 📂 構成ファイル (Context)
 ### 📂 Directory Structure
-- **`data/`** : `pet925_master.ods` (5シート構成のマスター), 各種CSV (products, categories, tags, brands, rules)
+- **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, brands, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）と `popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）もある
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
 - **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
-- **`pet_utils.py`** : `csv_to_json.py`と`auto_collect_all.py`の両方から読み込まれる共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
+- **`pet_utils.py`** : `csv_to_json.py` / `auto_collect_all.py` / `check_links.py` から読む共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
-- **`comment_logic.js`** : 「店員コメント」機能の選定ロジック（`pickStoreComments()` / `pickKeywordComments()`等）。DOM操作から分離し、Jestでのユニットテストを可能にしている
+- **`comment_logic.js`** : 店員コメント（`pickStoreComments()` / `pickKeywordComments()`）と、検索画面のよく検索されているワード（`pickPopularSearchWords()`）の選定ロジック。DOM操作から分離し、Jestでのユニットテストを可能にしている
 - **`jsconfig.json`** : エディタ上の型チェック設定。`checkJs`は全体では無効にし、ファイル先頭に`// @ts-check`があるファイル（`common.js`/`comment_logic.js`）だけがオプトインで検査される。`main.js`/`data_master.js`は`// @ts-check`を付けていないため検査対象外（ただしグローバル変数の補完・定義ジャンプのために`include`には含めている）
 - **`tests/`** : Jestによるユニットテスト（`npm test`で実行）
 - **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
@@ -29,6 +29,7 @@
 - **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
 - **`desc_helper.py`** / **`desc_helper.html`** : 既存商品の説明文だけを作り直すローカルツール（`npm run desc:helper`）
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
+- **`check_links.py`** : `products.csv` の画像URL（`img`）と公式ページURL（`a8`）の生死チェック（`npm run check:links`）。ビルドには使わない
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
@@ -52,7 +53,7 @@ python3 csv_to_json.py
 # 4. ファイル変更を監視しながらビルド（開発中）
 npm start
 
-# 4.5. ユニットテストの実行（normalize()や店員コメント選定ロジックなど）
+# 4.5. ユニットテストの実行（normalize()、店員コメント、よく検索されているワードなど）
 npm test
 
 # 5. データの公開（デプロイ）
@@ -74,6 +75,9 @@ npm run collect jan_list.csv   # データ収集のみ（別途 npm run build �
 
 # 10. 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run desc:helper
+
+# 11. 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
+npm run check:links
 ```
 
 > **運用マップと手順の詳細**（商品の増やし方、JAN収集、マスターCSV、公開チェック）は `docs/MANUAL.md` を参照してください。
@@ -91,6 +95,7 @@ npm run desc:helper
 一方 **`csv_to_json.py`（ビルドスクリプト）は画像を取得しません**。純粋にCSV→JSON変換とデータ検証のみを行い、`img` 列については `images/{JANコード}.拡張子` というファイルがプロジェクト直下に手動で置かれていればそれを優先採用する「ローカルキャッシュ参照」機能のみを持ちます。
 
 - **画像が見つからなかった場合**（`img` が `#` のまま）: フロントエンドが自動でプレースホルダー画像を表示するため、ビルドやデプロイが失敗することはありません。
+- **リンク切れを探したい場合**: `npm run check:links`（`img` と公式 `a8`）。CSV は書き換えません。詳細は `docs/MANUAL.md` §5。
 - **誤った画像や画像なしの商品を直したい場合**: `img` 列に正しいURLを直接貼り付けるか、`images/{JANコード}.jpg` を置いてから `npm run build` してください（詳細は `docs/MANUAL.md`）。
 
 ## 🌐 カスタムドメインの導入手順

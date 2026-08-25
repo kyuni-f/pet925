@@ -797,6 +797,26 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
     if (loadMoreArea) loadMoreArea.innerHTML = footerHtml;
 }
 
+/**
+ * 検索画面の吹き出しに、popular_searches.csv から選んだ語を入れる。
+ * 語が無ければ吹き出しを隠す（スマホ用CSSの display:flex より優先するため is-empty クラスを使う）。
+ */
+function renderSearchHintTeaser() {
+    const teaser = document.getElementById('search-hint-teaser');
+    const bubble = document.getElementById('search-hint-bubble');
+    if (!teaser || !bubble) return;
+
+    const words = pickPopularSearchWords();
+    const hint = formatPopularSearchHint(words);
+    if (!hint) {
+        bubble.textContent = '';
+        teaser.classList.add('is-empty');
+        return;
+    }
+    bubble.textContent = hint;
+    teaser.classList.remove('is-empty');
+}
+
 function initializeApp() { // アプリ全体の初期化処理
     // --- iframe埋め込み対策（他サイトにまるごと埋め込まれての無断転載を防止） ---
     if (window.top !== window.self) {
@@ -860,6 +880,7 @@ function initializeApp() { // アプリ全体の初期化処理
     initFilters();
     renderFilters();
     updateFavoriteButtonUI(); // 初期表示時のお気に入りボタンの状態を更新
+    renderSearchHintTeaser();
 }
 
 // すでに読み込みが終わっている場合は即実行、そうでなければイベントを待つ

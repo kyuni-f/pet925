@@ -603,8 +603,8 @@ footer a { color: var(--gold); text-decoration: none; }
     /* 店員コメント欄はスマホでのみ表示（接客のような「間」を作る） */
     .result-comment-area:not(:empty) { display: block; }
 
-    /* 検索欄下の予告バブルもスマホでのみ表示 */
-    .search-hint-teaser { display: flex; }
+    /* 検索欄下の予告バブルもスマホでのみ表示（語が無いときは隠す） */
+    .search-hint-teaser:not(.is-empty) { display: flex; }
 
     /* お気に入りボタンのツールチップはスマホでは非表示 */
     .card-fav-btn[data-tooltip]::after { display: none; }

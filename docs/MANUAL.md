@@ -45,6 +45,7 @@ flowchart TD
 | **集める** | `auto_collect_all.py`（`npm run collect`） | JAN から商品名・画像・説明・タグを取る | サイト用 JSON は作らない（`collect:all` なら続けてビルドする） |
 | **説明だけ取り直す** | `desc_helper.py`（`npm run desc:helper`） | 商品名＋任意の公式ページ事実から `desc` を生成 | CSV への自動書き込み、名前・画像の更新はしない |
 | **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用 | ネットから画像は取らない |
+| **リンクの生死を見る** | `check_links.py`（`npm run check:links`） | `img` と `a8` の URL が 404 や 1px になっていないか確認 | CSV は書き換えない。ビルドにも使わない |
 | **画面で探す** | `main.js` + `search_worker.js` | 検索、フィルター、お気に入り、店員コメント | マスター CSV は読まない。ビルド済み JSON を読む |
 
 ### 何を直すか早見表
@@ -54,10 +55,12 @@ flowchart TD
 | 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら `npm run deploy` |
 | 説明文だけを作り直す | `npm run desc:helper`（商品名を貼って生成 → `desc` に貼る） | `npm run build` |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
+| 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
 | 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
 | 英語ブランド名でも日本語検索したい | `data/brands.csv` | `npm run build` |
 | 店員コメントを足す | `data/comments.csv` | `npm run build` |
+| 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
 | 問い合わせフォーム自体を有効化する | `.env` の `FORMSPREE_FORM_ID` | `npm run build` |
 | 見た目 | `style.css` / `index.html` | 保存して Ctrl+F5 |
@@ -255,6 +258,16 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 - `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。
 - `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。
 
+### popular_searches.csv（検索画面のよく検索されているワード）
+
+スマホの検索欄下の吹き出し用です。GA4 でよく検索されている語を確認し、**出してよい語だけ**このファイルに手で書きます。自動取得はありません。
+
+| 列 | 意味 | 例 |
+|---|---|---|
+| `word` | 吹き出しに出す語 | `心臓` |
+
+ビルドは検証せず、そのまま `data_master.js` の `popular_searches` に載せます。画面は起動のたびに最大3語をランダムに選び、「よく検索されているワードは〇〇、〇〇、〇〇です」と出します。行が無ければ吹き出し自体を出しません。
+
 ---
 
 ## 5. 画像
@@ -269,11 +282,21 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 画像が `#` のままでもビルドは成功します。画面側が「No Image」の SVG を出します。
 
+改定で楽天CDNの画像URLが死んでも、ビルドは形式（`http` で始まるか）しか見ないので気づきません。週1くらいで次を回すと切れを一覧できます。
+
+```bash
+npm run check:links
+```
+
+`img` と公式ページ（`a8`）をネットで確認します。CSV は書き換えません。`npm run build` にも入っていません。切れ（404、極小・1px画像）があると終了コード 1、ボット拒否やトップへのリダイレクトは「要確認」で止めません。画像だけ / 公式だけなら `--img-only` / `--a8-only` です。
+
 直し方:
 
 1. 正しい URL を `img` 列に貼る。
 2. または `images/4902418002415.jpg` のように置く。
 3. `npm run build`。
+
+`collect:all` で全件取り直すと、手直しした説明文も戻ります。切れた JAN だけ直してください。廃盤かどうかは JAN からは分かりません。
 
 画像用の旧ブックマークレット（楽天ページから画像URLを取るもの）は現行リポジトリにありません。画像の正攻法は JAN 収集か、`img` 列への URL の手貼りです。説明文取り直し用のブックマークレットは §2 の `desc:helper` を見てください。
 
@@ -368,6 +391,7 @@ npm run deploy
 **データと機能**
 
 - [ ] `npm run build` がエラーなく終わる
+- [ ] （任意）`npm run check:links` で画像・公式URLの切れが無い。要確認は目視
 - [ ] 実行ボタンが `全N件を表示` になり、件数が見積もりと合う（`データを読み込み中...` のままなら Worker 失敗）
 - [ ] 犬 / 猫 / 涙やけなどフィルターが効く。cond は複数選択できる
 - [ ] 「ニュートロ」「ねこ」「ネコ」など表記ゆれで検索できる
@@ -402,6 +426,8 @@ npm run deploy
 | `商品名 '…' が重複しています` | 同じブランド＋同じ名前。別名にするか行を削除 |
 | `JANコードが標準的な13桁ではありません`（警告） | ビルドは通るが画像キャッシュ名に使えない |
 | `価格 amz_p は半角数字のみ` | カンマや「円」を消す |
+| `切れがあります`（`npm run check:links`） | `img` なら URL の貼り直しか `images/{JAN}.jpg`。`a8` なら公式ページを目視。全件 `collect:all` すると説明文も戻る |
+| `要確認`（`npm run check:links`） | 403 はボット拒否のことが多い。トップへ飛ばされた公式URLは改定・廃盤の手がかり（確定ではない） |
 | ボタンが `データを読み込み中` のまま / `データの読み込みに失敗` | まず `npm run build`。コンソールの `Worker data load failed` は `product_data.json` が古い・無い |
 | 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
 | 問い合わせが「準備中」のまま | `.env` の `FORMSPREE_FORM_ID` が空か、英数字以外。入れてから `npm run build` |
@@ -453,7 +479,7 @@ Python ライブラリの入れ方の選択肢:
 
 `data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `brands`, `categories`, `rules` です。
 
-`comments.csv` はビルドが自動で読む追加マスターです。ODS に `comments` シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
+`comments.csv` と `popular_searches.csv` はビルドが自動で読む追加マスターです。ODS に同名シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
 
 マクロの登録:
 

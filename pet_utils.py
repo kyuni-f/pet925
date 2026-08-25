@@ -1,5 +1,5 @@
 """
-pet925プロジェクトの複数のPythonスクリプト（csv_to_json.py / auto_collect_all.py）から
+pet925プロジェクトの複数のPythonスクリプト（csv_to_json.py / auto_collect_all.py / check_links.py）から
 共通で利用するユーティリティ集。
 
 「いつ実行するか」に依存しない純粋な処理（文字列正規化、.env読み込み、CSV読み込み、
