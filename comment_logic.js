@@ -109,6 +109,7 @@ const MAX_POPULAR_SEARCH_WORDS = 3;
 function pickPopularSearchWords(rows, max) {
     const limit = typeof max === 'number' ? max : MAX_POPULAR_SEARCH_WORDS;
     const source = rows || (typeof popular_searches !== 'undefined' ? popular_searches : []);
+    /** @type {string[]} */
     const words = [];
     const seen = new Set();
     source.forEach(row => {

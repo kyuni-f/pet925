@@ -34,8 +34,9 @@ flowchart TD
   files --> preview
 
   preview --> pub
-  pub --> deploy["npm run deploy"]
-  deploy --> live[GitHub Pages に公開]
+  pub --> deploy["npm run deploy（ビルド）"]
+  deploy --> git["git status → commit → push"]
+  git --> live[GitHub Pages に公開]
 ```
 
 ### 役割の切り分け
@@ -52,7 +53,7 @@ flowchart TD
 
 | やりたいこと | 触る場所 | そのあと |
 |---|---|---|
-| 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら `npm run deploy` |
+| 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら §9 で公開 |
 | 説明文だけを作り直す | `npm run desc:helper`（商品名を貼って生成 → `desc` に貼る） | `npm run build` |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
@@ -66,7 +67,7 @@ flowchart TD
 | 見た目 | `style.css` / `index.html` | 保存して Ctrl+F5 |
 | 画面の動き | `main.js` | 保存して Ctrl+F5 |
 | 検索の当たり方 | `search_worker.js` / `common.js` | 保存して Ctrl+F5 |
-| 公開 | 変更が保存されていること | `npm run deploy` |
+| 公開 | 変更が保存されていること | `npm run deploy`（ビルド）→ `git status` で確認 → commit / push |
 
 ---
 
@@ -83,7 +84,7 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
    ```
 2. ターミナルで `npm run collect:all` を実行する。
 3. `data/products.csv` の末尾付近を開き、商品名・タグ・説明・画像を目視する。
-4. 問題なければ `npm run deploy`。開発中の確認だけなら `npm start` のあとにブラウザで **Ctrl + F5**。
+4. 問題なければ §9 で公開。開発中の確認だけなら `npm start` のあとにブラウザで **Ctrl + F5**。
 
 `npm run collect` だけだと CSV 更新までです。サイトに出す JSON は別途 `npm run build` が必要です。`collect:all` はその両方を一度にやります。
 
@@ -94,7 +95,7 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 1. `data/*.csv` を直接編集する。または `data/pet925_master.ods` を直して CSV を書き出す（付録A）。
 2. `npm run build`（または監視中なら `npm start` が自動で再ビルド）。
 3. ブラウザで **Ctrl + F5**（IndexedDB が古いデータを持っているため）。
-4. 公開するなら `npm run deploy`。
+4. 公開するなら §9（ビルドのあと、自分で commit / push）。
 
 ### 説明文だけを取り直す（`npm run desc:helper`）
 
@@ -129,7 +130,7 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 1. `index.html` / `style.css` / `*.js` を保存する。
 2. ブラウザで **Ctrl + F5**。
 3. 検索ロジックを触った場合は `npm test` も実行する。
-4. 公開するなら `npm run deploy`。
+4. 公開するなら §9（ビルドのあと、自分で commit / push）。
 
 ---
 
@@ -350,9 +351,7 @@ AI に商品 CSV を手で作らせるときは、`docs/AI_INSTRUCTIONS.md` を�
 
 補助ツール:
 
-- `npm run desc:helper` … 既存商品の説明文だけを作り直す。手順は §2「説明文だけを取り直す」
-- `csv_helper.html` … 1行分の CSV を手で作る入力補助
-- `python3 auto_data_collector.py [商品URL]` … URL から1件分の CSV 行を出す旧経路。通常は `collect:all` で足りる
+- `npm run desc:helper` … 既存商品の説明文だけを作り直す。手順は §2「説明文だけを取り直す」（ブックマークレットあり）
 
 ---
 
@@ -382,7 +381,16 @@ npm test           # normalize と店員コメントのユニットテスト
 npm run deploy
 ```
 
-中身は「ビルド → `git add .` → commit → `git push`」です。ビルドでデータ不備があると push まで進みません。
+中身は検品・ビルドだけです（`npm run build` と同じ）。データ不備があるとここで止まります。通ったら **自分で** 載せるファイルを確認してから送ってください。
+
+```bash
+git status          # 載せるファイルを確認する（関係ない変更が混ざっていないか）
+git add 載せるファイル
+git commit -m "メッセージ"
+git push
+```
+
+`git add .` で全部まとめて載せるのは避けてください。誤ったファイルも乗ります。`git push --force` も使わないでください。
 
 独自ドメインの手順は `README.md` の「カスタムドメインの導入手順」です。ドメインを変えたら `index.html` の canonical と `main.js` の `authorizedDomains` を更新します。お気に入り（localStorage）はドメインが変わると消えます。
 

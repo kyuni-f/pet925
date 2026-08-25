@@ -23,11 +23,9 @@
 - **`comment_logic.js`** : 店員コメント（`pickStoreComments()` / `pickKeywordComments()`）と、検索画面のよく検索されているワード（`pickPopularSearchWords()`）の選定ロジック。DOM操作から分離し、Jestでのユニットテストを可能にしている
 - **`jsconfig.json`** : エディタ上の型チェック設定。`checkJs`は全体では無効にし、ファイル先頭に`// @ts-check`があるファイル（`common.js`/`comment_logic.js`）だけがオプトインで検査される。`main.js`/`data_master.js`は`// @ts-check`を付けていないため検査対象外（ただしグローバル変数の補完・定義ジャンプのために`include`には含めている）
 - **`tests/`** : Jestによるユニットテスト（`npm test`で実行）
-- **`csv_helper.html`** : CSV用の1行を簡単に作成するための入力補助ツール
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
-- **`auto_data_collector.py`** : URLから商品データを自動生成・追記する自動化スクリプト
-- **`desc_helper.py`** / **`desc_helper.html`** : 既存商品の説明文だけを作り直すローカルツール（`npm run desc:helper`）
+- **`desc_helper.py`** / **`desc_helper.html`** : 既存商品の説明文だけを作り直すローカルツール（`npm run desc:helper`）。説明取り直し用のブックマークレットもここ
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
 - **`check_links.py`** : `products.csv` の画像URL（`img`）と公式ページURL（`a8`）の生死チェック（`npm run check:links`）。ビルドには使わない
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
@@ -57,26 +55,20 @@ npm start
 npm test
 
 # 5. データの公開（デプロイ）
-npm run deploy  # 検品、ビルド、コミット、プッシュを一括実行
+npm run deploy  # 検品・ビルドのみ。通ったら git status で確認し、自分で commit / push
 
-# 6. 強制同期（競合等でプッシュできない場合）
-git push origin main --force
-
-# 7. VS Code 本体の更新 (Linux環境)
+# 6. VS Code 本体の更新 (Linux環境)
 sudo apt update && sudo apt install code
 
-# 8. APIで商品データを自動生成
-python3 auto_data_collector.py ""
-
-# 9. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
+# 7. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
 npm run collect:all   # データ収集 + JSONビルドまで一括実行
 # または
 npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
 
-# 10. 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
+# 8. 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run desc:helper
 
-# 11. 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
+# 9. 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
 npm run check:links
 ```
 
@@ -110,7 +102,7 @@ npm run check:links
     - `index.html`: `<link rel="canonical">` のURLを新しいドメインへ書き換え。
     - `main.js`: `authorizedDomains` 配列に新しいドメインを追加。
 5. **反映の確認**:
-    - `npm run deploy` で変更を反映。
+    - `npm run deploy` でビルドしたあと、変更を commit / push。
     - 数分〜数時間後に新しいドメインでサイトにアクセスできるか確認。
 
 > **注意**: ドメイン変更直後は、お気に入りデータ（localStorage）がリセットされます。

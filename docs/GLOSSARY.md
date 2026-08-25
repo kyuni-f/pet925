@@ -18,7 +18,7 @@
 | 用語 | このプロジェクトでの意味 |
 |---|---|
 | **ビルド** | `npm run build`（中身は `python3 csv_to_json.py`）。CSV を検品して、サイトが読む JSON / `data_master.js` を作る作業。 |
-| **デプロイ** | `npm run deploy`。ビルド → Git にコミット → GitHub へ push → GitHub Pages で公開、まで一気にやる。 |
+| **デプロイ** | サイトを公開すること。`npm run deploy` は検品・ビルドだけ。通ったら `git status` で確認し、自分で commit / push して GitHub Pages に出す。 |
 | **バリデーション** | ビルド時の検品。未登録タグ、列不足、商品名重複などがあると公開を止める。 |
 | **キャッシュ** | ブラウザが古いファイルを覚えてしまうこと。直したのに画面が変わらないときは **Ctrl + F5**。 |
 | **キャッシュバスティング** | `style.css?v=日付` のように URL にバージョンを付けて、古いキャッシュを使わせない仕組み。`siteVersion` がそれ。 |
@@ -36,7 +36,7 @@ npm test               # テスト実行
 npm run collect:all    # JANコードから商品データを自動収集してビルドまで
 npm run desc:helper    # 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run check:links    # 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
-npm run deploy         # 検品・ビルド・公開
+npm run deploy         # 検品・ビルド（公開は続けて自分で commit / push）
 ```
 
 ## ファイルと役割
@@ -54,7 +54,7 @@ npm run deploy         # 検品・ビルド・公開
 | `auto_collect_all.py` | JANコードから商品名・画像・説明を API で集める。 |
 | `check_links.py` | `img` と `a8` の URL が生きているか確認する。ビルドには使わない。CSV は書き換えない。 |
 | `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。 |
-| `desc_helper.html` | その画面。`csv_helper.html` の見た目を流用した説明専用フォーム。 |
+| `desc_helper.html` | その画面。説明専用フォーム。ブックマークレットのドラッグ用リンクもある。 |
 | `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。`check_links.py` からも読む。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
@@ -66,6 +66,7 @@ npm run deploy         # 検品・ビルド・公開
 | `product_data.json` | 商品データの目次（件数・チャンク数・版）。Worker が最初に読む。ビルドが生成する。 |
 | `product_data_*.json` | 商品データの分割ファイル。ビルドが生成する。`.gitignore` に入れない。 |
 | `jsconfig.json` | エディタが JS の型を検査するための設定。サイト本体には含まれない。 |
+| `node_modules/` | `npm install` で入る他人のライブラリ（Jest など）。何千ファイルあっても自分のコードではない。Git に入れない。中を見なくてよい。 |
 
 データの流れ:
 
@@ -173,7 +174,8 @@ CSV の列の意味:
 |---|---|
 | **SEO** | 検索エンジン向けの最適化。タイトル、description、canonical など。 |
 | **canonical** | 「本物のURLはこちら」と検索エンジンに伝えるタグ。コピーサイト対策。 |
-| **OGP** | SNS でシェアしたときのタイトル・画像。 |
+| **OGP** | SNS でシェアしたときのタイトル・画像。`index.html` の `og:image` など。 |
+| **`og-image.jpg`** | シェア用のサイトの顔写真。商品カードの画像とは別。`index.html` が `https://kyuni-f.github.io/pet925/og-image.jpg` を指している。ファイルが無くても検索やカードは動く。置くならリポジトリ直下に同名で（目安 1200×630）。 |
 | **JSON-LD** | 検索結果にサイト情報を出すための構造化データ。 |
 | **GA4 / gtag** | Google アナリティクス。何が検索されたか、0件ヒットは何か、を見る。ブラウザからは送るだけで、人気語を画面に直接は出せない。吹き出し用の語は GA4 を見て `popular_searches.csv` に手で写す。 |
 | **GA4 Data API** | GA4 の集計をプログラムで取る公式 API。認証が要る。このサイトでは使っていない（変な語がファイルに入るのを避けるため）。 |
@@ -212,7 +214,8 @@ CSV の列の意味:
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
 | 画像や公式ページのリンク切れを探したい | `npm run check:links` → 切れた行だけ CSV を直す → ビルド |
-| 公開したい | `npm run deploy` |
+| 公開したい | `npm run deploy`（ビルド）→ `git status` → commit / push。手順は `docs/MANUAL.md` §9 |
+| SNS シェア用の画像を置きたい | リポジトリ直下に `og-image.jpg`。無くてもサイトは動く |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
 | JSON を `.gitignore` した方がよいか迷う | 今はしない。Pages がリポジトリをそのまま出す。`product_data.json` が無いと検索が読めない |
@@ -379,8 +382,8 @@ def normalize_text(s):
 | `document.getElementById('search-input')` | id で要素を1つ取る |
 | `document.querySelector('.short-desc')` | CSS と同じ書き方で最初の1つを取る |
 | `document.querySelectorAll('.filter-btn')` | 条件に合う要素を全部取る |
-| `element.innerHTML = '...'` | 要素の中身の HTML を入れ替える |
-| `element.textContent` | 文字だけ（タグは解釈しない） |
+| `element.innerHTML = '...'` | 要素の中身を **HTML（タグ）として** 入れ替える。商品カードの枠向き |
+| `element.textContent` | 文字だけ（タグは解釈しない）。CSV 由来の名前・説明向き。**検索は JSON 側**なので、ここを変えてもヒットは変わらない |
 | `element.classList.add('active')` | class を付ける |
 | `element.classList.remove('active')` | class を外す |
 | `element.classList.toggle('active')` | あれば外し、なければ付ける |
@@ -531,10 +534,12 @@ Python と JS の対応（同じことをするとき）:
 |---|---|
 | **ワーキングツリー** | 今編集中のファイルたち。 |
 | **ステージング** | 「次の commit に入れる」と印を付けた状態。`git add`。 |
+| **`git add .`** | 今フォルダの変更を全部載せる。関係ない編集や誤って置いたファイルも乗るので、このサイトでは使わない。ファイルを選んで `git add` する。 |
+| **force push** | `git push --force`。GitHub 側の履歴を上書きする。競合の定番対処ではない。**使わない。** 詰まったら `git pull` して中身を見て直す。 |
 | **差分（diff）** | 何が変わったか。 |
 | **ブランチ** | 作業の枝。このリポジトリは主に `main`。 |
 | **origin** | GitHub 側の別名。 |
-| **コンフリクト** | 同じ場所を別々に直して衝突すること。 |
+| **コンフリクト** | 同じ場所を別々に直して衝突すること。`git push --force` では解消しない。 |
 | **npm** | Node.js 用のパッケージ管理。`package.json` を読む。 |
 | **`npm install`** | 依存関係を入れる。`node_modules/` ができる。 |
 | **`npm test` / `npm start` / `npm run ○○`** | `package.json` の `scripts` を実行する。 |
@@ -543,10 +548,12 @@ Python と JS の対応（同じことをするとき）:
 
 よく使う Git の意味:
 
-- `git status` … 今なにが変わっているか
+- `git status` … 今なにが変わっているか（公開前はこれを見てから add する）
 - `git diff` … 具体的な差分
 - `git log` … これまでの commit
 - `git add` / `git commit` / `git push` … 記録して送る
+- `git pull` … GitHub の新しい履歴を取る。競合したら先にこれ
+- `git push --force` … **使わない**
 
 ## よく見るエラーの読み方
 
