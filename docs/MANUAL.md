@@ -189,7 +189,8 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 | `jan` | 13桁。お気に入り ID と画像キャッシュ名に使う |
 | `img` | 画像 URL。`#` ならプレースホルダー |
 | `amz` / `rak` / `yah` / `a8` | 各ショップや公式の URL。`#` なら商品名検索リンクを自動生成（`a8` は `#` のときボタン自体を出さない） |
-| `label` / `promo` | 将来用。今は画面に出さない |
+| `label` | 画像左上の金色バッジ。`#` なら出さない |
+| `promo` | 説明文とタグのあいだのオレンジ文言。`#` なら出さない |
 | `amz_p` / `rak_p` / `yah_p` | 価格。半角数字のみ。今は非表示 |
 | `exclude_tags` | 自動タグ付けしたくない `key`。例: `appetite` |
 
