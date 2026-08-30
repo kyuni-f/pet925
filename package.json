@@ -9,8 +9,7 @@
     "collect": "python3 auto_collect_all.py",
     "collect:all": "python3 auto_collect_all.py jan_list.csv && python3 csv_to_json.py",
     "desc:helper": "python3 desc_helper.py",
-    "check:links": "python3 check_links.py",
-    "deploy": "npm run build"
+    "check:links": "python3 check_links.py"
   },
   "repository": {
     "type": "git",

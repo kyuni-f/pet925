@@ -18,7 +18,7 @@
 | 用語 | このプロジェクトでの意味 |
 |---|---|
 | **ビルド** | `npm run build`（中身は `python3 csv_to_json.py`）。CSV を検品して、サイトが読む JSON / `data_master.js` を作る作業。 |
-| **デプロイ** | サイトを公開すること。`npm run deploy` は検品・ビルドだけ。通ったら `git status` で確認し、自分で commit / push して GitHub Pages に出す。 |
+| **デプロイ** | サイトを GitHub Pages に出すこと。専用コマンドは無い。出す前に `npm run build`。通ったら `git status` で確認し、自分で commit / push。 |
 | **バリデーション** | ビルド時の検品。未登録タグ、列不足、商品名重複などがあると公開を止める。 |
 | **キャッシュ** | ブラウザが古いファイルを覚えてしまうこと。直したのに画面が変わらないときは **Ctrl + F5**。 |
 | **キャッシュバスティング** | `style.css?v=日付` のように URL にバージョンを付けて、古いキャッシュを使わせない仕組み。`siteVersion` がそれ。 |
@@ -31,12 +31,11 @@
 
 ```bash
 npm start              # CSVの変更を監視して自動ビルド
-npm run build          # 1回だけビルド
+npm run build          # 1回だけビルド（公開前の検品もこれ）
 npm test               # テスト実行
 npm run collect:all    # JANコードから商品データを自動収集してビルドまで
 npm run desc:helper    # 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run check:links    # 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
-npm run deploy         # 検品・ビルド（公開は続けて自分で commit / push）
 ```
 
 ## ファイルと役割
@@ -221,7 +220,7 @@ CSV の列の意味:
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
 | 画像や公式ページのリンク切れを探したい | `npm run check:links` → 切れた行だけ CSV を直す → ビルド |
-| 公開したい | `npm run deploy`（ビルド）→ `git status` → commit / push。手順は `docs/MANUAL.md` §9 |
+| 公開したい | `npm run build` → `git status` → commit / push。手順は `docs/MANUAL.md` §9 |
 | SNS シェア用の画像を変えたい | リポジトリ直下の `og-image.jpg` を差し替えて commit / push |
 | 問い合わせを有効にしたい / 届き先を変えたい | `.env` の `FORMSPREE_FORM_ID` と Formspree 管理画面。手順は `docs/MANUAL.md` §7 |
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |

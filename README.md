@@ -43,34 +43,32 @@ npm install
 # 2. Pythonライブラリのインストール
 sudo apt install python3-requests
 
-# 3. データのビルド（CSV -> JSON 変換 + バリデーション）
+# 3. ビルド（CSV → JSON + 検品）
 npm run build
-# または
-python3 csv_to_json.py
 
-# 4. ファイル変更を監視しながらビルド（開発中）
+# 4. 開発中（CSV の変更を監視して自動ビルド）
 npm start
 
-# 4.5. ユニットテストの実行（normalize()、店員コメント、よく検索されているワードなど）
+# 5. ユニットテスト
 npm test
 
-# 5. データの公開（デプロイ）
-npm run deploy  # 検品・ビルドのみ。通ったら git status で確認し、自分で commit / push
+# 6. 商品を増やす（JAN収集 + ビルド）
+npm run collect:all
 
-# 6. VS Code 本体の更新 (Linux環境)
-sudo apt update && sudo apt install code
-
-# 7. JANコードリストから商品データを全自動生成（楽天/Yahoo!/Gemini API使用）
-npm run collect:all   # データ収集 + JSONビルドまで一括実行
-# または
-npm run collect jan_list.csv   # データ収集のみ（別途 npm run build が必要）
-
-# 8. 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
+# 7. 既存商品の説明文だけを作り直す
 npm run desc:helper
 
-# 9. 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
+# 8. 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
 npm run check:links
+
+# 9. 公開（ビルドが通ったら git）
+git status
+git add 載せるファイル
+git commit -m "メッセージ"
+git push
 ```
+
+ビルドと公開で別名のコマンドは使いません。`python3 csv_to_json.py` は `npm run build` と同じです。CSV だけ更新したいときはマニュアルの `npm run collect`（ビルドなし）を見てください。
 
 > **運用マップと手順の詳細**（商品の増やし方、JAN収集、マスターCSV、公開チェック）は `docs/MANUAL.md` を参照してください。
 
@@ -102,7 +100,7 @@ npm run check:links
     - `index.html`: `<link rel="canonical">` のURLを新しいドメインへ書き換え。
     - `main.js`: `authorizedDomains` 配列に新しいドメインを追加。
 5. **反映の確認**:
-    - `npm run deploy` でビルドしたあと、変更を commit / push。
+    - `npm run build` したあと、変更を commit / push。
     - 数分〜数時間後に新しいドメインでサイトにアクセスできるか確認。
 
 > **注意**: ドメイン変更直後は、お気に入りデータ（localStorage）がリセットされます。
@@ -134,6 +132,7 @@ AI（Gemini等）を使用してデータ作成やコード修正を行う際は
     - ターミナル: `ls -a`
     - フォルダ画面: `Ctrl + H`
 - **強制リロード**: ブラウザで反映されない時は `Ctrl + F5`。
+- **VS Code の更新 (Linux)**: `sudo apt update && sudo apt install code`
 ## ⚖️ 免責事項 (Disclaimer)
 - **専門的助言の不提供**: 当サイト（pet925）に掲載されている情報は、科学的根拠に基づいた一般的なガイドラインであり、獣医学的な診断や個別のアドバイスを目的としたものではありません。フードの切り替えや健康管理については、必ずかかりつけの獣医師にご相談ください。
 - **情報の正確性**: データの正確性には万全を期していますが、メーカーによる原材料・成分・価格の変更がリアルタイムに反映されない場合があります。購入の際は、必ず各ショップの販売ページをご確認ください。

@@ -34,8 +34,8 @@ flowchart TD
   files --> preview
 
   preview --> pub
-  pub --> deploy["npm run deploy（ビルド）"]
-  deploy --> git["git status → commit → push"]
+  pub --> buildPub["npm run build"]
+  buildPub --> git["git status → commit → push"]
   git --> live[GitHub Pages に公開]
 ```
 
@@ -68,7 +68,7 @@ flowchart TD
 | シェア用の顔写真 | `og-image.jpg` | commit / push（ビルド不要） |
 | 画面の動き | `main.js` | 保存して Ctrl+F5 |
 | 検索の当たり方 | `search_worker.js` / `common.js` | 保存して Ctrl+F5 |
-| 公開 | 変更が保存されていること | `npm run deploy`（ビルド）→ `git status` で確認 → commit / push |
+| 公開 | 変更が保存されていること | `npm run build` → `git status` で確認 → commit / push |
 
 ---
 
@@ -380,10 +380,10 @@ npm test           # normalize と店員コメントのユニットテスト
 ## 9. 公開
 
 ```bash
-npm run deploy
+npm run build
 ```
 
-中身は検品・ビルドだけです（`npm run build` と同じ）。データ不備があるとここで止まります。通ったら **自分で** 載せるファイルを確認してから送ってください。
+データ不備があるとここで止まります。通ったら **自分で** 載せるファイルを確認してから送ってください。
 
 ```bash
 git status          # 載せるファイルを確認する（関係ない変更が混ざっていないか）
@@ -392,7 +392,7 @@ git commit -m "メッセージ"
 git push
 ```
 
-`git add .` で全部まとめて載せるのは避けてください。誤ったファイルも乗ります。`git push --force` も使わないでください。
+`git add .` で全部まとめて載せるのは避けてください。誤ったファイルも乗ります。`git push --force` も使わないでください。`npm run deploy` という別名は使いません（中身が `build` と同じだったため）。
 
 独自ドメインの手順は `README.md` の「カスタムドメインの導入手順」です。ドメインを変えたら `index.html` の canonical と `main.js` の `authorizedDomains` を更新します。お気に入り（localStorage）はドメインが変わると消えます。
 
