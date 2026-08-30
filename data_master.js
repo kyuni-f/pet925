@@ -1,4 +1,4 @@
-const siteVersion = '20260830183048';
+const siteVersion = '20260830231941';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -266,5 +266,9 @@ const brands = [
     {
         "key": "Select Balance",
         "name": "セレクトバランス"
+    },
+    {
+        "key": "Frecious",
+        "name": "ユニ・チャーム"
     }
 ];
