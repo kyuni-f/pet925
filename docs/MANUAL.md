@@ -65,6 +65,7 @@ flowchart TD
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
 | 問い合わせフォーム自体を有効化する | `.env` の `FORMSPREE_FORM_ID` | `npm run build` |
 | 見た目 | `style.css` / `index.html` | 保存して Ctrl+F5 |
+| シェア用の顔写真 | `og-image.jpg` | commit / push（ビルド不要） |
 | 画面の動き | `main.js` | 保存して Ctrl+F5 |
 | 検索の当たり方 | `search_worker.js` / `common.js` | 保存して Ctrl+F5 |
 | 公開 | 変更が保存されていること | `npm run deploy`（ビルド）→ `git status` で確認 → commit / push |

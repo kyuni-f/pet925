@@ -3,7 +3,7 @@ body { font-family: "Helvetica Neue", "Hiragino Sans", sans-serif; background: #
 
 /* ヘッダー：スタイリッシュな小文字デザイン */
 header { 
-    padding: 60px 20px; 
+    padding: 40px 20px; 
     text-align: center; 
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     background: #fff;
@@ -50,6 +50,63 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 .btn-back-to-search { background: none; border: none; color: #999; font-size: 0.7rem; letter-spacing: 2px; cursor: pointer; padding: 20px 0; text-decoration: underline; text-underline-offset: 4px; }
 .btn-back-to-search:hover { color: var(--dark); }
+
+/* 検索画面の使い方案内。サイト説明の直後・検索窓の前。PC/スマホ両方で表示。
+   結果画面では #view-search ごと消える。見た目は検索欄下の予告バブルと同じ系統。 */
+.search-guide-teaser {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 600px;
+    width: 100%;
+    margin: 8px auto 4px;
+    padding: 0 2px;
+    box-sizing: border-box;
+}
+.search-guide-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ece3d1;
+    box-shadow: 0 2px 4px rgba(90, 74, 44, 0.1);
+}
+.search-guide-bubble {
+    position: relative;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #8a7a5c;
+    margin: 0;
+    background: #faf7f0;
+    border-radius: 14px;
+    border-top-left-radius: 4px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 6px rgba(90, 74, 44, 0.08);
+}
+.search-guide-bubble::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    left: -6px;
+    width: 10px;
+    height: 10px;
+    background: #faf7f0;
+    border-top-right-radius: 8px;
+}
+.search-guide-bubble::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: -8px;
+    width: 8px;
+    height: 10px;
+    background: #fff;
+    border-top-right-radius: 8px;
+}
 
 /* 検索バー：ミニマルデザイン */
 .search-container { margin: 20px auto; max-width: 600px; width: 100%; }
