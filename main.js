@@ -36,7 +36,6 @@ let analyticsDebounceTimer = null; // アナリティクス送信用のデバウ
 let lastRenderStateKey = ""; // 重複描画防止用のキー
 let currentTotalMatchCount = 0; // 最新の検索結果件数を保持
 let tagLookupMap = {}; 
-let brandLookupMap = {}; // ブランドのkeyから表示名へのマップ
 let favorites = JSON.parse(localStorage.getItem('pet925_favs') || '[]');
 let visibleChipsInResults = new Set(); // 結果画面で表示し続けるチップのキー管理
 let showFavoritesOnly = false;
@@ -611,7 +610,7 @@ function removeSingleFilter(cat, val) { // 特定のフィルターを解除
  */
 function getSearchUrl(shop, brand, name, fallbackUrl, jan) { // モールごとの検索・アフィリエイトURLを生成
     // 商品名（ブランド名＋商品名）で検索することで、JANコード未対応の出品者もヒットさせる
-    const searchVal = `${brand} ${name}`;
+    const searchVal = [brand, name].filter(v => v && v !== '#').join(' ');
     const q = encodeURIComponent(searchVal);
 
     // CSVにURLがあればそれを使用、なければ検索URLを生成
@@ -747,8 +746,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
 
         const imageSrc = getProductImageSrc(item, defaultImg);
 
-        // brandLookupMap を使用して正式名称を取得
-        const displayBrandName = brandLookupMap[item.brand_id] || item.brand;
+        const displayBrandName = (item.brand && item.brand !== '#') ? item.brand : '';
         let productName = item.name;
         // 商品名の先頭にブランド名が入っている場合、重複を避けるために削る
         if (displayBrandName && productName.startsWith(displayBrandName)) {
@@ -781,8 +779,9 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const safeImg = String(item.img || "#").replace(/`/g, '\\`').replace(/"/g, '&quot;');
         const altName = String(item.name || "").replace(/"/g, '&quot;');
         const promoHtml = (item.promo && item.promo !== '#') ? `<span class="promo-text">${item.promo}</span>` : '';
+        const brandBadgeHtml = displayBrandName ? `<span class="brand-badge">${displayBrandName}</span>` : '';
 
-        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content"><span class="brand-badge">${displayBrandName}</span><div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}${promoHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content">${brandBadgeHtml}<div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}${promoHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +
@@ -839,13 +838,6 @@ function initializeApp() { // アプリ全体の初期化処理
     tagLookupMap = getTagLookup();
     console.log("%cSTOP!", "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black;");
     console.log("このサイトのコンテンツおよびデータの無断転載・複製を固く禁じます。");
-
-    // brandLookupMapの初期化
-    if (typeof brands !== 'undefined') {
-        brands.forEach(b => {
-            brandLookupMap[normalize(b.key)] = b.name; // keyも正規化して小文字で登録
-        });
-    }
 
     // --- スクロール監視：トップに戻るボタンの表示制御 ---
     const backToTopBtn = document.getElementById('floating-back-to-top');

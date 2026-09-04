@@ -44,7 +44,6 @@ from pet_utils import (
 # ─────────────────────────────────────────────
 DATA_DIR = 'data'
 PRODUCT_CSV = os.path.join(DATA_DIR, 'products.csv')
-BRANDS_CSV = os.path.join(DATA_DIR, 'brands.csv')
 TAG_CSV = os.path.join(DATA_DIR, 'tags.csv')
 RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
 
@@ -65,13 +64,6 @@ YAHOO_CLIENT_ID = get_env_value("YAHOO_CLIENT_ID")
 # ─────────────────────────────────────────────
 # マスターCSV読み込み（normalize_text / normalize_jan は pet_utils.py で共有）
 # ─────────────────────────────────────────────
-def load_brands_map():
-    brands_map = {}
-    for row in load_dict_rows(BRANDS_CSV):
-        if 'key' in row and 'name' in row:
-            brands_map[row['key'].lower()] = row['name']
-    return brands_map
-
 def load_rules_map():
     """rules.csv から {タグID: [キーワードリスト]} を読み込む"""
     rules = {}
@@ -374,12 +366,10 @@ def main(jan_list_path):
         print(f"⚠️ Gemini API: 未設定（説明文は自動生成されません。商品名のみで行きます）")
 
     # 各種データ読み込み
-    brands_map = load_brands_map()
     rules_map = load_rules_map()
     allowed_tags = load_allowed_tags()
 
-    print(f"\n📋 ブランド: {len(brands_map)}件")
-    print(f"📋 タグルール: {len(rules_map)}件")
+    print(f"\n📋 タグルール: {len(rules_map)}件")
     print(f"📋 許可タグ: {len(allowed_tags)}件")
 
     # ── 既存 products.csv 読み込み ──
@@ -412,8 +402,8 @@ def main(jan_list_path):
         for i, row in enumerate(csv.reader(f)):
             if not row: continue
             jan = normalize_jan(row[0])
-            if jan and jan != 'Undefined' and jan.isdigit() and len(jan) in [13, 14]:
-                jan13 = jan if len(jan) == 13 else jan[:13]
+            if jan and jan != 'Undefined' and jan.isdigit() and len(jan) == 13:
+                jan13 = jan
                 if jan13 in seen_in_list:
                     print(f"⏭️ 入力ファイル内で重複のためスキップ: JAN {jan13}")
                     continue
@@ -484,9 +474,8 @@ def main(jan_list_path):
             tags = auto_assign_tags(product_name, maker_name, rules_map, allowed_tags)
             print(f"  🏷️ タグ: {' '.join(tags)}")
 
-            # Step 4: ブランド名の正規化
-            brand_key = normalize_text(maker_name or "")
-            brand_display = brands_map.get(brand_key, maker_name or "")
+            # Step 4: ブランド名（APIのメーカー名をそのまま。空なら空欄）
+            brand_display = maker_name or ""
 
             # Step 5: 価格
             price_str = str(catalog_price) if catalog_price and catalog_price > 0 else "0"
@@ -538,6 +527,7 @@ def main(jan_list_path):
             new_row = {f: '#' for f in fieldnames}
             new_row['jan'] = jan
             new_row['name'] = product_name
+            new_row['brand'] = ''
             new_row['tags'] = ' '.join(tags)
             new_row['desc'] = description
             new_row['img'] = image_url or '#'
@@ -568,6 +558,7 @@ def main(jan_list_path):
             new_row = {f: '#' for f in fieldnames}
             new_row['jan'] = jan
             new_row['name'] = product_name
+            new_row['brand'] = ''
             new_row['tags'] = ' '.join(tags)
             new_row['img'] = image_url or '#'
             new_row['yah'] = '#'  # 表示時に商品名で検索URLを生成させる

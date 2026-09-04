@@ -1,4 +1,4 @@
-const siteVersion = '20260831081616';
+const siteVersion = '20260904030056';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -232,43 +232,5 @@ const comments = [
         "category": "keyword",
         "key": "食べむら",
         "comment": "食べむらがある子には、パウチやおやつをフードに混ぜたり、カリカリをお湯でふやかして匂いを出したりすると食いつきが戻ることがあります。持病がある場合は、塩分の少ないものを選んで獣医師に確認してからあげてください"
-    }
-];
-const brands = [
-    {
-        "key": "nutro",
-        "name": "ニュートロ"
-    },
-    {
-        "key": "supremo",
-        "name": "ニュートロ"
-    },
-    {
-        "key": "wildrecipe",
-        "name": "ニュートロ"
-    },
-    {
-        "key": "royal canin",
-        "name": "ロイヤルカナン"
-    },
-    {
-        "key": "sheba",
-        "name": "シーバ"
-    },
-    {
-        "key": "Medycoat",
-        "name": "ペットライン"
-    },
-    {
-        "key": "Medyfas",
-        "name": "ペットライン"
-    },
-    {
-        "key": "Select Balance",
-        "name": "セレクトバランス"
-    },
-    {
-        "key": "Frecious",
-        "name": "ユニ・チャーム"
     }
 ];

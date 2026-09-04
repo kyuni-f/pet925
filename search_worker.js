@@ -62,17 +62,10 @@ async function saveToDB(products) {
 const isMulti = (cat) => categoryMaster[cat] ? categoryMaster[cat].multi : false;
 
 // 初期化：検索用文字列の事前生成
-// マスタデータの逆引きマップ（タグ名、ブランド名）
+// マスタデータの逆引きマップ（タグ名）
 const tagLookupMap = {};
 if (typeof tagMaster !== 'undefined') {
     Object.values(tagMaster).forEach(group => Object.assign(tagLookupMap, group));
-}
-
-const brandLookupMap = {};
-if (typeof brands !== 'undefined') {
-    brands.forEach(b => {
-        brandLookupMap[normalize(b.key)] = b.name; // keyも正規化して小文字で登録
-    });
 }
 
 /**
@@ -83,8 +76,8 @@ function processChunk(data) {
     data.forEach(item => {
         // スコアリング用に各フィールドを個別に正規化して保持
         const nameNorm = normalize(item.name);
-        const brandDisplayName = brandLookupMap[item.brand_id] || "";
-        const brandNorm = normalize(item.brand) + " " + normalize(item.brand_id || "") + " " + normalize(brandDisplayName);
+        const rawBrand = (item.brand && item.brand !== '#') ? item.brand : '';
+        const brandNorm = normalize(rawBrand) + " " + normalize(item.brand_id && item.brand_id !== '#' ? item.brand_id : '');
         const descNorm = normalize(item.desc);
 
         let tagsNorm = "";

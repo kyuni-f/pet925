@@ -59,7 +59,6 @@ flowchart TD
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
 | 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
-| 英語ブランド名でも日本語検索したい | `data/brands.csv` | `npm run build` |
 | 店員コメントを足す | `data/comments.csv` | `npm run build` |
 | 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
@@ -146,7 +145,7 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 3. それでも失敗したら **Yahoo!ショッピング API**（画像にショップロゴが入ることがある）。
 4. `.env` に `GEMINI_API_KEY` があれば、説明文を約60字で生成する。無い場合でも、楽天から取れた情報だけで行は作れる。
 5. `data/rules.csv` でタグを自動判定する。
-6. `data/brands.csv` にメーカー名と一致する `key` があれば、収集時点の `brand` 列をその `name`（日本語など）にする。
+6. メーカー名が取れたら `brand` 列にそのまま入れる。取れなければ空欄。
 7. `data/products.csv` に **新規追加**、または **既存 JAN の一部列を更新**する。最後に JAN 順へ並べ替えて保存する。
 
 ### 新規と更新の違い（重要）
@@ -182,7 +181,7 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 | 列 | 意味 |
 |---|---|
 | `name` | 商品名。画面表示と検索の最重要 |
-| `brand` | **画面に出るブランド名そのもの**（ビルドでは変換しない） |
+| `brand` | **画面に出るブランド名そのもの**（ビルドでは変換しない）。シリーズは商品名側に残し、バッジはメーカー名にする。空欄または `#` ならバッジを出さない |
 | `tags` | `tags.csv` の `key`。半角スペース区切り（例: `dog adult tear`） |
 | `desc` | 説明文。検索対象 |
 | `size` | 内容量。画面には出さないが検索には使う |
@@ -220,21 +219,6 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 | `keywords` | `グレインフリー 穀物不使用` |
 
 区切りはスペース・カンマ・読点どれでも構いません。判定は収集時とビルド時の両方で行われます。特定商品だけ付けたくないタグは `exclude_tags` へ。
-
-### brands.csv（検索用の別名）
-
-| 列 | 意味 | 例 |
-|---|---|---|
-| `key` | 英語名など（小文字で照合） | `nutro` |
-| `name` | 日本語での呼び方 | `ニュートロ` |
-
-いまの動き:
-
-- **画面の表示**は `products.csv` の `brand` 列のままです。ビルドは日本語に自動変換しません。
-- **検索**では `key` と `name` の両方にヒットします（`nutro` でも「ニュートロ」でも見つかる）。
-- **収集時**だけ、メーカー名が `key` と一致すれば `brand` 列を `name` にします。
-
-未登録ブランドでもビルドは止まりません。日本語検索を安定させたいときだけ追加してください。
 
 ### categories.csv（フィルターの枠）
 
@@ -449,8 +433,6 @@ git push
 | お気に入りが消えた | ドメインやブラウザを変えると localStorage は別物 |
 | GA4 のリアルタイムにしか出ない | 標準レポートは 24〜48 時間遅れる |
 
-ブランド未登録でビルドが止まる、ということは **今はありません。** 日本語検索を足したいときだけ `brands.csv` を更新します。
-
 CSV 保存時に「テキスト形式で保存しますか？」と出たら **はい** です。
 
 ---
@@ -487,11 +469,20 @@ Python ライブラリの入れ方の選択肢:
 
 ## 付録A. LibreOffice（ODS）からの CSV 書き出し
 
-`data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `brands`, `categories`, `rules` です。
+`data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `categories`, `rules` です。
 
 `comments.csv` と `popular_searches.csv` はビルドが自動で読む追加マスターです。ODS に同名シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
 
-マクロの登録:
+### マクロの用途
+
+| マクロ | 用途 |
+|--------|------|
+| `ExportAllSheetsToCSV` | **CSV 一括出力（常用）**。必須シートの有無と必須列を確認したうえで、可視シートすべてを ODS と同じフォルダへ `.csv` で書き出す。ツールバーに載せるのはこれ |
+| `ExportCurrentSheetOnly` | **いま開いているシートだけ** を速く書き出す。全シート一括が重いときの用 |
+| `CheckMandatoryFields` | 必須列の空欄チェック。上2つから呼ばれる補助関数で、単独ボタンにはしない |
+| `SyncBrandToMaster` | `products` の tags 列を編集したとき、未登録タグを `tags` シートへ追加するか聞く（名前は Brand だが中身はタグ同期） |
+
+### マクロの登録
 
 1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic]
 2. 下の `ExportAllSheetsToCSV` / `ExportCurrentSheetOnly` / `CheckMandatoryFields` / `SyncBrandToMaster` を登録する
@@ -533,7 +524,7 @@ Sub ExportAllSheetsToCSV
     oSheets = oDoc.Sheets
     
     Dim requiredSheets As Variant, sNameCheck As String
-    requiredSheets = Array("products", "tags", "brands", "categories", "rules")
+    requiredSheets = Array("products", "tags", "categories", "rules")
     For Each sNameCheck In requiredSheets
         If Not oSheets.hasByName(sNameCheck) Then
             MsgBox "エラー: シート '" & sNameCheck & "' が見つかりません。", 16, "実行失敗"
@@ -601,11 +592,9 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     sNameLower = LCase(sName)
 
     If sNameLower = "products" Then
-        mandatoryCols = Array(0, 1, 2)
+        mandatoryCols = Array(0, 2)
     ElseIf sNameLower = "tags" Then
         mandatoryCols = Array(0, 1, 2)
-    ElseIf sNameLower = "brands" Then
-        mandatoryCols = Array(0, 1)
     ElseIf sNameLower = "categories" Then
         mandatoryCols = Array(0, 1, 2, 3)
     Else
@@ -636,9 +625,8 @@ Sub SyncBrandToMaster(oEvent As Object)
     Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
     Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
     Dim iRow As Long, i As Long, bExists As Boolean
-    Dim sValue As String, oCell As Object, oCellName As Object
+    Dim sValue As String, oCell As Object
 
-    Static sProcessedBrands As String
     Static sProcessedTags As String
 
     oDoc = ThisComponent
@@ -659,46 +647,10 @@ Sub SyncBrandToMaster(oEvent As Object)
 
     If oSheet.Name <> "products" Then Exit Sub
 
-    sProcessedBrands = "|" 
     sProcessedTags = "|"
 
     For iRow = startRow To endRow
         If iRow = 0 Then GoTo NextRow
-
-        If startCol <= 1 And endCol >= 1 Then
-            sValue = Trim(oSheet.getCellByPosition(1, iRow).String)
-            If sValue <> "" And sValue <> "brand" And sValue <> "ブランド" And sValue <> "#" And InStr(sProcessedBrands, "|" & sValue & "|") = 0 Then
-                oTargetSheet = oSheets.getByName("brands")
-                bExists = False
-                i = 1
-                
-                Do While i < 5000
-                    oCell = oTargetSheet.getCellByPosition(0, i)
-                    oCellName = oTargetSheet.getCellByPosition(1, i)
-                    
-                    If LCase(Trim(oCell.String)) = LCase(sValue) Or LCase(Trim(oCellName.String)) = LCase(sValue) Then
-                        bExists = True
-                        Exit Do
-                    End If
-                    
-                    If oCell.String = "" And oCellName.String = "" Then Exit Do
-                    i = i + 1
-                Loop
-
-                If Not bExists Then
-                    If MsgBox("新ブランド '" & sValue & "' を brands シートに登録しますか？", 4 + 32, "クイック追加") = 6 Then
-                        Dim sKey As String, sBrandName As String
-                        sKey = LCase(InputBox("システム用ID (半角英数):", "1/2 ステップ", sValue))
-                        If sKey <> "" Then
-                            sBrandName = InputBox("サイトでの表示名:", "2/2 ステップ", sValue)
-                            oTargetSheet.getCellByPosition(0, i).String = sKey
-                            oTargetSheet.getCellByPosition(1, i).String = sBrandName
-                        End If
-                    End If
-                    sProcessedBrands = sProcessedBrands & sValue & "|"
-                End If
-            End If
-        End If
 
         If startCol <= 2 And endCol >= 2 Then
             sValue = Trim(oSheet.getCellByPosition(2, iRow).String)

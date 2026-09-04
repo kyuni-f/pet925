@@ -14,7 +14,7 @@
 
 ## 📂 構成ファイル (Context)
 ### 📂 Directory Structure
-- **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, brands, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）と `popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）もある
+- **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）と `popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）もある
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
 - **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
 - **`pet_utils.py`** : `csv_to_json.py` / `auto_collect_all.py` / `check_links.py` から読む共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
@@ -29,7 +29,7 @@
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
 - **`check_links.py`** : `products.csv` の画像URL（`img`）と公式ページURL（`a8`）の生死チェック（`npm run check:links`）。ビルドには使わない
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
-- **`data_master.js`** : フィルターやブランド設定を管理するマスタースクリプト
+- **`data_master.js`** : フィルターや店員コメントなどのマスタースクリプト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」
 - **`package-lock.json`** : インストールされたライブラリのバージョンを完全に固定する「検品名簿」
 - **`docs/`** : `GLOSSARY.md` (用語集), `MANUAL.md` (運用手順書), `PROJECT_SUMMARY.md` (開発記録), `AI_INSTRUCTIONS.md` (AI用指示書)

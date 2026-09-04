@@ -34,11 +34,11 @@ def normalize_text(s):
 def normalize_jan(jan_str):
     """
     JANコードを半角数字のみに正規化する。
-    14桁（先頭に0が付くEAN-14形式など）の場合は、先頭13桁のJANコードに切り詰める。
+    13桁未満は先頭ゼロ埋めで13桁にする。
     """
     jan = unicodedata.normalize('NFKC', str(jan_str)).strip().replace(" ", "").replace("-", "")
-    if jan.isdigit() and len(jan) == 14:
-        return jan[:13]
+    if jan.isdigit() and 1 <= len(jan) < 13:
+        return jan.zfill(13)
     return jan
 
 
