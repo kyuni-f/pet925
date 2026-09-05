@@ -1,4 +1,10 @@
-const { normalize } = require('../common.js');
+const {
+    normalize,
+    isKindCategory,
+    getDefaultKindCategory,
+    itemMatchesKind,
+    sortFilterCategories
+} = require('../common.js');
 
 describe('normalize()', () => {
     test('全角スペースを半角スペースに変換する', () => {
@@ -32,5 +38,43 @@ describe('normalize()', () => {
 
     test('数値など文字列以外が渡されても文字列化して処理する', () => {
         expect(normalize(123)).toBe('123');
+    });
+});
+
+describe('種類枠 (kind)', () => {
+    const tagMaster = {
+        animal: { dog: '犬', cat: '猫' },
+        age: { adult: '成犬' },
+        cond: { gf: '穀物不使用', tear: '涙やけ' },
+        care: { dental: 'デンタル' },
+        out: { leash: 'リード' }
+    };
+
+    test('animal / age 以外が種類枠', () => {
+        expect(isKindCategory('animal')).toBe(false);
+        expect(isKindCategory('age')).toBe(false);
+        expect(isKindCategory('cond')).toBe(true);
+        expect(isKindCategory('care')).toBe(true);
+    });
+
+    test('デフォルト種類枠は cond', () => {
+        expect(getDefaultKindCategory(tagMaster)).toBe('cond');
+    });
+
+    test('種類タグが無い商品はお悩み（フード）に出す', () => {
+        expect(itemMatchesKind(['dog', 'adult'], 'cond', tagMaster)).toBe(true);
+        expect(itemMatchesKind(['dog', 'adult'], 'care', tagMaster)).toBe(false);
+    });
+
+    test('ケアタグがある商品はお悩みに出さない', () => {
+        expect(itemMatchesKind(['dog', 'dental'], 'cond', tagMaster)).toBe(false);
+        expect(itemMatchesKind(['dog', 'dental'], 'care', tagMaster)).toBe(true);
+    });
+
+    test('枠の並びは categories の行順、未登録は末尾', () => {
+        const categoryMaster = { animal: {}, age: {}, cond: {}, care: {} };
+        expect(sortFilterCategories(tagMaster, categoryMaster)).toEqual([
+            'animal', 'age', 'cond', 'care', 'out'
+        ]);
     });
 });
