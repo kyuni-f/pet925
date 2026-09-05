@@ -159,7 +159,7 @@ initWorker();
 /**
  * メインスレッドからの検索リクエスト待機。
  * 受け取るメッセージ（main.jsのrender()が送信）:
- *   { searchWords: string[], activeFilters: Object, visibleCount: number, showFavoritesOnly: boolean, favorites: string[] }
+ *   { searchWords: string[], activeFilters: Object, activeKind: string, visibleCount: number, showFavoritesOnly: boolean, favorites: string[] }
  * 返すメッセージ:
  *   { matchedItems: Object[], totalMatchCount: number, visibleCount: number }
  */
@@ -169,8 +169,9 @@ self.onmessage = function(e) {
         return;
     }
 
-    const { searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites } = e.data;
+    const { searchWords, activeFilters, activeKind, visibleCount, showFavoritesOnly, favorites } = e.data;
     const catsToCheck = Object.keys(tagMaster);
+    const resolvedKind = activeKind || getDefaultKindCategory(tagMaster);
     const favSet = new Set(favorites || []); // ループの外で一度だけ作成
     
     // お気に入りが空で、かつお気に入りフィルターがONの場合は即座に空の結果を返す
@@ -196,6 +197,7 @@ self.onmessage = function(e) {
         // フィルタリング
         const matchFilters = catsToCheck.every(cat => {
             if (!tagMaster[cat]) return true;
+            if (isKindCategory(cat) && cat !== resolvedKind) return true;
             const filterVal = activeFilters[cat];
             const itemTags = item.tags;
             if (!isMulti(cat)) {
@@ -205,6 +207,7 @@ self.onmessage = function(e) {
         });
 
         if (!matchFilters) continue;
+        if (!itemMatchesKind(item.tags, resolvedKind, tagMaster)) continue;
 
         // キーワード検索
         // 全文検索の高速化：indexOfはincludesよりわずかに速い場合があります

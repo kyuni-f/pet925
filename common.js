@@ -18,7 +18,87 @@ const normalize = (str) => {
         .trim();
 };
 
+/** 種類・年齢。開閉しても絞り込みの種類は変わらない */
+const SHARED_FILTER_CATEGORIES = ['animal', 'age'];
+
+/**
+ * お悩み / ケア / お出かけのような「種類枠」かどうか。
+ * animal / age 以外は種類枠（同時に1つだけ開く）。
+ * @param {string} cat カテゴリキー
+ * @returns {boolean}
+ */
+const isKindCategory = (cat) => !!cat && SHARED_FILTER_CATEGORIES.indexOf(cat) === -1;
+
+/**
+ * tagMaster にある種類枠のキー一覧。
+ * @param {Record<string, Record<string, string>>} [tagMaster]
+ * @returns {string[]}
+ */
+const getKindCategories = (tagMaster) => Object.keys(tagMaster || {}).filter(isKindCategory);
+
+/**
+ * デフォルトの種類枠。お悩み(cond)があればそれ、なければ種類枠の先頭。
+ * @param {Record<string, Record<string, string>>} [tagMaster]
+ * @returns {string}
+ */
+const getDefaultKindCategory = (tagMaster) => {
+    const kinds = getKindCategories(tagMaster);
+    if (kinds.indexOf('cond') !== -1) return 'cond';
+    return kinds[0] || '';
+};
+
+/**
+ * 種類枠の絞り込み。デフォルト枠では、どの種類枠のタグも無い商品をフードとして通す。
+ * @param {string[]} itemTags 商品のタグ
+ * @param {string} activeKind 開いている種類枠
+ * @param {Record<string, Record<string, string>>} tagMaster
+ * @returns {boolean}
+ */
+const itemMatchesKind = (itemTags, activeKind, tagMaster) => {
+    if (!activeKind) return true;
+    const tags = itemTags || [];
+    const kindCats = getKindCategories(tagMaster);
+    /**
+     * @param {string} cat
+     * @returns {boolean}
+     */
+    const hasTagInCat = (cat) => {
+        const keys = tagMaster && tagMaster[cat] ? Object.keys(tagMaster[cat]) : [];
+        return keys.some((t) => tags.indexOf(t) !== -1);
+    };
+    const hasActive = hasTagInCat(activeKind);
+    if (activeKind === getDefaultKindCategory(tagMaster)) {
+        return hasActive || !kindCats.some((c) => hasTagInCat(c));
+    }
+    return hasActive;
+};
+
+/**
+ * フィルター枠の表示順。categories.csv の行順、未登録は末尾。
+ * @param {Record<string, unknown>} [tagMaster]
+ * @param {Record<string, unknown>} [categoryMaster]
+ * @returns {string[]}
+ */
+const sortFilterCategories = (tagMaster, categoryMaster) => {
+    const cats = Object.keys(tagMaster || {});
+    const order = Object.keys(categoryMaster || {});
+    return cats.slice().sort((a, b) => {
+        const ia = order.indexOf(a);
+        const ib = order.indexOf(b);
+        return (ia === -1 ? 1000 : ia) - (ib === -1 ? 1000 : ib);
+    });
+};
+
 // Node/Jest環境でのテスト用エクスポート（ブラウザでは`module`が存在しないため、この分岐は実行されない）
+// @ts-ignore Node の module。ブラウザの型定義には無い（#78 と同じ）
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalize };
+    // @ts-ignore
+    module.exports = {
+        normalize,
+        isKindCategory,
+        getKindCategories,
+        getDefaultKindCategory,
+        itemMatchesKind,
+        sortFilterCategories
+    };
 }

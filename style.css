@@ -175,15 +175,17 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 /* カテゴリヘッダーの改善 */
 .group-header { 
     display: flex; align-items: center; gap: 10px; margin-bottom: 12px; 
-    padding: 8px 12px; cursor: pointer; user-select: none; transition: 0.2s; 
+    padding: 8px 12px; user-select: none; transition: 0.2s; 
     background: var(--gray); border-radius: 2px; 
 }
-.group-header:hover { opacity: 0.8; }
+.filter-group[data-cat] .group-header[onclick] { cursor: pointer; }
+.filter-group[data-cat] .group-header[onclick]:hover { opacity: 0.8; }
 .group-label-jp { font-size: 0.95rem; font-weight: 600; color: var(--dark); }
 .group-label-en { font-size: 0.6rem; font-weight: 700; color: #bbb; letter-spacing: 1px; text-transform: uppercase; }
 .collapse-icon { font-size: 0.6rem; color: #ccc; transition: 0.3s; margin-left: auto; }
 .filter-group.collapsed .filter-wrap-box { display: none; }
 .filter-group.collapsed .collapse-icon { transform: rotate(-90deg); }
+.filter-group.is-kind-open .group-header { box-shadow: inset 3px 0 0 var(--gold); }
 
 .multi-badge { 
     font-size: 0.75rem; color: var(--gold); border: 1px solid var(--gold); 

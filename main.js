@@ -30,7 +30,8 @@ const AFFILIATE_CONFIG = {
     },
 };
 
-let activeFilters = {}; 
+let activeFilters = {};
+let activeKind = ''; // 開いている種類枠（お悩み / ケア / お出かけ）。共通枠 animal/age は含めない
 let searchInputDebounceTimer = null; // 検索入力専用のデバウンスタイマー
 let analyticsDebounceTimer = null; // アナリティクス送信用のデバウンスタイマー
 let lastRenderStateKey = ""; // 重複描画防止用のキー
@@ -41,9 +42,6 @@ let visibleChipsInResults = new Set(); // 結果画面で表示し続けるチ�
 let showFavoritesOnly = false;
 let searchWorker = null; 
 let isWorkerReady = false; 
-
-// カテゴリの表示順序を定義（この順序で画面に並びます）
-const CATEGORY_PRIORITY = ['animal', 'age', 'cond'];
 
 let visibleCount = 20; 
 const PAGE_SIZE = 20;  
@@ -97,7 +95,9 @@ function backToSearch() { // 結果画面から検索画面へ戻る
     }
     // 検索入力欄が空でフィルターも適用されていない場合、URLからクエリパラメータをクリアする
     const searchVal = document.getElementById('search-input').value.trim();
-    const hasActiveFilters = Object.values(activeFilters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'));
+    const defaultKind = getDefaultKindCategory(typeof tagMaster !== 'undefined' ? tagMaster : {});
+    const hasActiveFilters = Object.values(activeFilters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all'))
+        || (activeKind && activeKind !== defaultKind);
     if (!searchVal && !hasActiveFilters) {
         history.replaceState(null, '', window.location.pathname);
     }
@@ -322,6 +322,9 @@ function updateURLAndGA4() { // URLパラメータの更新とページビュー
     const searchVal = document.getElementById('search-input').value.trim();
     if (searchVal) params.set('q', searchVal);
 
+    const defaultKind = getDefaultKindCategory(typeof tagMaster !== 'undefined' ? tagMaster : {});
+    if (activeKind && activeKind !== defaultKind) params.set('kind', activeKind);
+
     for (const cat in activeFilters) {
         const val = activeFilters[cat];
         if (Array.isArray(val) && val.length > 0) {
@@ -382,6 +385,13 @@ function initFilters() { // URLのパラメータからフィルター状態を�
         } else {
             activeFilters[cat] = getDefaultFilterValue(cat);
         }
+    }
+
+    const kinds = getKindCategories(tagMaster);
+    if (params.has('kind') && kinds.indexOf(params.get('kind')) !== -1) {
+        activeKind = params.get('kind');
+    } else {
+        activeKind = kinds.find((k) => params.has(k) && params.get(k)) || getDefaultKindCategory(tagMaster);
     }
 }
 
@@ -444,9 +454,22 @@ function handleSearchKeydown(event) {
     }
 }
 
-function toggleGroupCollapse(header) { // カテゴリグループの開閉切り替え
+function selectKind(cat) { // 種類枠を開いて、その種類の商品だけに切り替える
+    activeKind = cat;
+    getKindCategories(typeof tagMaster !== 'undefined' ? tagMaster : {}).forEach((k) => {
+        if (k !== cat) activeFilters[k] = getDefaultFilterValue(k);
+    });
+    renderFilters();
+    visibleCount = PAGE_SIZE;
+    render(false);
+    trackEvent('Filter', 'select_kind', cat);
+}
+
+function toggleGroupCollapse(header) { // 種類枠の見出し：押した枠を開いて種類を切り替える（共通枠は常に開いたまま）
     const group = header.parentElement;
-    group.classList.toggle('collapsed');
+    const cat = group.getAttribute('data-cat');
+    if (!isKindCategory(cat) || cat === activeKind) return;
+    selectKind(cat);
 }
 
 function clearAllFilters() {
@@ -458,6 +481,8 @@ function clearAllFilters() {
     for (const cat in activeFilters) {
         activeFilters[cat] = (typeof tagMaster !== 'undefined' && tagMaster[cat]) ? getDefaultFilterValue(cat) : "all";
     }
+    activeKind = getDefaultKindCategory(typeof tagMaster !== 'undefined' ? tagMaster : {});
+    renderFilters();
     visibleChipsInResults.clear();
     document.getElementById('search-input').value = '';
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -474,20 +499,22 @@ function renderFilters() { // フィルターボタン一覧を画面に描画
     const navContainer = document.getElementById('filter-nav-container');
     navContainer.innerHTML = '';
 
-    // 表示順序に基づいてカテゴリをソートしてレンダリング
-    const sortedCategories = Object.keys(tagMaster).sort((a, b) => {
-        return CATEGORY_PRIORITY.indexOf(a) - CATEGORY_PRIORITY.indexOf(b);
-    });
+    const sortedCategories = sortFilterCategories(tagMaster, typeof categoryMaster !== 'undefined' ? categoryMaster : {});
 
     for (const category of sortedCategories) {
         const tags = tagMaster[category];
         const groupDiv = document.createElement('div');
-        groupDiv.className = 'filter-group';
+        const isKind = isKindCategory(category);
+        const isKindOpen = isKind && category === activeKind;
+        groupDiv.className = 'filter-group' + (isKind && !isKindOpen ? ' collapsed' : '') + (isKindOpen ? ' is-kind-open' : '');
+        groupDiv.setAttribute('data-cat', category);
         const catInfo = categoryMaster[category] || { jp: category, en: category.toUpperCase(), multi: false };
         if (catInfo.multi) groupDiv.setAttribute('data-multiselect', 'true');
         const isAllActive = catInfo.multi ? (!activeFilters[category] || activeFilters[category].length === 0) : (activeFilters[category] === 'all');
         const allActiveClass = isAllActive ? 'active' : '';
-        let html = `<div class="group-header" onclick="toggleGroupCollapse(this)"><span class="group-label-jp">${catInfo.jp}</span><span class="group-label-en">${catInfo.en}</span>${catInfo.multi ? '<span class="multi-badge">複数選択可</span>' : ''}<span class="collapse-icon">▲</span></div><div class="filter-wrap-box" id="filter-${category}"><button class="filter-btn ${allActiveClass}" data-cat="${category}" data-val="all" onclick="toggleFilter(this)"><span class="btn-jp">すべて</span></button>`;
+        const headerClick = isKind ? ' onclick="toggleGroupCollapse(this)"' : '';
+        const collapseIcon = isKind ? '<span class="collapse-icon">▲</span>' : '';
+        let html = `<div class="group-header"${headerClick}><span class="group-label-jp">${catInfo.jp}</span><span class="group-label-en">${catInfo.en}</span>${catInfo.multi ? '<span class="multi-badge">複数選択可</span>' : ''}${collapseIcon}</div><div class="filter-wrap-box" id="filter-${category}"><button class="filter-btn ${allActiveClass}" data-cat="${category}" data-val="all" onclick="toggleFilter(this)"><span class="btn-jp">すべて</span></button>`;
         for (const [tagKey, tagName] of Object.entries(tags)) {
             const isActive = Array.isArray(activeFilters[category]) ? activeFilters[category].includes(tagKey) : activeFilters[category] === tagKey;
             const parts = tagName.match(/(.+)\s*\((.+)\)/);
@@ -688,11 +715,11 @@ window.render = function(isTyping = false) { // 検索Workerへの依頼とUI更
     updateFavoriteButtonUI();
 
     // 現在の検索状態をキー化して、前回と全く同じなら重い処理（Worker検索・URL更新）をスキップ（重複リクエスト防止）
-    const currentStateKey = JSON.stringify({searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites});
+    const currentStateKey = JSON.stringify({searchWords, activeFilters, activeKind, visibleCount, showFavoritesOnly, favorites});
     if (currentStateKey === lastRenderStateKey) return;
     lastRenderStateKey = currentStateKey;
 
-    searchWorker.postMessage({ searchWords, activeFilters, visibleCount, showFavoritesOnly, favorites });
+    searchWorker.postMessage({ searchWords, activeFilters, activeKind, visibleCount, showFavoritesOnly, favorites });
     updateURLAndGA4();
 }
 

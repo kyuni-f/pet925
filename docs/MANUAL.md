@@ -58,6 +58,7 @@ flowchart TD
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
+| フィルターの枠を足す | `data/categories.csv` に行を足し、`data/tags.csv` にその所属のタグを足す | `npm run build` |
 | 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
 | 店員コメントを足す | `data/comments.csv` | `npm run build` |
 | 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
@@ -224,11 +225,13 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 | 列 | 意味 |
 |---|---|
-| `key` | `animal` など |
+| `key` | `animal` など。`tags.csv` の所属と一致させる |
 | `jp` / `en` | 見出し |
 | `type` | `single` または `multi` |
 
-通常は既存の3行を触らなくて大丈夫です。
+`animal` / `age` は共通枠で、常に開いたまま。**それ以外**は種類枠で、同時に1つだけ開く。デフォルトはお悩み（`cond`）。どの種類枠のタグも無い商品はフードとしてお悩み側に出る。
+
+新しい枠（ケア、お出かけなど）はここに行を足し、`tags.csv` にその所属のタグを足す。枠を出す本体は tags。categories は見出しと単一／複数。用品用の予約行 `type` は置かない。
 
 ### comments.csv（店員コメント）
 

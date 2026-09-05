@@ -1,4 +1,4 @@
-const siteVersion = '20260904030056';
+const siteVersion = '20260905101926';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -24,11 +24,6 @@ const tagMaster = {
     }
 };
 const categoryMaster = {
-    "type": {
-        "jp": "カテゴリー",
-        "en": "Category",
-        "multi": false
-    },
     "animal": {
         "jp": "種類",
         "en": "Animal",
