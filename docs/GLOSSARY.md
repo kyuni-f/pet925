@@ -34,6 +34,7 @@ npm start              # CSVの変更を監視して自動ビルド
 npm run build          # 1回だけビルド（公開前の検品もこれ）
 npm test               # テスト実行
 npm run collect:all    # JANコードから商品データを自動収集してビルドまで
+npm run collect:img    # 既存商品の画像URLだけ取り直す（名前・説明は触らない）
 npm run desc:helper    # 既存商品の説明文だけを作り直す（ブラウザで商品名を貼る）
 npm run check:links    # 画像URLと公式ページURLのリンク切れ確認（CSVは書き換えない）
 ```

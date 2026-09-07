@@ -4,13 +4,17 @@ JANコードリストから全自動で products.csv 行を生成する統合ス
 
 使い方:
   python3 auto_collect_all.py jan_list.csv
+  python3 auto_collect_all.py jan_list.csv --img-only
 
 ワークフロー:
   1. Product Search API v2 → 商品名・画像・メーカー名・説明文・価格を一発取得
-  2. 取得できなければ Item Search API にフォールバック
-  3. 説明文が空なら Gemini API で自動生成
-  4. rules.csv ベースでタグを自動判定
-  5. products.csv に追記
+  2. 名前は取れたが画像が無い場合、画像だけ Item Search → 兄弟SKU → Yahoo の順で補完
+  3. 取得できなければ Item Search API にフォールバック（商品名ごと）
+  4. 説明文が空なら Gemini API で自動生成（--img-only ではスキップ）
+  5. rules.csv ベースでタグを自動判定
+  6. products.csv に追記
+
+  --img-only: 既存行の img 列だけ更新する。名前・説明・タグは触らない。
 
 注意:
   GEMINI_API_KEY が .env に設定されている場合、説明文の自動生成が有効になります。
@@ -26,6 +30,7 @@ import json
 import unicodedata
 import random
 import requests
+from difflib import SequenceMatcher
 from io import StringIO
 
 from pet_utils import (
@@ -52,6 +57,21 @@ FIELD_NAMES = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'ra
 # 既存JANが見つかった場合でも、この項目だけは自動取得結果で上書き更新する
 # （amz/yah/a8/label/promo/size/amz_p/yah_p などの手動編集項目は既存値を保持する）
 AUTO_UPDATE_FIELDS = ['name', 'brand', 'tags', 'desc', 'img', 'rak', 'rak_p']
+
+WEIGHT_RE = re.compile(r'\d+(?:\.\d+)?\s*(?:kg|g)', re.I)
+SHOP_JUNK_RE = re.compile(r'【[^】]*】|\[[^\]]*\]')
+SIBLING_GENERIC_TOKENS = {
+    normalize_text(t) for t in (
+        'ロイヤルカナン', 'royalcanin', 'royal', 'canin',
+        'ドッグフード', 'キャットフード', 'ドライフード', 'ドライ',
+        '正規品', 'フード', '犬用', '猫用', '成犬用', '成猫用',
+        '子犬用', '子猫用', '中高齢犬用', '中・高齢犬用', '中高齢猫用',
+        'ジッパー付き', 'プレミアムフード', 'shn', 'lhn', 'ccn',
+        '小型犬用', '超小型犬', '超小型犬~小型犬用', '超小型犬〜小型犬用',
+        '生後10ヵ月齢以上', '生後10ヵ月以上', '減量したい犬用',
+        '健康な尿を維持したい犬用',
+    )
+}
 
 # ─────────────────────────────────────────────
 # 設定読み込み（.env読み込みの実処理は pet_utils.get_env_value に共通化）
@@ -88,9 +108,186 @@ def load_allowed_tags():
             allowed.add(normalize_text(key))
     return allowed
 
+def clean_image_url(url):
+    if not url or not isinstance(url, str):
+        return None
+    url = url.strip()
+    if not url.startswith('http'):
+        return None
+    return re.sub(r"\?_ex=.*$", "", url)
+
+
+def is_catalog_image(url):
+    return bool(url) and 'r.r10s.jp' in url
+
+
+def score_image_url(url):
+    if not url or not str(url).startswith('http'):
+        return -1
+    lower = url.lower()
+    if 'r.r10s.jp' in lower:
+        return 100
+    if 'thumbnail.image.rakuten.co.jp' in lower:
+        return 40
+    if 'yimg.jp' in lower:
+        return 20
+    return 10
+
+
+def pick_better_image(old, new):
+    """既存のカタログ画像を、店画像や空値で潰さない。"""
+    old = old if old and old != '#' else None
+    new = new if new and new != '#' else None
+    if is_catalog_image(new):
+        return new
+    if is_catalog_image(old):
+        return old
+    return new or old
+
+
+def product_image_url(product):
+    return clean_image_url(
+        product.get("mediumImageUrl") or product.get("smallImageUrl") or product.get("imageUrl")
+    )
+
+
+def unwrap_product_entry(entry):
+    if not isinstance(entry, dict):
+        return None
+    product = entry.get("Product", entry)
+    return product if isinstance(product, dict) else None
+
+
+def pick_product(products, jan):
+    """JAN一致の製品を優先し、その中で画像があるものを選ぶ。一致が無いときは先頭のみ。"""
+    parsed = [p for p in (unwrap_product_entry(e) for e in products) if p]
+    if not parsed:
+        return None
+    exact = [p for p in parsed if str(p.get("productCode") or "") == jan]
+    pool = exact or parsed[:1]
+    pool.sort(key=lambda p: 1 if product_image_url(p) else 0, reverse=True)
+    return pool[0]
+
+
+def product_to_result(product):
+    if not product:
+        return None
+    return {
+        "name": product.get("productName") or product.get("productTitle") or product.get("title"),
+        "makerName": product.get("makerName"),
+        "brandName": product.get("brandName"),
+        "description": product.get("productDescription") or product.get("explanation") or product.get("productCaption"),
+        "catalogPrice": product.get("catalogPrice") or product.get("price"),
+        "image": product_image_url(product),
+    }
+
+
+def extract_item_images(item):
+    urls = []
+    direct = clean_image_url(item.get("image_url") or item.get("imageUrl"))
+    if direct:
+        urls.append(direct)
+    for key in ("medium_image_urls", "mediumImageUrls"):
+        urls_list = item.get(key)
+        if not isinstance(urls_list, list):
+            continue
+        for entry in urls_list:
+            if isinstance(entry, dict):
+                cleaned = clean_image_url(entry.get("imageUrl") or entry.get("image_url"))
+            else:
+                cleaned = clean_image_url(entry)
+            if cleaned:
+                urls.append(cleaned)
+    return urls
+
+
+def sibling_family_key(name):
+    text = SHOP_JUNK_RE.sub(' ', name or '')
+    text = WEIGHT_RE.sub(' ', text)
+    text = normalize_text(text)
+    tokens = [
+        t for t in text.split()
+        if t not in SIBLING_GENERIC_TOKENS and not t.startswith('rcdb')
+    ]
+    # スペース有無のゆれ（ライト ウェイト ケア vs ライトウェイトケア）を吸収
+    return ''.join(tokens)
+
+
+def sibling_life_stage(name):
+    text = normalize_text(name or '')
+    if re.search(r'パピー|子犬|幼犬|puppy', text):
+        return 'puppy'
+    if re.search(r'シニア|高齢|8\+|8＋|senior', text):
+        return 'senior'
+    if re.search(r'アダルト|成犬|成猫|adult', text):
+        return 'adult'
+    return ''
+
+
+def find_sibling_image(jan, name, rows, min_ratio=0.82):
+    """容量違いなど、同じラインのカタログ画像を借りる。"""
+    key = sibling_family_key(name)
+    if len(key) < 8:
+        return None
+    stage = sibling_life_stage(name)
+    best_img = None
+    best_ratio = 0
+    for row in rows:
+        other_jan = normalize_jan(row.get('jan', ''))
+        if not other_jan or other_jan == jan:
+            continue
+        img = (row.get('img') or '').strip()
+        if not is_catalog_image(img):
+            continue
+        other_key = sibling_family_key(row.get('name') or '')
+        if len(other_key) < 8:
+            continue
+        other_stage = sibling_life_stage(row.get('name') or '')
+        if stage and other_stage and stage != other_stage:
+            continue
+        ratio = SequenceMatcher(None, key, other_key).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_img = img
+    if best_ratio >= min_ratio:
+        return best_img
+    return None
+
+
 # ─────────────────────────────────────────────
 # 楽天 Product Search API v2（全情報取得）
 # ─────────────────────────────────────────────
+def _get_with_retry(url, params, headers, timeout, label, jan, retries=1):
+    """429 のときだけ待って1回やり直す。"""
+    resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+    if resp.status_code == 429 and retries > 0:
+        print(f"  ⚠️ {label} レート制限: JAN {jan} → 8秒待って再試行")
+        time.sleep(8)
+        return _get_with_retry(url, params, headers, timeout, label, jan, retries - 1)
+    return resp
+
+
+def _product_search_request(jan, use_product_code):
+    params = {
+        "applicationId": RAKUTEN_APP_ID.strip(),
+        "accessKey": RAKUTEN_ACCESS_KEY.strip(),
+        "format": "json",
+    }
+    if use_product_code:
+        params["productCode"] = jan
+    else:
+        params["keyword"] = jan
+        params["hits"] = 30
+    return _get_with_retry(
+        RAKUTEN_PRODUCT_SEARCH_V2_URL,
+        params,
+        RAKUTEN_REQUEST_HEADERS,
+        10,
+        "Product Search API",
+        jan,
+    )
+
+
 def fetch_product_search_v2(jan):
     """
     楽天Product Search API (v2) から全情報を一度に取得する。
@@ -105,41 +302,36 @@ def fetch_product_search_v2(jan):
     """
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
         return None
-    url = RAKUTEN_PRODUCT_SEARCH_V2_URL
-    params = {
-        "applicationId": RAKUTEN_APP_ID.strip(),
-        "accessKey": RAKUTEN_ACCESS_KEY.strip(),
-        "keyword": jan,
-        "format": "json"
-    }
     try:
-        resp = requests.get(url, params=params, headers=RAKUTEN_REQUEST_HEADERS, timeout=10)
+        resp = _product_search_request(jan, use_product_code=True)
+        products = []
         if resp.status_code == 200:
             data = resp.json()
-            products = data.get("Products", [])
-            if products and isinstance(products, list) and len(products) > 0:
-                first_entry = products[0]
-                product = first_entry.get("Product", first_entry) if isinstance(first_entry, dict) else first_entry
-                if not isinstance(product, dict):
-                    return None
-
-                result = {
-                    "name": product.get("productName") or product.get("productTitle") or product.get("title"),
-                    "makerName": product.get("makerName"),
-                    "brandName": product.get("brandName"),
-                    "description": product.get("productDescription") or product.get("explanation"),
-                    "catalogPrice": product.get("catalogPrice") or product.get("price"),
-                    "image": None
-                }
-                # 画像URL
-                img_url = product.get("mediumImageUrl") or product.get("smallImageUrl") or product.get("imageUrl")
-                if img_url:
-                    result["image"] = re.sub(r"\?_ex=.*$", "", img_url)
-                return result
+            products = data.get("Products") or []
         elif resp.status_code == 429:
             print(f"  ⚠️ Product Search API レート制限: JAN {jan}")
-        else:
+            return None
+        elif resp.status_code not in (400, 404):
             print(f"  ⚠️ Product Search API エラー {resp.status_code}: JAN {jan}")
+
+        if not products:
+            resp = _product_search_request(jan, use_product_code=False)
+            if resp.status_code == 200:
+                data = resp.json()
+                products = data.get("Products") or []
+            elif resp.status_code == 429:
+                print(f"  ⚠️ Product Search API レート制限: JAN {jan}")
+                return None
+            elif resp.status_code != 200:
+                print(f"  ⚠️ Product Search API エラー {resp.status_code}: JAN {jan}")
+                return None
+
+        if not isinstance(products, list) or not products:
+            return None
+        product = pick_product(products, jan)
+        result = product_to_result(product)
+        if result and result.get("name"):
+            return result
     except Exception as e:
         print(f"  ❌ Product Search API 通信エラー: {e} (JAN: {jan})")
     return None
@@ -150,6 +342,7 @@ def fetch_product_search_v2(jan):
 def fetch_item_search(jan):
     """
     楽天Item Search API。Product Search API で取得できなかった場合のフォールバック。
+    画像ありの出品を最大10件見て、r.r10s.jp を優先する。
     戻り値: {"name": ..., "image": ..., "url": ...} または None
     """
     if not RAKUTEN_APP_ID or not RAKUTEN_ACCESS_KEY or not jan or jan == '#':
@@ -159,36 +352,39 @@ def fetch_item_search(jan):
         "applicationId": RAKUTEN_APP_ID.strip(),
         "accessKey": RAKUTEN_ACCESS_KEY.strip(),
         "keyword": jan,
-        "hits": 1,
+        "hits": 10,
+        "imageFlag": 1,
         "format": "json",
         "formatVersion": 2
     }
     try:
-        resp = requests.get(url, params=params, headers=RAKUTEN_REQUEST_HEADERS, timeout=10)
+        resp = _get_with_retry(
+            url, params, RAKUTEN_REQUEST_HEADERS, 10, "Item Search API", jan
+        )
         if resp.status_code == 200:
             data = resp.json()
             items = data.get("items") or data.get("Items", [])
-            if items:
-                entry = items[0]
+            best = None
+            best_score = -1
+            for entry in items:
                 item = entry.get("Item") if isinstance(entry, dict) and "Item" in entry else entry
                 if not isinstance(item, dict):
-                    return None
-                img_url = None
-                if item.get("image_url"):
-                    img_url = item.get("image_url")
-                else:
-                    urls_list = item.get("medium_image_urls") or item.get("mediumImageUrls")
-                    if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
-                        first_item = urls_list[0]
-                        if isinstance(first_item, dict):
-                            img_url = first_item.get("imageUrl")
-                        else:
-                            img_url = first_item
-                return {
-                    "name": item.get("itemName") or item.get("name"),
-                    "image": re.sub(r"\?_ex=.*$", "", img_url) if img_url else None,
-                    "url": item.get("itemUrl")
-                }
+                    continue
+                images = extract_item_images(item)
+                if not images:
+                    continue
+                img_url = max(images, key=score_image_url)
+                score = score_image_url(img_url)
+                if score > best_score:
+                    best_score = score
+                    best = {
+                        "name": item.get("itemName") or item.get("name"),
+                        "image": img_url,
+                        "url": item.get("itemUrl")
+                    }
+                    if score >= 100:
+                        break
+            return best
         elif resp.status_code == 429:
             print(f"  ⚠️ Item Search API レート制限: JAN {jan}")
         else:
@@ -196,6 +392,56 @@ def fetch_item_search(jan):
     except Exception as e:
         print(f"  ❌ Item Search API 通信エラー: {e} (JAN: {jan})")
     return None
+
+
+def resolve_better_image(jan, name, current_image, rows, try_item=True, try_yahoo=True):
+    """
+    カタログ画像が無いときだけ、Item Search → 兄弟SKU → Yahoo の順で補完する。
+    商品名は変えない。
+    """
+    image = current_image if current_image and current_image != '#' else None
+    if is_catalog_image(image):
+        return image
+
+    if try_item:
+        time.sleep(1.5)
+        item_data = fetch_item_search(jan)
+        if item_data and item_data.get("image"):
+            candidate = item_data["image"]
+            if not image or score_image_url(candidate) > score_image_url(image):
+                image = candidate
+                print(f"    画像補完 (Item Search): {image[:50]}...")
+        if is_catalog_image(image):
+            return image
+
+    sibling = find_sibling_image(jan, name, rows)
+    if sibling:
+        print(f"    画像補完 (兄弟SKU): {sibling[:50]}...")
+        return sibling
+
+    if try_yahoo and not image:
+        yahoo_data = fetch_yahoo_shopping(jan)
+        if yahoo_data and yahoo_data.get("image"):
+            image = yahoo_data["image"]
+            print(f"    画像補完 (Yahoo): {image[:50]}...")
+    return image
+
+
+def apply_sibling_images(rows):
+    """書き出し前に、まだ欠けている img を兄弟SKUのカタログ画像で埋める。"""
+    filled = 0
+    for row in rows:
+        img = (row.get('img') or '').strip()
+        if img and img != '#':
+            continue
+        jan = normalize_jan(row.get('jan', ''))
+        name = row.get('name') or ''
+        sibling = find_sibling_image(jan, name, rows)
+        if sibling:
+            row['img'] = sibling
+            filled += 1
+            print(f"  🧩 兄弟SKU画像: JAN {jan} ← {sibling[:50]}...")
+    return filled
 
 # ─────────────────────────────────────────────
 # Yahoo!ショッピング API（フォールバック用）
@@ -220,7 +466,7 @@ def fetch_yahoo_shopping(jan):
                         img_url = img_url.replace("/i/c/", "/i/g/").replace("/i/d/", "/i/g/")
                     return {
                         "name": first.get("name"),
-                        "image": img_url,
+                        "image": clean_image_url(img_url),
                         "url": first.get("url")
                     }
     except Exception as e:
@@ -344,7 +590,61 @@ def merge_into_existing(existing_row, new_data, fieldnames):
 # メイン処理
 # ─────────────────────────────────────────────
 
-def main(jan_list_path):
+def fill_images_only(jans, existing_row_index, existing_rows):
+    """既存行の img だけ更新する。名前・説明・タグは触らない。"""
+    updated_count = 0
+    api_calls = 0
+    for idx, jan in enumerate(jans):
+        if jan not in existing_row_index:
+            print(f"⏭️ --img-only は既存行のみ対象のためスキップ: JAN {jan}")
+            continue
+
+        row = existing_row_index[jan]
+        old_img = (row.get('img') or '').strip()
+        name = row.get('name') or ''
+        if is_catalog_image(old_img):
+            print(f"⏭️ カタログ画像済みのためスキップ: JAN {jan}")
+            continue
+
+        print(f"\n{'─'*50}")
+        print(f"[{idx+1}/{len(jans)}] JAN: {jan} （画像のみ） {name[:40]}")
+
+        if not old_img or old_img == '#':
+            sibling = find_sibling_image(jan, name, existing_rows)
+            if sibling:
+                row['img'] = sibling
+                updated_count += 1
+                print(f"  🧩 兄弟SKU画像を採用（APIスキップ）")
+                continue
+
+        if api_calls > 0:
+            wait = 3.0 + random.uniform(0.5, 2.0)
+            print(f"\n⏳ {wait:.0f}秒待機（レート制限回避）...")
+            time.sleep(wait)
+        api_calls += 1
+
+        resolved = None
+        prod_data = fetch_product_search_v2(jan)
+        if prod_data and prod_data.get("image"):
+            resolved = prod_data["image"]
+            print(f"  ✅ Product Search 画像: {resolved[:50]}...")
+        elif prod_data and prod_data.get("name"):
+            print(f"  ℹ️ Product Search: 名前あり・画像なし → 画像だけ補完")
+            if not name:
+                name = prod_data["name"]
+
+        resolved = resolve_better_image(jan, name, resolved, existing_rows)
+        final = pick_better_image(old_img, resolved)
+        if final and final != '#' and final != old_img:
+            row['img'] = final
+            updated_count += 1
+            print(f"  ✅ img 更新")
+        else:
+            print(f"  ⏭️ 画像は更新しませんでした")
+    return updated_count
+
+
+def main(jan_list_path, img_only=False):
     if not os.path.exists(jan_list_path):
         print(f"エラー: JANコードリスト '{jan_list_path}' が見つかりません。")
         sys.exit(1)
@@ -426,6 +726,29 @@ def main(jan_list_path):
     print(f"🆕 新規JANコード: {len(new_jans)}件 / 🔄 更新JANコード: {len(update_jans)}件 を処理します")
     print(f"{'='*60}")
 
+    def write_products_csv(collected_count=0, updated_count=0):
+        existing_rows.sort(key=lambda r: (0, normalize_jan(r.get('jan', '#'))) if r.get('jan', '#') != '#' and r['jan'].isdigit() else (1, r.get('name', '')))
+        with open(PRODUCT_CSV, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(existing_rows)
+        print(f"\n✅ products.csv を更新しました（全{len(existing_rows)}行、新規{collected_count}件・更新{updated_count}件）")
+        print(f"💡 内容を確認するには ODS で開くか、以下のコマンドを実行:")
+        print(f"   python3 csv_to_json.py")
+        print(f"💡 手動で微調整したい場合は pet925_master.ods の products シートに貼り付けてください")
+
+    if img_only:
+        print("🖼 画像のみ更新モード（名前・説明・タグは変更しません）")
+        updated_count = fill_images_only(all_jans, existing_row_index, existing_rows)
+        sibling_filled = apply_sibling_images(existing_rows)
+        print(f"\n{'='*60}")
+        print(f"完了: img 更新 {updated_count}件 / 兄弟SKU補完 {sibling_filled}件")
+        if updated_count or sibling_filled:
+            write_products_csv(updated_count=updated_count + sibling_filled)
+        else:
+            print("画像の更新はありませんでした。")
+        return
+
     # ── 各JANを処理 ──
     collected = []
     updated = []
@@ -459,6 +782,12 @@ def main(jan_list_path):
                 print(f"    価格: {catalog_price}円")
             if image_url:
                 print(f"    画像: {image_url[:50]}...")
+            else:
+                print(f"    画像なし → 画像だけフォールバック")
+
+            old_img = existing_row_index[jan].get('img') if is_update else None
+            image_url = resolve_better_image(jan, product_name, image_url, existing_rows)
+            image_url = pick_better_image(old_img, image_url)
 
             # Step 2: 説明文をGeminiで生成（元ネタあり）
             description = ""
@@ -510,6 +839,10 @@ def main(jan_list_path):
 
             print(f"  ✅ Item Search API: {product_name[:40]}...")
 
+            old_img = existing_row_index[jan].get('img') if is_update else None
+            image_url = resolve_better_image(jan, product_name, image_url, existing_rows, try_item=False, try_yahoo=True)
+            image_url = pick_better_image(old_img, image_url)
+
             # 説明文をGeminiで生成（元ネタなし）
             description = ""
             if GEMINI_API_KEY:
@@ -552,6 +885,10 @@ def main(jan_list_path):
 
             print(f"  ✅ Yahoo! Shopping: {product_name[:40]}...")
 
+            old_img = existing_row_index[jan].get('img') if is_update else None
+            image_url = resolve_better_image(jan, product_name, image_url, existing_rows, try_item=False, try_yahoo=False)
+            image_url = pick_better_image(old_img, image_url)
+
             tags = auto_assign_tags(product_name, "", rules_map, allowed_tags)
             print(f"  🏷️ タグ: {' '.join(tags)}")
 
@@ -587,29 +924,28 @@ def main(jan_list_path):
             if jan:
                 existing_rows.append(item)
 
-        # JANコード順にソート
-        existing_rows.sort(key=lambda r: (0, normalize_jan(r.get('jan', '#'))) if r.get('jan', '#') != '#' and r['jan'].isdigit() else (1, r.get('name', '')))
+        sibling_filled = apply_sibling_images(existing_rows)
+        if sibling_filled:
+            print(f"🧩 書き出し前の兄弟SKU補完: {sibling_filled}件")
 
-        # 書き出し
-        with open(PRODUCT_CSV, 'w', encoding='utf-8-sig', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(existing_rows)
-
-        print(f"\n✅ products.csv を更新しました（全{len(existing_rows)}行、新規{len(collected)}件・更新{len(updated)}件）")
-        print(f"💡 内容を確認するには ODS で開くか、以下のコマンドを実行:")
-        print(f"   python3 csv_to_json.py")
-        print(f"💡 手動で微調整したい場合は pet925_master.ods の products シートに貼り付けてください")
+        write_products_csv(collected_count=len(collected), updated_count=len(updated))
     else:
         print("どのAPIからもデータを取得できませんでした。")
         print("JANコードが正しいか確認してください。")
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("使用法: python3 auto_collect_all.py [JANリストCSV]")
+    flags = {a for a in sys.argv[1:] if a.startswith('--')}
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    unknown = flags - {'--img-only'}
+    if unknown:
+        print(f"不明なオプション: {' '.join(sorted(unknown))}")
+        sys.exit(1)
+    if not args:
+        print("使用法: python3 auto_collect_all.py [JANリストCSV] [--img-only]")
         print("")
         print("JANリストCSVの形式: 1列目に13桁のJANコードを並べたファイル")
         print("例: python3 auto_collect_all.py jan_list.csv")
+        print("例: python3 auto_collect_all.py jan_list.csv --img-only")
         sys.exit(1)
-    main(sys.argv[1])
+    main(args[0], img_only='--img-only' in flags)

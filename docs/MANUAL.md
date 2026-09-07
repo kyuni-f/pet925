@@ -142,12 +142,15 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 ### 内部の順番
 
 1. **楽天 Product Search API (v2)** … 商品名・メーカー・説明・価格・画像。透かしの少ない `r.r10s.jp` を最優先。
-2. 失敗したら **楽天 Item Search API**。
-3. それでも失敗したら **Yahoo!ショッピング API**（画像にショップロゴが入ることがある）。
-4. `.env` に `GEMINI_API_KEY` があれば、説明文を約60字で生成する。無い場合でも、楽天から取れた情報だけで行は作れる。
-5. `data/rules.csv` でタグを自動判定する。
-6. メーカー名が取れたら `brand` 列にそのまま入れる。取れなければ空欄。
-7. `data/products.csv` に **新規追加**、または **既存 JAN の一部列を更新**する。最後に JAN 順へ並べ替えて保存する。
+2. 名前は取れたが画像が無い場合、**画像だけ** Item Search → 容量違いの兄弟SKU → Yahoo の順で補完する（商品名はカタログのまま）。
+3. 製品そのものが取れなければ **楽天 Item Search API**（画像ありの出品を最大10件見て `r.r10s.jp` を優先）。
+4. それでも失敗したら **Yahoo!ショッピング API**（画像にショップロゴが入ることがある）。
+5. `.env` に `GEMINI_API_KEY` があれば、説明文を約60字で生成する。無い場合でも、楽天から取れた情報だけで行は作れる。 `--img-only` では説明文は作らない。
+6. `data/rules.csv` でタグを自動判定する。
+7. メーカー名が取れたら `brand` 列にそのまま入れる。取れなければ空欄。
+8. `data/products.csv` に **新規追加**、または **既存 JAN の一部列を更新**する。最後に JAN 順へ並べ替えて保存する。
+
+画像だけ直したいときは `python3 auto_collect_all.py jan_list.csv --img-only`（または `npm run collect:img`）。名前・説明・タグは上書きしません。欠けている JAN だけリストに入れて実行してください。
 
 ### 新規と更新の違い（重要）
 
