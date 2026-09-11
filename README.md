@@ -16,7 +16,7 @@
 ### 📂 Directory Structure
 - **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）と `popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）もある
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
-- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）。実行ごとに確認用の`build_report.html`（データ不備・タグ付け忘れの確認推奨などを色分け表示、Git管理外）も出力する
+- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）。実行ごとに確認用の`build_report.html`（データ不備・必須タグ欠け・矛盾・商品名の硬い一致を色分け表示。説明文ではタグを提案しない。Git管理外）も出力する
 - **`pet_utils.py`** : `csv_to_json.py` / `auto_collect_all.py` / `check_links.py` から読む共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）

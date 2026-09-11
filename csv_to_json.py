@@ -57,17 +57,50 @@ validation_errors = []
 validation_warnings = []
 
 BUILD_REPORT_HTML = 'build_report.html'
+# 説明文の単語ではタグを提案しない。日常確認は必須欠け・矛盾・商品名の硬い一致だけ。
+REVIEW_WARN_MARKERS = ('必須タグ欠け', 'タグ矛盾', '商品名に')
+NAME_HIT_MIN_KW_LEN = 2
+
 
 def _html_escape(s):
     return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             .replace('"', '&quot;'))
 
 
-def write_build_report(errors, warnings, suggestions, rule_weak_suggestions, product_count, exec_time_str, duration):
-    """npm run build の結果を色分きHTMLレポートとして書き出す。
+def _strip_tag_display_name(name):
+    """tags.csv の表示名から末尾の英語カッコ（例: (TEAR)）を除く。"""
+    return re.sub(r'\s*[（(][^（()）]*[）)]\s*$', '', name or '').strip()
+
+
+def _render_tag_badges(tag_names):
+    """商品カードに実際に出るタグバッジと同じ見た目（style.cssの .tag 相当）を、
+    外部CSS無しでも再現できるようインラインstyleで描画する。"""
+    if not tag_names:
+        return '<span class="muted">（バッジなし）</span>'
+    badge_style = ('font-size:11px;color:#999;border:1px solid #eee;padding:3px 8px;'
+                   'text-transform:uppercase;display:inline-block;margin:0 4px 4px 0;white-space:nowrap;')
+    return ''.join(f'<span style="{badge_style}">{_html_escape(n)}</span>' for n in tag_names)
+
+
+def _render_card_preview(item):
+    """サイトの商品カード相当：condバッジ + 説明文。サイトを開かずに判断するための欄。"""
+    badges = _render_tag_badges(item.get('current_tags') or [])
+    desc = (item.get('desc') or '').strip()
+    desc_html = _html_escape(desc) if desc else '<span class="muted">（説明なし）</span>'
+    return f'<div class="card-preview">{badges}<div class="desc">{desc_html}</div></div>'
+
+
+def _empty_review():
+    return {"missing": [], "conflicts": [], "name_hits": []}
+
+
+def write_build_report(errors, warnings, missing_required, tag_conflicts, name_hits,
+                       product_count, exec_time_str, duration):
+    """npm run build の結果を色分けHTMLレポートとして書き出す。
     products.csv / pet925_master.ods は一切書き換えず、確認用の別ファイルとして毎回上書きする。
+    説明文の単語一致ではタグを提案しない（読み物・検索用の語がバッジ確認を汚さないようにする）。
     """
-    other_warnings = [w for w in warnings if 'の付与を検討してください' not in w]
+    other_warnings = [w for w in warnings if not any(m in w for m in REVIEW_WARN_MARKERS)]
 
     parts = []
     parts.append('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">')
@@ -84,13 +117,17 @@ tr.error td { background: #ffe0e0; }
 tr.warning td { background: #fff8d6; }
 .empty { color: #2a7d2a; font-weight: bold; }
 code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
+.muted { color: #bbb; }
+.card-preview .desc { margin-top: 6px; color: #444; max-width: 28em; line-height: 1.45; }
 ''')
     parts.append('</style></head><body>')
     parts.append('<h1>pet925 ビルドレポート</h1>')
     parts.append(f'<p class="summary">実行時刻: {_html_escape(exec_time_str)} / 処理時間: {duration:.2f}秒 / '
                   f'商品件数: {product_count}件<br>'
                   'このファイルは npm run build のたびに上書きされます。products.csv や pet925_master.ods は書き換えません。'
-                  'コピペしてODS側の修正に使ってください。</p>')
+                  'コピペしてODS側の修正に使ってください。<br>'
+                  'タグの正は tags 列です。説明文の単語ではタグを提案しません。'
+                  '「カード相当」はサイトの商品カードと同じ cond バッジと説明文なので、サイトを開かなくても判断できます。</p>')
 
     # 1. データ不備（エラー。ビルドを止める原因）
     parts.append(f'<h2>データ不備 ({len(errors)}件)</h2>')
@@ -102,43 +139,67 @@ code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
     else:
         parts.append('<p class="empty">✅ データ不備はありません。</p>')
 
-    # 2. タグ付け忘れの確認推奨（コピペ用に構造化）
-    parts.append(f'<h2>タグ付け忘れの確認推奨 ({len(suggestions)}件)</h2>')
-    if suggestions:
-        parts.append('<p class="summary">説明文にタグ名と同じ言葉が含まれているのに、tags列にそのタグが無い商品です。'
-                      '本当に付けるべきタグかは目視で判断してください。JAN・商品名・提案タグの列はそのままODSへコピペできます。</p>')
-        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>提案タグ (key)</th><th>提案タグ (表示名)</th><th>行番号</th></tr>')
-        for s in sorted(suggestions, key=lambda x: x['line']):
+    # 2. 必須タグ欠け（animal / age）
+    parts.append(f'<h2>必須タグ欠け ({len(missing_required)}件)</h2>')
+    if missing_required:
+        parts.append('<p class="summary">犬/猫（animal）または年齢（age）が tags 列に無い商品です。'
+                      'cond のお悩みバッジとは別で、フィルターの共通枠に使います。カード相当の列で説明文も確認できます。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>カード相当（バッジ＋説明文）</th>'
+                      '<th>現在の tags 列</th><th>欠け</th><th>行番号</th></tr>')
+        for s in sorted(missing_required, key=lambda x: x['line']):
             parts.append('<tr class="warning">'
                           f'<td>{_html_escape(s["jan"])}</td>'
                           f'<td>{_html_escape(s["name"])}</td>'
-                          f'<td><code>{_html_escape(s["tag_id"])}</code></td>'
-                          f'<td>{_html_escape(s["tag_name"])}</td>'
+                          f'<td>{_render_card_preview(s)}</td>'
+                          f'<td><code>{_html_escape(s["all_tags"])}</code></td>'
+                          f'<td>{_html_escape(s["detail"])}</td>'
                           f'<td>{s["line"]}</td></tr>')
         parts.append('</table>')
     else:
-        parts.append('<p class="empty">✅ タグ付け忘れの提案はありません。</p>')
+        parts.append('<p class="empty">✅ 必須タグの欠けはありません。</p>')
 
-    # 3. rules.csv キーワードによる「弱い一致」の参考候補（タグの厳密な表示名一致より広い、ゆるめの同義語ヒット）
-    parts.append(f'<h2>rules.csvキーワードによる参考候補・弱い一致 ({len(rule_weak_suggestions)}件)</h2>')
-    if rule_weak_suggestions:
-        parts.append('<p class="summary">上の「タグ付け忘れの確認推奨」よりゆるい基準（rules.csvの同義語キーワード）でのヒットです。'
-                      'タグは自動では付きません。説明文の一部に単語が出てきただけの誤検知も多いので、'
-                      '1件ずつ「本当にそのお悩み向けか」を見てから、必要ならODSのtags列に手で追加してください。</p>')
-        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>提案タグ (key)</th><th>提案タグ (表示名)</th><th>ヒットした語</th><th>行番号</th></tr>')
-        for s in sorted(rule_weak_suggestions, key=lambda x: x['line']):
+    # 3. タグの矛盾
+    parts.append(f'<h2>タグの矛盾 ({len(tag_conflicts)}件)</h2>')
+    if tag_conflicts:
+        parts.append('<p class="summary">同時には付かないはずのタグが付いている商品です（例: 年齢タグが2つ以上）。'
+                      '付けるなら1つに揃えてください。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>カード相当（バッジ＋説明文）</th>'
+                      '<th>現在の tags 列</th><th>内容</th><th>行番号</th></tr>')
+        for s in sorted(tag_conflicts, key=lambda x: x['line']):
             parts.append('<tr class="warning">'
                           f'<td>{_html_escape(s["jan"])}</td>'
                           f'<td>{_html_escape(s["name"])}</td>'
+                          f'<td>{_render_card_preview(s)}</td>'
+                          f'<td><code>{_html_escape(s["all_tags"])}</code></td>'
+                          f'<td>{_html_escape(s["detail"])}</td>'
+                          f'<td>{s["line"]}</td></tr>')
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ タグの矛盾はありません。</p>')
+
+    # 4. 商品名からの硬い一致（説明文は見ない）
+    parts.append(f'<h2>商品名からの硬い一致 ({len(name_hits)}件)</h2>')
+    if name_hits:
+        parts.append('<p class="summary">商品名に、お悩みタグの表示名または rules.csv のキーワードがあるのに、'
+                      'tags 列にそのタグが無い商品です。説明文は判定に使いません（検索用の言葉が誤検知になるため）。'
+                      '本当にそのお悩み向けかは目視で判断してください。JAN・商品名・提案タグはそのままODSへコピペできます。'
+                      '誤検知を今後出さないときだけ、任意列 exclude_tags にその key を書いて黙らせられます（主経路ではありません）。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>カード相当（バッジ＋説明文）</th>'
+                      '<th>提案タグ (key)</th><th>提案タグ (表示名)</th><th>ヒットした語</th><th>行番号</th></tr>')
+        for s in sorted(name_hits, key=lambda x: (x['tag_id'], x['line'])):
+            parts.append('<tr class="warning">'
+                          f'<td>{_html_escape(s["jan"])}</td>'
+                          f'<td>{_html_escape(s["name"])}</td>'
+                          f'<td>{_render_card_preview(s)}</td>'
                           f'<td><code>{_html_escape(s["tag_id"])}</code></td>'
                           f'<td>{_html_escape(s["tag_name"])}</td>'
                           f'<td>{_html_escape(s["keyword"])}</td>'
                           f'<td>{s["line"]}</td></tr>')
         parts.append('</table>')
     else:
-        parts.append('<p class="empty">✅ 参考候補はありません。</p>')
+        parts.append('<p class="empty">✅ 商品名からの付け忘れ提案はありません。</p>')
 
-    # 4. その他の確認推奨（exclude_tags の未登録タグ、JAN形式、類似商品名など）
+    # 5. その他の確認推奨（exclude_tags の未登録タグ、JAN形式、類似商品名など）
     parts.append(f'<h2>その他の確認推奨 ({len(other_warnings)}件)</h2>')
     if other_warnings:
         parts.append('<table><tr><th>内容</th></tr>')
@@ -154,19 +215,33 @@ code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
         f.write(''.join(parts))
 
 
-def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, alias_rules, tag_display_names):
+def _review_item(line_num, row, name, desc, tags, cond_tag_ids, tag_display_names, **extra):
+    item = {
+        "line": line_num,
+        "jan": (row.get('jan') or '#').strip(),
+        "name": name,
+        "desc": desc,
+        "current_tags": [tag_display_names.get(t, t) for t in tags if t in cond_tag_ids],
+        "all_tags": ' '.join(tags) if tags else '（空）',
+    }
+    item.update(extra)
+    return item
+
+
+def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, name_hit_lookup, alias_rules,
+                     tag_display_names, cond_tag_ids, animal_tag_ids, age_tag_ids):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
-    row_suggestions = []  # 確認推奨（タグ付け忘れ）の構造化データ。レポートでのコピペ用
+    review = _empty_review()
     name = row.get('name', '').strip()
 
     # ヘッダー行そのものがデータとして混入している場合はスキップ
     if name.lower() == 'name' or name == '商品名':
-        return None, [], [], [], None, line_num
+        return None, [], [], _empty_review(), None, line_num
 
     if not name:
-        return None, [f"行 {line_num}: 商品名(name)が空です。"], [], [], None, line_num
+        return None, [f"行 {line_num}: 商品名(name)が空です。"], [], _empty_review(), None, line_num
 
     # 16列構成（必須列。17列目のexclude_tagsは任意列のためここには含めない）
     expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
@@ -176,7 +251,6 @@ def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_f
 
     norm_name = normalize_text(name)
     desc = row.get('desc', '').strip()
-    check_text = normalize_text(name + desc)
 
     # ブランド情報の処理 (直接入力値をIDとしても使用)
     brand_name = row.get('brand', '').strip()
@@ -190,7 +264,7 @@ def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_f
             row_errors.append(f"行 {line_num}: 未登録タグ '{t}' (商品: {name[:20]}...)")
 
     # 除外タグの読み込み（tags.csv/rules.csv と同じ英語タグID表記。例: appetite）
-    # これに含まれるタグIDは、キーワード一致による自動付与・提案の対象から除外する
+    # 商品名の硬い一致提案だけを黙らせる任意列。説明文一致の提案は出さないので、主経路ではない。
     exclude_tags_raw = str(row.get('exclude_tags', '#')).strip()
     excluded_tag_ids = set()
     if exclude_tags_raw and exclude_tags_raw != '#':
@@ -199,21 +273,43 @@ def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_f
             if t not in allowed_tags:
                 row_warnings.append(f"行 {line_num}: exclude_tags に未登録タグ '{t}' が指定されています (商品: {name[:20]}...)")
 
-    # タグ名そのものが説明文に含まれている場合の提案（除外タグ適用後）
-    # ※ かつては rules.csv のキーワード一致でタグを自動付与していたが、
-    #   「tags列に書いていないタグがバッジに出る/消える」という分かりにくさがあったため、
-    #   タグは products.csv の tags列（人が書いた/収集時にAIが書いたもの）だけを信頼し、
-    #   ここでは「つけ忘れていませんか？」の提案（警告）のみに一本化した。
-    for t_name_norm, t_id in tag_lookup_for_suggest.items():
-        if t_id not in tags and t_id not in excluded_tag_ids and t_name_norm in check_text:
-            row_warnings.append(f"行 {line_num}: 説明文に '{t_name_norm}' が含まれています。タグ '{t_id}' の付与を検討してください。")
-            row_suggestions.append({
-                "line": line_num,
-                "jan": (row.get('jan') or '#').strip(),
-                "name": name,
-                "tag_id": t_id,
-                "tag_name": tag_display_names.get(t_id, t_id),
-            })
+    tags_set = set(tags)
+    name_short = name[:20]
+
+    # 必須タグ欠け（animal / age）。exclude_tags では黙らせない。
+    if animal_tag_ids and not (tags_set & animal_tag_ids):
+        expected = '/'.join(sorted(animal_tag_ids))
+        detail = f"{expected} がありません"
+        row_warnings.append(f"行 {line_num}: 必須タグ欠け (animal): {detail} (商品: {name_short}...)")
+        review["missing"].append(_review_item(
+            line_num, row, name, desc, tags, cond_tag_ids, tag_display_names, detail=detail))
+    if age_tag_ids and not (tags_set & age_tag_ids):
+        expected = '/'.join(sorted(age_tag_ids))
+        detail = f"年齢タグ（{expected}）がありません"
+        row_warnings.append(f"行 {line_num}: 必須タグ欠け (age): {detail} (商品: {name_short}...)")
+        review["missing"].append(_review_item(
+            line_num, row, name, desc, tags, cond_tag_ids, tag_display_names, detail=detail))
+
+    # 年齢は categories.csv 上 single。2つ以上は矛盾。
+    age_hits = [t for t in tags if t in age_tag_ids]
+    if len(age_hits) > 1:
+        detail = f"年齢タグが複数あります: {' '.join(age_hits)}"
+        row_warnings.append(f"行 {line_num}: タグ矛盾 (age): {detail} (商品: {name_short}...)")
+        review["conflicts"].append(_review_item(
+            line_num, row, name, desc, tags, cond_tag_ids, tag_display_names, detail=detail))
+
+    # 商品名だけの硬い一致（説明文は見ない）。バッジ対象の cond のみ。
+    hit_tag_ids = set()
+    for kw, t_id in name_hit_lookup:
+        if t_id in tags_set or t_id in excluded_tag_ids or t_id in hit_tag_ids:
+            continue
+        if kw and kw in norm_name:
+            hit_tag_ids.add(t_id)
+            row_warnings.append(
+                f"行 {line_num}: 商品名に '{kw}' があるためタグ '{t_id}' の付与を検討してください (商品: {name_short}...)")
+            review["name_hits"].append(_review_item(
+                line_num, row, name, desc, tags, cond_tag_ids, tag_display_names,
+                tag_id=t_id, tag_name=tag_display_names.get(t_id, t_id), keyword=kw))
 
     # 3. aliases.csv に基づく検索専用の読み・別名（タグには一切影響しない）
     #    ブランド表記が英語のままでも、カタカナ/ひらがなで検索できるようにするための裏フィールド。
@@ -245,7 +341,7 @@ def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_f
 
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
     row['tags'] = tags
-    return row, row_errors, row_warnings, row_suggestions, norm_name, line_num
+    return row, row_errors, row_warnings, review, norm_name, line_num
 
 def convert(exit_on_error=True):
     print(f"--- 変換処理を開始します ---")
@@ -275,7 +371,6 @@ def convert(exit_on_error=True):
     # 2. タグマスタの読み込み（列名ベース。tags.csvの列順を変更しても壊れない）
     tag_master = {}
     allowed_tags = set()
-    tag_lookup_for_suggest = {} # 提案用：正規化名 -> タグID
     tag_display_names = {} # レポート表示用：タグID -> 表示名（元の大文字小文字・括弧つき）
     for row in load_dict_rows(TAG_CSV):
         cat = (row.get('category') or '').strip()
@@ -289,11 +384,6 @@ def convert(exit_on_error=True):
         norm_key = normalize_text(key)
         tag_master[cat][norm_key] = name
         allowed_tags.add(norm_key)
-        # 提案用のキーは "涙やけ (TEAR)" のような英語カッコ書きを除いた日本語部分だけにする。
-        # カッコ込みの文字列が説明文にそのまま書かれることは無いため、除かないと提案が一切発火しない。
-        name_for_suggest = re.sub(r'\s*[（(][^（()）]*[）)]\s*$', '', name).strip()
-        if name_for_suggest:
-            tag_lookup_for_suggest[normalize_text(name_for_suggest)] = norm_key
         tag_display_names[norm_key] = name
 
     # タグのカテゴリ所属マップを作成（ソート用）
@@ -302,6 +392,11 @@ def convert(exit_on_error=True):
         if cat_key in tag_master:
             for t_key in tag_master[cat_key]:
                 tag_to_cat_index[t_key] = idx
+
+    # バッジ表示対象（cond カテゴリ）のタグID集合。商品カードに実際に出るのはこれだけ（main.js側の実装に合わせる）
+    cond_tag_ids = set(tag_master.get('cond', {}).keys())
+    animal_tag_ids = set(tag_master.get('animal', {}).keys())
+    age_tag_ids = set(tag_master.get('age', {}).keys())
 
     # ビルド時間をバージョンとして記録
     build_version = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
@@ -317,6 +412,24 @@ def convert(exit_on_error=True):
             if tag not in tag_keywords: tag_keywords[tag] = []
             tag_keywords[tag].extend(kws)
             allowed_tags.add(normalize_text(tag))
+
+    # 商品名だけの硬い一致用：cond タグの表示名（英語カッコ除く）と rules.csv キーワード。
+    # 2文字未満（例: 歯）は誤検知が多いので使わない。長い語を先に見る。
+    name_hit_map = {}
+    for t_id, display in tag_display_names.items():
+        if t_id not in cond_tag_ids:
+            continue
+        stripped = _strip_tag_display_name(display)
+        norm = normalize_text(stripped)
+        if norm and len(norm) >= NAME_HIT_MIN_KW_LEN:
+            name_hit_map[norm] = t_id
+    for t_id, kws in tag_keywords.items():
+        if t_id not in cond_tag_ids:
+            continue
+        for kw in kws:
+            if kw and len(kw) >= NAME_HIT_MIN_KW_LEN:
+                name_hit_map.setdefault(kw, t_id)
+    name_hit_lookup = sorted(name_hit_map.items(), key=lambda x: len(x[0]), reverse=True)
 
     # 4-2. 検索専用の別名（aliases.csv）の読み込み。タグ体系とは無関係で、
     #      「name/brand/desc に keyword があれば reading を検索対象に足す」だけの表。
@@ -368,28 +481,28 @@ def convert(exit_on_error=True):
     # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
-    all_tag_suggestions = []  # 確認推奨（タグ付け忘れ）の構造化データ。全行分をここに集約
+    all_missing_required = []
+    all_tag_conflicts = []
+    all_name_hits = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, alias_rules, tag_display_names)
+        futures = [executor.submit(
+            process_row_task, ln, row, tag_to_cat_index, allowed_tags, name_hit_lookup, alias_rules,
+            tag_display_names, cond_tag_ids, animal_tag_ids, age_tag_ids)
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
-            res_row, res_errs, res_warns, res_suggestions, norm_name, ln = future.result()
+            res_row, res_errs, res_warns, res_review, norm_name, ln = future.result()
             validation_errors.extend(res_errs)
             validation_warnings.extend(res_warns)
-            all_tag_suggestions.extend(res_suggestions)
+            all_missing_required.extend(res_review.get("missing") or [])
+            all_tag_conflicts.extend(res_review.get("conflicts") or [])
+            all_name_hits.extend(res_review.get("name_hits") or [])
             if res_row:
                 processed_results.append((ln, res_row, norm_name))
 
     # 全プロセス終了後、行番号で並び替えて元の順序を復元
     processed_results.sort(key=lambda x: x[0])
     products = [r[1] for r in processed_results]
-
-    # rules.csv のキーワードのうち、バッジ表示対象(cond)のタグだけを「弱い一致」参考候補の対象にする
-    # (dog/cat/adult/senior等は説明文にほぼ必ず出てくる語なので対象外にし、ノイズを避ける)
-    cond_tag_ids = set(tag_master.get('cond', {}).keys())
-    rule_cond_keywords = {t: kws for t, kws in tag_keywords.items() if t in cond_tag_ids}
-    all_rule_weak_suggestions = []
 
     for ln, res_row, norm_name in processed_results:
         # JAN重複チェック (# はスキップ)
@@ -428,29 +541,6 @@ def convert(exit_on_error=True):
         # お気に入り管理用の不変なIDを付与
         # JANがあればJANを使用、なければ名寄せ用キーのパイプをアンダーバーに変えたものを使用
         res_row['id'] = jan_val if jan_val != '#' else dup_key.replace('|', '_')
-
-        # rules.csv のキーワードによる「弱い一致」の参考候補（バッジ対象のcondタグのみ）
-        # tags.csv の厳密な表示名一致（tag_lookup_for_suggest）では出てこない、
-        # もっとゆるい同義語ヒットを「要目視の参考」としてレポートにだけ出す（タグの自動付与はしない）。
-        exclude_raw = str(res_row.get('exclude_tags', '#')).strip()
-        row_excluded = set()
-        if exclude_raw and exclude_raw != '#':
-            row_excluded = {normalize_text(t) for t in exclude_raw.replace(',', ' ').split() if t}
-        row_check_text = normalize_text(f"{res_row.get('name', '')} {res_row.get('desc', '')}")
-        row_tags_set = set(res_row.get('tags') or [])
-        for cond_tag_id, kws in rule_cond_keywords.items():
-            if cond_tag_id in row_tags_set or cond_tag_id in row_excluded:
-                continue
-            hit_kw = next((kw for kw in kws if kw in row_check_text), None)
-            if hit_kw:
-                all_rule_weak_suggestions.append({
-                    "line": ln,
-                    "jan": jan_val,
-                    "name": res_row.get('name', ''),
-                    "tag_id": cond_tag_id,
-                    "tag_name": tag_display_names.get(cond_tag_id, cond_tag_id),
-                    "keyword": hit_kw,
-                })
 
     # products リストは既に上で作成済み
     # 画像キャッシュ参照処理: images/{jan}.ext を手動で配置しておくと自動的に採用される
@@ -506,8 +596,8 @@ def convert(exit_on_error=True):
     print(f"   - 処理時間: {duration:.2f}秒")
 
     # 全件（省略なし）の詳細をHTMLレポートに書き出す。products.csv/ODSには一切触れない
-    write_build_report(validation_errors, validation_warnings, all_tag_suggestions, all_rule_weak_suggestions,
-                        len(products), exec_time, duration)
+    write_build_report(validation_errors, validation_warnings, all_missing_required, all_tag_conflicts,
+                        all_name_hits, len(products), exec_time, duration)
     print(f"   - {BUILD_REPORT_HTML} (確認推奨・エラーの全件レポート)")
 
     # 警告（確認を促すだけでデプロイは止めない）を表示

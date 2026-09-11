@@ -53,10 +53,10 @@ npm run check:links    # 画像URLと公式ページURLのリンク切れ確認�
 | `csv_to_json.py` | ビルド本体。CSV → JSON、検品。画像は取らない。 |
 | `auto_collect_all.py` | JANコードから商品名・画像・説明を API で集める。 |
 | `check_links.py` | `img` と `a8` の URL が生きているか確認する。ビルドには使わない。CSV は書き換えない。 |
-| `build_report.html` | `npm run build` のたびに上書きされる確認用レポート。データ不備・タグ付け忘れの確認推奨・`rules.csv`キーワードの参考候補を色分けして表示。`products.csv`/ODS は書き換えない。Git管理外（`.gitignore`）。ブラウザで開く。 |
+| `build_report.html` | `npm run build` のたびに上書きされる確認用レポート。データ不備・必須タグ欠け・タグの矛盾・商品名からの硬い一致を色分けして表示。説明文の単語ではタグを提案しない。`products.csv`/ODS は書き換えない。Git管理外（`.gitignore`）。ブラウザで開く。 |
 | `check_links_report.html` | `npm run check:links` のたびに上書きされる確認用レポート。切れ・要確認をJAN/商品名付きの表で表示。Git管理外（`.gitignore`）。ブラウザで開く。 |
-| `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。 |
-| `desc_helper.html` | その画面。説明専用フォーム。ブックマークレットのドラッグ用リンクもある。 |
+| `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。タグは変更しない。 |
+| `desc_helper.html` | その画面。説明専用フォーム。現在のタグも表示するが変更はしない。ブックマークレットのドラッグ用リンクもある。 |
 | `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。`check_links.py` からも読む。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
@@ -92,15 +92,15 @@ product_data.json + data_master.js
 | **JANコード** | バーコードの数字。商品の一意な ID。お気に入りのキーにも使う。 |
 | **チャンク** | 巨大 JSON を `product_data_0.json` のように分割した塊。1ファイル最大 5000件。 |
 | **名寄せ** | 同じメーカーのシリーズを、バッジではメーカー名に揃えること。表示も検索も `products.csv` の `brand` 列そのもの。 |
-| **rules.csv のキーワード** | 「グレインフリー」と書いたら `gf` タグを付ける、など。使い道は3つ：収集時（`GEMINI_API_KEY` 無し/失敗時のフォールバック）、既にタグが付いている商品の検索補助（読みの追加）、`build_report.html`の「参考候補・弱い一致」（目視確認用のヒントを出すだけ）。ビルド時にタグを自動で付け直すことはしない（タグは `products.csv` の `tags` 列が正） |
+| **rules.csv のキーワード** | 「グレインフリー」と書いたら `gf` タグを付ける、など。使い道は2つ：収集時（`GEMINI_API_KEY` 無し/失敗時のフォールバック）、既にタグが付いている商品の検索補助（読みの追加）。ビルドの確認レポートでは、同じ語を**商品名だけ**に当てて付け忘れの硬い一致を出す（説明文は見ない。タグは自動では付けない。正は `products.csv` の `tags` 列） |
 | **aliases.csv（検索エイリアス）** | タグとは無関係な、検索専用の読み・別名表。`name`/`brand`/`desc` に `keyword` があれば `reading` を検索対象へ足すだけで、バッジ・商品名・フィルターには一切出てこない。英語表記のブランド（`TripeDry`→`トライプドライ`）や漢字語（`納豆菌`→`なっとうきん`）をかな・カタカナでも検索できるようにするための表。 |
 | **search_alias** | `aliases.csv` の判定結果として、ビルド時に商品ごとに作られる検索専用の裏フィールド。画面には出ない。 |
 | **`label`** | 画像左上の金色バッジ。`#` なら出さない。例: `小分けパック`。検索・絞り込みには使わない。 |
 | **`promo`** | 説明文とタグのあいだのオレンジ文言。`#` なら出さない。例: `公式サンプル有り`。検索・絞り込みには使わない。 |
-| **exclude_tags** | 収集時のタグ自動判定や、ビルド時の「付け忘れ確認」警告の対象から、その商品だけタグを外す列。 |
+| **exclude_tags** | 任意列。ビルドの「商品名からの硬い一致」提案だけを、その商品について黙らせる。説明文では提案しないので日常の主経路ではない。 |
 | **追加マスター** | `data/` の CSV のうち、products / categories / tags / rules / aliases 以外。ビルドが検証せず `data_master.js` の同名変数にする。`comments.csv` と `popular_searches.csv` がそれ。 |
 | **フォールバック** | 本命が失敗したときの予備。画像は 楽天v2 → 楽天Item → Yahoo の順。 |
-| **説明の取り直し** | `collect:all` の `desc` がいまいちなとき、`npm run desc:helper` で説明だけ作り、CSV に手で貼る作業。再収集は名前や画像も上書きするので使わない。 |
+| **説明の取り直し** | `collect:all` の `desc` がいまいちなとき、`npm run desc:helper` で説明だけ作り、CSV に手で貼る作業。タグは変更しない。再収集は名前や画像も上書きするので使わない。 |
 
 タグのグループ（`tags.csv`）:
 
@@ -226,7 +226,7 @@ CSV の列の意味:
 | 画面の動きを変えたい | `main.js` |
 | 見た目を変えたい | `style.css` / `index.html` |
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
-| 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る → ビルド |
+| 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る（`tags` は触らない） → ビルド |
 | 画像や公式ページのリンク切れを探したい | `npm run check:links` → 切れた行だけ CSV を直す → ビルド |
 | ビルドの確認推奨・エラーを全件見たい | `npm run build` 後に `build_report.html` をブラウザで開く（ターミナルは最初の10件だけ） |
 | リンク切れ・要確認を全件見たい | `npm run check:links` 後に `check_links_report.html` をブラウザで開く |
