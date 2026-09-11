@@ -16,7 +16,7 @@
 ### 📂 Directory Structure
 - **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）と `popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）もある
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
-- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）
+- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）。実行ごとに確認用の`build_report.html`（データ不備・タグ付け忘れの確認推奨などを色分け表示、Git管理外）も出力する
 - **`pet_utils.py`** : `csv_to_json.py` / `auto_collect_all.py` / `check_links.py` から読む共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
@@ -27,7 +27,7 @@
 - **`product_data_*.json`** : 商品データの分割チャンク（ビルド時に生成）
 - **`desc_helper.py`** / **`desc_helper.html`** : 既存商品の説明文だけを作り直すローカルツール（`npm run desc:helper`）。説明取り直し用のブックマークレットもここ
 - **`auto_collect_all.py`** : JANコードリスト（`jan_list.csv`）から楽天/Yahoo!/Gemini APIを使い全自動で `products.csv` を生成するスクリプト
-- **`check_links.py`** : `products.csv` の画像URL（`img`）と公式ページURL（`a8`）の生死チェック（`npm run check:links`）。ビルドには使わない
+- **`check_links.py`** : `products.csv` の画像URL（`img`）と公式ページURL（`a8`）の生死チェック（`npm run check:links`）。ビルドには使わない。実行ごとに確認用の`check_links_report.html`（Git管理外）も出力する
 - **`jan_list.csv`** : `auto_collect_all.py` に読み込ませるJANコードの入力リスト（1行1コード、使い切り）
 - **`data_master.js`** : フィルターや店員コメントなどのマスタースクリプト
 - **`package.json`** : プロジェクトの設定と依存関係を管理する「身分証明書」

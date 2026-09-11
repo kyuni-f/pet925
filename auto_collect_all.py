@@ -10,15 +10,16 @@ JANコードリストから全自動で products.csv 行を生成する統合ス
   1. Product Search API v2 → 商品名・画像・メーカー名・説明文・価格を一発取得
   2. 名前は取れたが画像が無い場合、画像だけ Item Search → 兄弟SKU → Yahoo の順で補完
   3. 取得できなければ Item Search API にフォールバック（商品名ごと）
-  4. 説明文が空なら Gemini API で自動生成（--img-only ではスキップ）
-  5. rules.csv ベースでタグを自動判定
-  6. products.csv に追記
+  4. GEMINI_API_KEY があれば、説明文とタグ候補（tags.csvの許可リストから選択）をAIに1回でまとめて依頼
+     （--img-only ではスキップ）。AI呼び出しが無い/失敗した場合は rules.csv ベースの判定にフォールバック
+     （説明文は空のまま）
+  5. products.csv に追記
 
   --img-only: 既存行の img 列だけ更新する。名前・説明・タグは触らない。
 
 注意:
-  GEMINI_API_KEY が .env に設定されている場合、説明文の自動生成が有効になります。
-  設定がない場合でも、楽天APIから取得できる情報だけで products.csv は完成します。
+  GEMINI_API_KEY が .env に設定されている場合、説明文とタグの自動生成が有効になります。
+  設定がない場合でも、楽天APIから取得できる情報だけで products.csv は完成します（タグはrules.csvベース）。
 """
 
 import csv
@@ -107,6 +108,20 @@ def load_allowed_tags():
         if key:
             allowed.add(normalize_text(key))
     return allowed
+
+
+def load_tag_catalog_text():
+    """
+    tags.csv から「key:日本語名」の一覧テキストを作る（Geminiへのタグ選択プロンプト用）。
+    ここに載っているキーだけをAIに選ばせることで、tags.csvに無い野良タグが生まれるのを防ぐ。
+    """
+    lines = []
+    for row in load_dict_rows(TAG_CSV):
+        key = (row.get('key') or '').strip()
+        name = (row.get('name') or '').strip()
+        if key:
+            lines.append(f"{normalize_text(key)}:{name}")
+    return "\n".join(lines)
 
 def clean_image_url(url):
     if not url or not isinstance(url, str):
@@ -474,12 +489,16 @@ def fetch_yahoo_shopping(jan):
     return None
 
 # ─────────────────────────────────────────────
-# Gemini API で説明文を自動生成
+# Gemini API で説明文とタグ候補をまとめて自動生成
 # ─────────────────────────────────────────────
-def generate_description_via_gemini(product_name, maker_name, raw_description, jan):
+def generate_description_and_tags_via_gemini(product_name, maker_name, raw_description, jan, tag_catalog_text):
     """
-    Gemini API を使用して60字程度の説明文を生成する。
-    元ネタ（raw_description）がある場合はそれを参考にする。
+    Gemini API を1回だけ呼び、「60字程度の説明文」と「タグ候補（tags.csvの許可リストから選択）」を
+    同時にJSON形式で生成する。
+    以前は説明文生成(このAPI呼び出し)とタグ判定(rules.csvの完全一致)を別処理にしていたが、
+    ①API呼び出しが2回に増えてレート制限に近づく ②rules.csvの完全一致はメーカー名表記の揺れに弱い、
+    という理由から1回のAI呼び出しに統合した。
+    戻り値: {"description": "...", "tags": [...]} または None（失敗時。呼び出し元でルールベースにフォールバックする）
     """
     if not GEMINI_API_KEY:
         return None
@@ -491,17 +510,28 @@ def generate_description_via_gemini(product_name, maker_name, raw_description, j
     source_text = f"\n【参考: 商品説明の元ネタ】\n{raw_description[:500]}" if raw_description else ""
 
     prompt = f"""あなたはペットフード比較サイトのデータ作成アシスタントです。
-以下の商品の「特徴・おすすめポイント」を、**60文字程度**で簡潔に説明してください。
+以下の商品について、(1)特徴・おすすめポイントの説明文 と (2)当てはまるタグ を判定してください。
 
 【商品名】{product_name}
 【メーカー】{maker_name or "不明"}【JANコード】{jan}{source_text}
 
-【ルール】
+【説明文のルール】
 - 商品の特徴を具体的に（例：主原料、対応年齢、健康ケア）
 - 「どんな悩みを持つ犬・猫におすすめか」というユーザー視点を含める
 - 60文字程度（50〜70字）に収める
 - 宣伝文句や誇張表現は避ける
-- 余計な解説は一切不要。説明文のみを出力してください。"""
+
+【タグのルール】
+- 下記の「タグ一覧」に載っているキーだけを使うこと。一覧に無いタグは絶対に作らないこと
+- 商品名・メーカー名・説明文の元ネタから、当てはまるものだけを選ぶこと
+- 動物種（dog/cat。両方向けなら両方）と、年齢（all_ages/puppy/adult/senior のいずれか1つ）は必ず含めること
+
+【タグ一覧（key:日本語名）】
+{tag_catalog_text}
+
+【出力形式】
+説明や前置き、Markdownのコードブロック記号（```）は一切付けず、次のJSON形式のみを1行で出力してください。
+{{"description": "説明文をここに", "tags": ["key1", "key2"]}}"""
 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     headers = {"Content-Type": "application/json"}
@@ -512,15 +542,56 @@ def generate_description_via_gemini(product_name, maker_name, raw_description, j
             res_data = resp.json()
             if "candidates" in res_data and len(res_data["candidates"]) > 0:
                 text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-                # 説明文のみを取り出す（余計な改行・引用など除去）
-                desc = text.replace("```", "").strip()
-                # 60文字前後になるよう調整
+                cleaned = text.replace("```json", "").replace("```", "").strip()
+                # 応答の前後に余計な文章が付くことがあるので、最初の { から最後の } までを抜き出す
+                start = cleaned.find('{')
+                end = cleaned.rfind('}')
+                if start == -1 or end == -1 or end < start:
+                    print(f"  ⚠️ Gemini応答がJSON形式ではありません: {cleaned[:80]}...")
+                    return None
+                parsed = json.loads(cleaned[start:end + 1])
+
+                desc = str(parsed.get("description") or "").strip()
                 if len(desc) > 80:
                     desc = desc[:77] + "..."
-                return desc
+
+                raw_tags = parsed.get("tags") or []
+                tags = [normalize_text(t) for t in raw_tags if isinstance(t, str) and t.strip()]
+                return {"description": desc, "tags": tags}
+        else:
+            print(f"  ⚠️ Gemini API エラー {resp.status_code}")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"  ⚠️ Gemini応答のJSON解析に失敗: {e}")
     except Exception as e:
         print(f"  ⚠️ Gemini API エラー: {e}")
     return None
+
+
+def resolve_description_and_tags(product_name, maker_name, raw_description, jan, rules_map, allowed_tags, tag_catalog_text):
+    """
+    説明文とタグを決定する。GEMINI_API_KEYがあればAIに1回で両方頼み、
+    失敗した場合やキー未設定の場合は rules.csv ベースの判定にフォールバックする
+    （説明文が無くても products.csv は完成する、という既存の方針を維持）。
+    """
+    if GEMINI_API_KEY:
+        print(f"  🤖 Geminiで説明文とタグを生成中...")
+        ai_result = generate_description_and_tags_via_gemini(product_name, maker_name, raw_description, jan, tag_catalog_text)
+        time.sleep(2)  # Gemini API レート制限対策（呼び出し回数は以前と変わらず1回のまま）
+        if ai_result:
+            tags = sorted({t for t in ai_result["tags"] if t in allowed_tags})
+            if tags:
+                if ai_result["description"]:
+                    print(f"    ✅ 説明文生成: {ai_result['description'][:40]}...")
+                print(f"    ✅ AIによるタグ判定: {' '.join(tags)}")
+                return ai_result["description"], tags
+            print(f"  ⚠️ Geminiのタグ候補が空/未登録タグのみだったため、ルールベース判定にフォールバックします")
+        else:
+            print(f"  ⚠️ Gemini呼び出しに失敗したため、ルールベース判定にフォールバックします")
+
+    # フォールバック: rules.csv + 正規表現ベースの判定（説明文は生成できないので空のまま）
+    tags = auto_assign_tags(product_name, maker_name, rules_map, allowed_tags)
+    print(f"  🏷️ タグ（ルールベース）: {' '.join(tags)}")
+    return "", tags
 
 # ─────────────────────────────────────────────
 # タグ自動判定
@@ -668,6 +739,7 @@ def main(jan_list_path, img_only=False):
     # 各種データ読み込み
     rules_map = load_rules_map()
     allowed_tags = load_allowed_tags()
+    tag_catalog_text = load_tag_catalog_text()
 
     print(f"\n📋 タグルール: {len(rules_map)}件")
     print(f"📋 許可タグ: {len(allowed_tags)}件")
@@ -789,19 +861,10 @@ def main(jan_list_path, img_only=False):
             image_url = resolve_better_image(jan, product_name, image_url, existing_rows)
             image_url = pick_better_image(old_img, image_url)
 
-            # Step 2: 説明文をGeminiで生成（元ネタあり）
-            description = ""
-            if GEMINI_API_KEY:
-                print(f"  🤖 Geminiで説明文を生成中...")
-                desc = generate_description_via_gemini(product_name, maker_name, raw_desc, jan)
-                if desc:
-                    description = desc
-                    print(f"    ✅ 説明文生成: {desc[:40]}...")
-                time.sleep(2)  # Gemini API レート制限対策
-
-            # Step 3: タグ自動判定
-            tags = auto_assign_tags(product_name, maker_name, rules_map, allowed_tags)
-            print(f"  🏷️ タグ: {' '.join(tags)}")
+            # Step 2+3: 説明文とタグをGeminiに1回でまとめて頼む（失敗時はルールベースにフォールバック）
+            description, tags = resolve_description_and_tags(
+                product_name, maker_name, raw_desc, jan, rules_map, allowed_tags, tag_catalog_text
+            )
 
             # Step 4: ブランド名（APIのメーカー名をそのまま。空なら空欄）
             brand_display = maker_name or ""
@@ -843,19 +906,10 @@ def main(jan_list_path, img_only=False):
             image_url = resolve_better_image(jan, product_name, image_url, existing_rows, try_item=False, try_yahoo=True)
             image_url = pick_better_image(old_img, image_url)
 
-            # 説明文をGeminiで生成（元ネタなし）
-            description = ""
-            if GEMINI_API_KEY:
-                print(f"  🤖 Geminiで説明文を生成中...")
-                desc = generate_description_via_gemini(product_name, "", "", jan)
-                if desc:
-                    description = desc
-                    print(f"    ✅ 説明文生成: {desc[:40]}...")
-                time.sleep(2)
-
-            # タグ判定
-            tags = auto_assign_tags(product_name, "", rules_map, allowed_tags)
-            print(f"  🏷️ タグ: {' '.join(tags)}")
+            # 説明文とタグをGeminiに1回でまとめて頼む（元ネタなし。失敗時はルールベースにフォールバック）
+            description, tags = resolve_description_and_tags(
+                product_name, "", "", jan, rules_map, allowed_tags, tag_catalog_text
+            )
 
             new_row = {f: '#' for f in fieldnames}
             new_row['jan'] = jan
@@ -889,14 +943,16 @@ def main(jan_list_path, img_only=False):
             image_url = resolve_better_image(jan, product_name, image_url, existing_rows, try_item=False, try_yahoo=False)
             image_url = pick_better_image(old_img, image_url)
 
-            tags = auto_assign_tags(product_name, "", rules_map, allowed_tags)
-            print(f"  🏷️ タグ: {' '.join(tags)}")
+            description, tags = resolve_description_and_tags(
+                product_name, "", "", jan, rules_map, allowed_tags, tag_catalog_text
+            )
 
             new_row = {f: '#' for f in fieldnames}
             new_row['jan'] = jan
             new_row['name'] = product_name
             new_row['brand'] = ''
             new_row['tags'] = ' '.join(tags)
+            new_row['desc'] = description
             new_row['img'] = image_url or '#'
             new_row['yah'] = '#'  # 表示時に商品名で検索URLを生成させる
             new_row['rak_p'] = '0'

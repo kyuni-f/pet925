@@ -1,4 +1,4 @@
-const siteVersion = '20260905121848';
+const siteVersion = '20260911182557';
 const tagMaster = {
     "animal": {
         "dog": "犬 (DOG)",
@@ -70,13 +70,15 @@ const tagKeywords = {
         "猫"
     ],
     "all_ages": [
-        "全年齢用"
+        "全年齢"
     ],
     "puppy": [
-        "子犬・子猫"
+        "子犬",
+        "子猫"
     ],
     "adult": [
-        "成犬・成猫"
+        "成犬",
+        "成猫"
     ],
     "senior": [
         "シニア"
@@ -85,7 +87,8 @@ const tagKeywords = {
         "涙ヤケ"
     ],
     "kidney": [
-        "腎臓・尿路"
+        "腎臓",
+        "尿路"
     ],
     "skin": [
         "皮膚",

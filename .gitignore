@@ -7,3 +7,7 @@ __pycache__/
 .~lock.*
 .DS_Store
 .tmp_preview/
+
+# 確認用レポート（npm run build / check:links のたびに上書きされる。個人の確認用でGit管理は不要）
+build_report.html
+check_links_report.html

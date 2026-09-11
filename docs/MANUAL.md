@@ -45,8 +45,8 @@ flowchart TD
 |---|---|---|---|
 | **集める** | `auto_collect_all.py`（`npm run collect`） | JAN から商品名・画像・説明・タグを取る | サイト用 JSON は作らない（`collect:all` なら続けてビルドする） |
 | **説明だけ取り直す** | `desc_helper.py`（`npm run desc:helper`） | 商品名＋任意の公式ページ事実から `desc` を生成 | CSV への自動書き込み、名前・画像の更新はしない |
-| **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用 | ネットから画像は取らない |
-| **リンクの生死を見る** | `check_links.py`（`npm run check:links`） | `img` と `a8` の URL が 404 や 1px になっていないか確認 | CSV は書き換えない。ビルドにも使わない |
+| **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用。確認推奨・エラーの全件を `build_report.html` に出力 | ネットから画像は取らない |
+| **リンクの生死を見る** | `check_links.py`（`npm run check:links`） | `img` と `a8` の URL が 404 や 1px になっていないか確認。結果を `check_links_report.html` に出力 | CSV は書き換えない。ビルドにも使わない |
 | **画面で探す** | `main.js` + `search_worker.js` | 検索、フィルター、お気に入り、店員コメント | マスター CSV は読まない。ビルド済み JSON を読む |
 
 ### 何を直すか早見表
@@ -57,9 +57,11 @@ flowchart TD
 | 説明文だけを作り直す | `npm run desc:helper`（商品名を貼って生成 → `desc` に貼る） | `npm run build` |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
+| ビルドやリンクチェックの確認推奨・エラーを全件見る | `build_report.html` / `check_links_report.html`（実行後に自動生成） | ブラウザで開いて目視。ターミナルは最初の10件だけ表示 |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
 | フィルターの枠を足す | `data/categories.csv` に行を足し、`data/tags.csv` にその所属のタグを足す | `npm run build` |
-| 「グレインフリー」などで自動タグを付ける | `data/rules.csv` | `npm run build` または次回の `collect` |
+| 収集時に「グレインフリー」などで自動タグを付ける（AI未設定時のフォールバック） | `data/rules.csv` | 次回の `collect` |
+| 英語表記のブランド名や漢字の単語を、かな/カタカナ検索でもヒットさせる | `data/aliases.csv` | `npm run build` |
 | 店員コメントを足す | `data/comments.csv` | `npm run build` |
 | 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
@@ -145,8 +147,8 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 2. 名前は取れたが画像が無い場合、**画像だけ** Item Search → 容量違いの兄弟SKU → Yahoo の順で補完する（商品名はカタログのまま）。
 3. 製品そのものが取れなければ **楽天 Item Search API**（画像ありの出品を最大10件見て `r.r10s.jp` を優先）。
 4. それでも失敗したら **Yahoo!ショッピング API**（画像にショップロゴが入ることがある）。
-5. `.env` に `GEMINI_API_KEY` があれば、説明文を約60字で生成する。無い場合でも、楽天から取れた情報だけで行は作れる。 `--img-only` では説明文は作らない。
-6. `data/rules.csv` でタグを自動判定する。
+5. `.env` に `GEMINI_API_KEY` があれば、**説明文（約60字）とタグ候補を1回のAI呼び出しでまとめて**生成する。タグは `data/tags.csv` に登録済みのキーだけから選ばせる（一覧に無いタグは作らせない）。`--img-only` ではスキップする。
+6. AI呼び出しが無い/失敗した場合は `data/rules.csv` の完全一致キーワードでタグだけ判定する（説明文は空のまま）。楽天から取れた情報だけでも行は作れる。
 7. メーカー名が取れたら `brand` 列にそのまま入れる。取れなければ空欄。
 8. `data/products.csv` に **新規追加**、または **既存 JAN の一部列を更新**する。最後に JAN 順へ並べ替えて保存する。
 
@@ -213,16 +215,38 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 未登録の `key` を商品に書くと、ビルドがエラーで止まります。古いカテゴリ名 `pref` は使いません。
 
-### rules.csv（自動タグ）
+### rules.csv（収集時のタグ自動判定 / フォールバック用）
 
-商品名・説明文にキーワードがあれば、そのタグを自動で付けます。
+商品名・メーカー名にキーワードがあれば、そのタグを付けます。
 
 | 列 | 例 |
 |---|---|
 | `tag` | `gf` |
 | `keywords` | `グレインフリー 穀物不使用` |
 
-区切りはスペース・カンマ・読点どれでも構いません。判定は収集時とビルド時の両方で行われます。特定商品だけ付けたくないタグは `exclude_tags` へ。
+区切りはスペース・カンマ・読点どれでも構いません。
+
+**使われる場面は3つだけです（ビルド時に自動でタグを付け直すことはもうしません）。**
+
+1. `auto_collect_all.py` で商品を収集するとき、`GEMINI_API_KEY` が無い/AI呼び出しに失敗したときのフォールバック判定
+2. `npm run build` 時、既にタグが付いている商品の検索を助ける読み・別名として（例: `digestive` タグが付いている商品は「おなか」でも検索にヒットする）
+3. `npm run build` 時、`build_report.html`の「参考候補・弱い一致」に出す、目視確認用のヒント（タグは付けない。詳細は本章末の「確認レポート」）
+
+タグそのもの（バッジ表示・フィルター）は常に `products.csv` の `tags` 列に書かれているものだけが使われます。「説明文にこの言葉があるのにタグが無い」場合は `npm run build` 時に確認推奨の警告が出るだけで、自動では付きません。特定商品だけ提案してほしくないタグは `exclude_tags` へ。
+
+### aliases.csv（検索専用の読み・別名）
+
+タグとは完全に無関係に、「本文にこの文字があれば、検索窓ではこの読みでもヒットさせる」というだけの表です。ブランドバッジの表示や商品名は一切変更しません。
+
+| 列 | 例 |
+|---|---|
+| `keyword` | `TripeDry` |
+| `reading` | `トライプドライ` |
+
+- `keyword`: `name` / `brand` / `desc` のいずれかに含まれているかを判定する文字列
+- `reading`: 見つかった場合に検索対象へ追加する読み（スペース区切りで複数可）
+
+例えば英語表記のブランド（`TripeDry`）はカタカナで検索されても見つかるように、漢字の成分名（`納豆菌`）はひらがな・カタカナ（`なっとうきん`/`ナットウキン`）で検索されても見つかるようにするための表です。`normalize()` はひらがな⇄カタカナの揺れは吸収しますが、漢字の読みまでは変換しないため、この表で個別に足す必要があります。
 
 ### categories.csv（フィルターの枠）
 
@@ -261,6 +285,21 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 ビルドは検証せず、そのまま `data_master.js` の `popular_searches` に載せます。画面は起動のたびに最大3語をランダムに選び、「よく検索されているワードは〇〇、〇〇、〇〇です」と出します。行が無ければ吹き出し自体を出しません。
 
+### 確認レポート（build_report.html）
+
+`npm run build` を実行するたびに、プロジェクト直下に `build_report.html` ができます。ターミナルには最初の10件しか出ないので、全件を見たいときはこちらをブラウザで開いてください。`products.csv` や ODS は書き換えません。実行するたびに上書きされます（Git管理外）。
+
+4つのセクションがあります。
+
+| セクション | 内容 | 基準 |
+|---|---|---|
+| データ不備 | ビルドを止める原因（未登録タグ、列不足、JAN重複など） | エラー。1件でもあると公開できない |
+| タグ付け忘れの確認推奨 | 説明文に `tags.csv` の表示名（例: `涙やけ`）と同じ言葉があるのに、その商品の `tags` 列に無い | `tags.csv` の表示名（英語カッコ書きは除く）と部分一致。JAN・商品名・提案タグの列はそのままODSへコピペできる |
+| rules.csvキーワードによる参考候補・弱い一致 | 上より緩い、`rules.csv` の同義語キーワードでのヒット | 誤検知も多いので、1件ずつ目視してから `tags` に追加するか判断する。個別に出したくない商品は `exclude_tags` へ |
+| その他の確認推奨 | `exclude_tags` の未登録タグ、JANが13桁でない、似た商品名など | 上記以外の警告文をそのまま列挙 |
+
+どの項目もタグを自動では付けません。付けるかどうかは必ず人（またはAI収集時のみ）が判断します。
+
 ---
 
 ## 5. 画像
@@ -282,6 +321,8 @@ npm run check:links
 ```
 
 `img` と公式ページ（`a8`）をネットで確認します。CSV は書き換えません。`npm run build` にも入っていません。切れ（404、極小・1px画像）があると終了コード 1、ボット拒否やトップへのリダイレクトは「要確認」で止めません。画像だけ / 公式だけなら `--img-only` / `--a8-only` です。
+
+実行後、プロジェクト直下に `check_links_report.html` ができます。ターミナルは全件表示ですが、JAN・商品名・URLを見比べながら確認したいときはこちらをブラウザで開いてください。実行するたびに上書きされます（Git管理外）。
 
 直し方:
 
@@ -428,6 +469,7 @@ git push
 | `価格 amz_p は半角数字のみ` | カンマや「円」を消す |
 | `切れがあります`（`npm run check:links`） | `img` なら URL の貼り直しか `images/{JAN}.jpg`。`a8` なら公式ページを目視。全件 `collect:all` すると説明文も戻る |
 | `要確認`（`npm run check:links`） | 403 はボット拒否のことが多い。トップへ飛ばされた公式URLは改定・廃盤の手がかり（確定ではない） |
+| 確認推奨・切れの全件を見たい | ターミナルは最初の10件だけ。`build_report.html` / `check_links_report.html` をブラウザで開く（§4「確認レポート」） |
 | ボタンが `データを読み込み中` のまま / `データの読み込みに失敗` | まず `npm run build`。コンソールの `Worker data load failed` は `product_data.json` が古い・無い |
 | 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
 | 問い合わせが「準備中」のまま | `.env` の `FORMSPREE_FORM_ID` が空か、英数字以外。入れてから `npm run build` |
@@ -477,7 +519,7 @@ Python ライブラリの入れ方の選択肢:
 
 `data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `categories`, `rules` です。
 
-`comments.csv` と `popular_searches.csv` はビルドが自動で読む追加マスターです。ODS に同名シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
+`comments.csv`、`popular_searches.csv`、`aliases.csv` はビルドが自動で読む追加マスターです。ODS に同名シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
 
 ### マクロの用途
 

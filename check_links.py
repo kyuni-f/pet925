@@ -12,6 +12,7 @@ products.csv の画像URL（img）と公式ページURL（a8）が生きてい�
 """
 
 import argparse
+import datetime
 import json
 import os
 import struct
@@ -35,6 +36,83 @@ COLOR_GREEN = "\033[32m"
 COLOR_YELLOW = "\033[33m"
 COLOR_BOLD = "\033[1m"
 COLOR_RESET = "\033[0m"
+
+CHECK_LINKS_REPORT_HTML = "check_links_report.html"
+
+
+def _html_escape(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+
+def write_check_links_report(results, targets, skipped, exec_time_str):
+    """check_links.py の結果を色分きHTMLレポートとして書き出す。products.csv は書き換えない。"""
+    broken = [item for item in results if item["level"] == "broken"]
+    review = [item for item in results if item["level"] == "review"]
+    ok_count = sum(1 for item in results if item["level"] == "ok")
+
+    def row_html(item, css_class):
+        final = ""
+        if item["final_url"] and item["final_url"] != item["url"]:
+            final = f'<br><span style="color:#888;">→ {_html_escape(item["final_url"])}</span>'
+        extra = ""
+        if item["dims"]:
+            extra = f' {item["dims"][0]}x{item["dims"][1]}'
+        elif item["size"]:
+            extra = f' {item["size"]} bytes'
+        kind_label = "画像" if item["kind"] == "img" else "公式"
+        return (f'<tr class="{css_class}">'
+                f'<td>{_html_escape(item["jan"])}</td>'
+                f'<td>{_html_escape(item["name"])}</td>'
+                f'<td>{kind_label}</td>'
+                f'<td>{_html_escape(item["url"])}{final}</td>'
+                f'<td>{_html_escape(item["detail"])}{_html_escape(extra)}</td>'
+                f'<td>{item["line"]}</td></tr>')
+
+    parts = []
+    parts.append('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">')
+    parts.append('<title>pet925 リンク生死チェックレポート</title><style>')
+    parts.append('''
+body { font-family: -apple-system, "Hiragino Sans", Meiryo, sans-serif; margin: 24px; color: #222; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; margin-top: 32px; border-bottom: 2px solid #ddd; padding-bottom: 4px; }
+.summary { color: #555; margin-bottom: 20px; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; word-break: break-all; }
+th { background: #f0f0f0; }
+tr.broken td { background: #ffe0e0; }
+tr.review td { background: #fff8d6; }
+.empty { color: #2a7d2a; font-weight: bold; }
+''')
+    parts.append('</style></head><body>')
+    parts.append('<h1>pet925 リンク生死チェックレポート</h1>')
+    parts.append(f'<p class="summary">実行時刻: {_html_escape(exec_time_str)} / 対象列: {_html_escape(", ".join(targets))} / '
+                  f'結果: OK {ok_count} / 切れ {len(broken)} / 要確認 {len(review)}<br>'
+                  'このファイルは npm run check:links のたびに上書きされます。products.csv は書き換えません。</p>')
+
+    parts.append(f'<h2>切れ ({len(broken)}件)</h2>')
+    if broken:
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>種類</th><th>URL</th><th>詳細</th><th>行番号</th></tr>')
+        for item in broken:
+            parts.append(row_html(item, "broken"))
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ 切れはありません。</p>')
+
+    parts.append(f'<h2>要確認 ({len(review)}件)</h2>')
+    parts.append('<p class="summary">ボット拒否・一時障害・トップページへのリダイレクトの可能性があります。改定・廃盤の手がかりですが確定ではありません。</p>')
+    if review:
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>種類</th><th>URL</th><th>詳細</th><th>行番号</th></tr>')
+        for item in review:
+            parts.append(row_html(item, "review"))
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ 要確認の項目はありません。</p>')
+
+    parts.append('</body></html>')
+
+    with open(CHECK_LINKS_REPORT_HTML, "w", encoding="utf-8") as f:
+        f.write("".join(parts))
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -338,6 +416,7 @@ def main():
     print("   ※ ビルドや CSV は変更しません。切れの修正は手作業です。")
 
     if not tasks:
+        write_check_links_report([], targets, skipped, datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         print(f"\n{COLOR_GREEN}{COLOR_BOLD}✅ チェック対象のURLがありません（すべて未設定）。{COLOR_RESET}")
         sys.exit(0)
 
@@ -351,6 +430,10 @@ def main():
     broken = [item for item in results if item["level"] == "broken"]
     review = [item for item in results if item["level"] == "review"]
     ok_count = sum(1 for item in results if item["level"] == "ok")
+
+    exec_time_str = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+    write_check_links_report(results, targets, skipped, exec_time_str)
+    print(f"\n   - {CHECK_LINKS_REPORT_HTML} (全件レポート)")
 
     if broken:
         print(f"\n{COLOR_RED}{COLOR_BOLD}⚠️  切れ {len(broken)} 件:{COLOR_RESET}")

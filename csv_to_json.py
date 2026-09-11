@@ -23,6 +23,7 @@ PRODUCT_CSV = os.path.join(DATA_DIR, 'products.csv')
 CAT_CSV = os.path.join(DATA_DIR, 'categories.csv')
 TAG_CSV = os.path.join(DATA_DIR, 'tags.csv')
 RULE_CSV = os.path.join(DATA_DIR, 'rules.csv')
+ALIAS_CSV = os.path.join(DATA_DIR, 'aliases.csv')
 
 OUTPUT_JSON = 'product_data.json'
 CHUNK_SIZE = 5000  # 1ファイルあたりの最大件数
@@ -40,7 +41,7 @@ FORMSPREE_FORM_ID = contact_config["form_id"]
 # CSVファイル名と、それがdata_master.jsでどの変数名になるかのマッピング
 # products.csv は特別扱いなのでここには含めない
 SPECIFIC_MASTER_CSVS = {
-    'categories.csv', 'tags.csv', 'rules.csv'
+    'categories.csv', 'tags.csv', 'rules.csv', 'aliases.csv'
 }
 
 
@@ -55,18 +56,117 @@ COLOR_RESET = '\033[0m'
 validation_errors = []
 validation_warnings = []
 
-def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest):
+BUILD_REPORT_HTML = 'build_report.html'
+
+def _html_escape(s):
+    return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            .replace('"', '&quot;'))
+
+
+def write_build_report(errors, warnings, suggestions, rule_weak_suggestions, product_count, exec_time_str, duration):
+    """npm run build の結果を色分きHTMLレポートとして書き出す。
+    products.csv / pet925_master.ods は一切書き換えず、確認用の別ファイルとして毎回上書きする。
+    """
+    other_warnings = [w for w in warnings if 'の付与を検討してください' not in w]
+
+    parts = []
+    parts.append('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">')
+    parts.append('<title>pet925 ビルドレポート</title><style>')
+    parts.append('''
+body { font-family: -apple-system, "Hiragino Sans", Meiryo, sans-serif; margin: 24px; color: #222; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; margin-top: 32px; border-bottom: 2px solid #ddd; padding-bottom: 4px; }
+.summary { color: #555; margin-bottom: 20px; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 14px; vertical-align: top; }
+th { background: #f0f0f0; }
+tr.error td { background: #ffe0e0; }
+tr.warning td { background: #fff8d6; }
+.empty { color: #2a7d2a; font-weight: bold; }
+code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
+''')
+    parts.append('</style></head><body>')
+    parts.append('<h1>pet925 ビルドレポート</h1>')
+    parts.append(f'<p class="summary">実行時刻: {_html_escape(exec_time_str)} / 処理時間: {duration:.2f}秒 / '
+                  f'商品件数: {product_count}件<br>'
+                  'このファイルは npm run build のたびに上書きされます。products.csv や pet925_master.ods は書き換えません。'
+                  'コピペしてODS側の修正に使ってください。</p>')
+
+    # 1. データ不備（エラー。ビルドを止める原因）
+    parts.append(f'<h2>データ不備 ({len(errors)}件)</h2>')
+    if errors:
+        parts.append('<table><tr><th>内容</th></tr>')
+        for e in errors:
+            parts.append(f'<tr class="error"><td>{_html_escape(e)}</td></tr>')
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ データ不備はありません。</p>')
+
+    # 2. タグ付け忘れの確認推奨（コピペ用に構造化）
+    parts.append(f'<h2>タグ付け忘れの確認推奨 ({len(suggestions)}件)</h2>')
+    if suggestions:
+        parts.append('<p class="summary">説明文にタグ名と同じ言葉が含まれているのに、tags列にそのタグが無い商品です。'
+                      '本当に付けるべきタグかは目視で判断してください。JAN・商品名・提案タグの列はそのままODSへコピペできます。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>提案タグ (key)</th><th>提案タグ (表示名)</th><th>行番号</th></tr>')
+        for s in sorted(suggestions, key=lambda x: x['line']):
+            parts.append('<tr class="warning">'
+                          f'<td>{_html_escape(s["jan"])}</td>'
+                          f'<td>{_html_escape(s["name"])}</td>'
+                          f'<td><code>{_html_escape(s["tag_id"])}</code></td>'
+                          f'<td>{_html_escape(s["tag_name"])}</td>'
+                          f'<td>{s["line"]}</td></tr>')
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ タグ付け忘れの提案はありません。</p>')
+
+    # 3. rules.csv キーワードによる「弱い一致」の参考候補（タグの厳密な表示名一致より広い、ゆるめの同義語ヒット）
+    parts.append(f'<h2>rules.csvキーワードによる参考候補・弱い一致 ({len(rule_weak_suggestions)}件)</h2>')
+    if rule_weak_suggestions:
+        parts.append('<p class="summary">上の「タグ付け忘れの確認推奨」よりゆるい基準（rules.csvの同義語キーワード）でのヒットです。'
+                      'タグは自動では付きません。説明文の一部に単語が出てきただけの誤検知も多いので、'
+                      '1件ずつ「本当にそのお悩み向けか」を見てから、必要ならODSのtags列に手で追加してください。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>提案タグ (key)</th><th>提案タグ (表示名)</th><th>ヒットした語</th><th>行番号</th></tr>')
+        for s in sorted(rule_weak_suggestions, key=lambda x: x['line']):
+            parts.append('<tr class="warning">'
+                          f'<td>{_html_escape(s["jan"])}</td>'
+                          f'<td>{_html_escape(s["name"])}</td>'
+                          f'<td><code>{_html_escape(s["tag_id"])}</code></td>'
+                          f'<td>{_html_escape(s["tag_name"])}</td>'
+                          f'<td>{_html_escape(s["keyword"])}</td>'
+                          f'<td>{s["line"]}</td></tr>')
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ 参考候補はありません。</p>')
+
+    # 4. その他の確認推奨（exclude_tags の未登録タグ、JAN形式、類似商品名など）
+    parts.append(f'<h2>その他の確認推奨 ({len(other_warnings)}件)</h2>')
+    if other_warnings:
+        parts.append('<table><tr><th>内容</th></tr>')
+        for w in other_warnings:
+            parts.append(f'<tr class="warning"><td>{_html_escape(w)}</td></tr>')
+        parts.append('</table>')
+    else:
+        parts.append('<p class="empty">✅ その他の確認推奨はありません。</p>')
+
+    parts.append('</body></html>')
+
+    with open(BUILD_REPORT_HTML, 'w', encoding='utf-8') as f:
+        f.write(''.join(parts))
+
+
+def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, alias_rules, tag_display_names):
     """1行分の重い処理を担当するワーカー関数"""
     row_errors = []
     row_warnings = []
+    row_suggestions = []  # 確認推奨（タグ付け忘れ）の構造化データ。レポートでのコピペ用
     name = row.get('name', '').strip()
 
     # ヘッダー行そのものがデータとして混入している場合はスキップ
     if name.lower() == 'name' or name == '商品名':
-        return None, [], [], None, line_num
+        return None, [], [], [], None, line_num
 
     if not name:
-        return None, [f"行 {line_num}: 商品名(name)が空です。"], [], None, line_num
+        return None, [f"行 {line_num}: 商品名(name)が空です。"], [], [], None, line_num
 
     # 16列構成（必須列。17列目のexclude_tagsは任意列のためここには含めない）
     expected_keys = ['name', 'brand', 'tags', 'desc', 'size', 'jan', 'img', 'amz', 'rak', 'yah', 'a8', 'label', 'promo', 'amz_p', 'rak_p', 'yah_p']
@@ -99,17 +199,31 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
             if t not in allowed_tags:
                 row_warnings.append(f"行 {line_num}: exclude_tags に未登録タグ '{t}' が指定されています (商品: {name[:20]}...)")
 
-    # 1. rules.csv に基づく自動付与（除外タグは対象外）
-    for tag_id, keywords in tag_keywords.items():
-        if tag_id not in tags and tag_id not in excluded_tag_ids:
-            found_kw = next((kw for kw in keywords if kw in check_text), None)
-            if found_kw:
-                tags.append(tag_id)
-
-    # 2. タグ名そのものが説明文に含まれている場合の提案 (除外タグ適用後)
+    # タグ名そのものが説明文に含まれている場合の提案（除外タグ適用後）
+    # ※ かつては rules.csv のキーワード一致でタグを自動付与していたが、
+    #   「tags列に書いていないタグがバッジに出る/消える」という分かりにくさがあったため、
+    #   タグは products.csv の tags列（人が書いた/収集時にAIが書いたもの）だけを信頼し、
+    #   ここでは「つけ忘れていませんか？」の提案（警告）のみに一本化した。
     for t_name_norm, t_id in tag_lookup_for_suggest.items():
         if t_id not in tags and t_id not in excluded_tag_ids and t_name_norm in check_text:
             row_warnings.append(f"行 {line_num}: 説明文に '{t_name_norm}' が含まれています。タグ '{t_id}' の付与を検討してください。")
+            row_suggestions.append({
+                "line": line_num,
+                "jan": (row.get('jan') or '#').strip(),
+                "name": name,
+                "tag_id": t_id,
+                "tag_name": tag_display_names.get(t_id, t_id),
+            })
+
+    # 3. aliases.csv に基づく検索専用の読み・別名（タグには一切影響しない）
+    #    ブランド表記が英語のままでも、カタカナ/ひらがなで検索できるようにするための裏フィールド。
+    #    name/brand/desc のいずれかに keyword があれば、対応する reading を search_alias に足す。
+    alias_check_text = normalize_text(f"{name} {brand_name} {desc}")
+    alias_hits = []
+    for keyword_norm, readings in alias_rules:
+        if keyword_norm and keyword_norm in alias_check_text:
+            alias_hits.extend(readings)
+    row['search_alias'] = ' '.join(alias_hits)
 
     # 価格の数値形式チェック
     for p_col in ['amz_p', 'rak_p', 'yah_p']:
@@ -131,7 +245,7 @@ def process_row_task(line_num, row, tag_keywords, tag_to_cat_index, allowed_tags
 
     tags.sort(key=lambda t: tag_to_cat_index.get(t, 999))
     row['tags'] = tags
-    return row, row_errors, row_warnings, norm_name, line_num
+    return row, row_errors, row_warnings, row_suggestions, norm_name, line_num
 
 def convert(exit_on_error=True):
     print(f"--- 変換処理を開始します ---")
@@ -162,6 +276,7 @@ def convert(exit_on_error=True):
     tag_master = {}
     allowed_tags = set()
     tag_lookup_for_suggest = {} # 提案用：正規化名 -> タグID
+    tag_display_names = {} # レポート表示用：タグID -> 表示名（元の大文字小文字・括弧つき）
     for row in load_dict_rows(TAG_CSV):
         cat = (row.get('category') or '').strip()
         key = (row.get('key') or '').strip()
@@ -174,7 +289,12 @@ def convert(exit_on_error=True):
         norm_key = normalize_text(key)
         tag_master[cat][norm_key] = name
         allowed_tags.add(norm_key)
-        tag_lookup_for_suggest[normalize_text(name)] = norm_key
+        # 提案用のキーは "涙やけ (TEAR)" のような英語カッコ書きを除いた日本語部分だけにする。
+        # カッコ込みの文字列が説明文にそのまま書かれることは無いため、除かないと提案が一切発火しない。
+        name_for_suggest = re.sub(r'\s*[（(][^（()）]*[）)]\s*$', '', name).strip()
+        if name_for_suggest:
+            tag_lookup_for_suggest[normalize_text(name_for_suggest)] = norm_key
+        tag_display_names[norm_key] = name
 
     # タグのカテゴリ所属マップを作成（ソート用）
     tag_to_cat_index = {}
@@ -197,6 +317,18 @@ def convert(exit_on_error=True):
             if tag not in tag_keywords: tag_keywords[tag] = []
             tag_keywords[tag].extend(kws)
             allowed_tags.add(normalize_text(tag))
+
+    # 4-2. 検索専用の別名（aliases.csv）の読み込み。タグ体系とは無関係で、
+    #      「name/brand/desc に keyword があれば reading を検索対象に足す」だけの表。
+    #      例: ブランド表記が英語(TripeDry)でもカタカナ(トライプドライ)で検索できるようにする、
+    #      説明文の漢字語(納豆菌)をかな(なっとうきん)でも検索できるようにする、など。
+    alias_rules = []
+    for row in load_dict_rows(ALIAS_CSV):
+        keyword = (row.get('keyword') or '').strip()
+        reading_str = (row.get('reading') or '').strip()
+        if keyword and reading_str:
+            readings = [r for r in reading_str.split() if r]
+            alias_rules.append((normalize_text(keyword), readings))
 
     # 5. 動的に他の未認識マスターCSVを読み込む
     other_masters_data = {}
@@ -236,20 +368,28 @@ def convert(exit_on_error=True):
     # 例: os.cpu_count() // 2 とすれば、パソコンの能力の半分だけを使います
     num_cores = os.cpu_count() or 1
     max_workers = max(1, min(num_cores - 1, 8)) # 1コアをOS用に残し、最大8プロセスで並列化
+    all_tag_suggestions = []  # 確認推奨（タグ付け忘れ）の構造化データ。全行分をここに集約
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_row_task, ln, row, tag_keywords, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest)
+        futures = [executor.submit(process_row_task, ln, row, tag_to_cat_index, allowed_tags, tag_lookup_for_suggest, alias_rules, tag_display_names)
                    for ln, row in all_rows_input]
         
         for future in concurrent.futures.as_completed(futures):
-            res_row, res_errs, res_warns, norm_name, ln = future.result()
+            res_row, res_errs, res_warns, res_suggestions, norm_name, ln = future.result()
             validation_errors.extend(res_errs)
             validation_warnings.extend(res_warns)
+            all_tag_suggestions.extend(res_suggestions)
             if res_row:
                 processed_results.append((ln, res_row, norm_name))
 
     # 全プロセス終了後、行番号で並び替えて元の順序を復元
     processed_results.sort(key=lambda x: x[0])
     products = [r[1] for r in processed_results]
+
+    # rules.csv のキーワードのうち、バッジ表示対象(cond)のタグだけを「弱い一致」参考候補の対象にする
+    # (dog/cat/adult/senior等は説明文にほぼ必ず出てくる語なので対象外にし、ノイズを避ける)
+    cond_tag_ids = set(tag_master.get('cond', {}).keys())
+    rule_cond_keywords = {t: kws for t, kws in tag_keywords.items() if t in cond_tag_ids}
+    all_rule_weak_suggestions = []
 
     for ln, res_row, norm_name in processed_results:
         # JAN重複チェック (# はスキップ)
@@ -288,6 +428,29 @@ def convert(exit_on_error=True):
         # お気に入り管理用の不変なIDを付与
         # JANがあればJANを使用、なければ名寄せ用キーのパイプをアンダーバーに変えたものを使用
         res_row['id'] = jan_val if jan_val != '#' else dup_key.replace('|', '_')
+
+        # rules.csv のキーワードによる「弱い一致」の参考候補（バッジ対象のcondタグのみ）
+        # tags.csv の厳密な表示名一致（tag_lookup_for_suggest）では出てこない、
+        # もっとゆるい同義語ヒットを「要目視の参考」としてレポートにだけ出す（タグの自動付与はしない）。
+        exclude_raw = str(res_row.get('exclude_tags', '#')).strip()
+        row_excluded = set()
+        if exclude_raw and exclude_raw != '#':
+            row_excluded = {normalize_text(t) for t in exclude_raw.replace(',', ' ').split() if t}
+        row_check_text = normalize_text(f"{res_row.get('name', '')} {res_row.get('desc', '')}")
+        row_tags_set = set(res_row.get('tags') or [])
+        for cond_tag_id, kws in rule_cond_keywords.items():
+            if cond_tag_id in row_tags_set or cond_tag_id in row_excluded:
+                continue
+            hit_kw = next((kw for kw in kws if kw in row_check_text), None)
+            if hit_kw:
+                all_rule_weak_suggestions.append({
+                    "line": ln,
+                    "jan": jan_val,
+                    "name": res_row.get('name', ''),
+                    "tag_id": cond_tag_id,
+                    "tag_name": tag_display_names.get(cond_tag_id, cond_tag_id),
+                    "keyword": hit_kw,
+                })
 
     # products リストは既に上で作成済み
     # 画像キャッシュ参照処理: images/{jan}.ext を手動で配置しておくと自動的に採用される
@@ -342,18 +505,23 @@ def convert(exit_on_error=True):
     duration = time.perf_counter() - start_time
     print(f"   - 処理時間: {duration:.2f}秒")
 
+    # 全件（省略なし）の詳細をHTMLレポートに書き出す。products.csv/ODSには一切触れない
+    write_build_report(validation_errors, validation_warnings, all_tag_suggestions, all_rule_weak_suggestions,
+                        len(products), exec_time, duration)
+    print(f"   - {BUILD_REPORT_HTML} (確認推奨・エラーの全件レポート)")
+
     # 警告（確認を促すだけでデプロイは止めない）を表示
     if validation_warnings:
         print(f"\n{COLOR_CYAN}{COLOR_BOLD}💡 {len(validation_warnings)} 個の確認推奨項目があります:{COLOR_RESET}")
         for warn in validation_warnings[:10]:
             print(f"{COLOR_CYAN}   - {warn}{COLOR_RESET}")
-        if len(validation_warnings) > 10: print(f"   ...他 {len(validation_warnings)-10} 件")
+        if len(validation_warnings) > 10: print(f"   ...他 {len(validation_warnings)-10} 件（全件は {BUILD_REPORT_HTML} を参照）")
 
     if validation_errors:
         print(f"\n{COLOR_RED}{COLOR_BOLD}⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:{COLOR_RESET}")
         for err in validation_errors[:10]: # 最初の10件を表示
             print(f"{COLOR_RED}   - {err}{COLOR_RESET}")
-        if len(validation_errors) > 10: print(f"   ...他 {len(validation_errors)-10} 件")
+        if len(validation_errors) > 10: print(f"   ...他 {len(validation_errors)-10} 件（全件は {BUILD_REPORT_HTML} を参照）")
         # 致命的なミス（商品名空など）がある場合にデプロイを止めるなら以下を有効にする
         if exit_on_error:
             sys.exit(1)

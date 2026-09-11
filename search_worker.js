@@ -79,6 +79,8 @@ function processChunk(data) {
         const rawBrand = (item.brand && item.brand !== '#') ? item.brand : '';
         const brandNorm = normalize(rawBrand) + " " + normalize(item.brand_id && item.brand_id !== '#' ? item.brand_id : '');
         const descNorm = normalize(item.desc);
+        // aliases.csv 由来の検索専用の読み・別名（タグには影響しない。表示にも出さない）
+        const aliasNorm = normalize(item.search_alias || "");
 
         let tagsNorm = "";
         // セットを毎回作らず、検索時も配列のincludesを使用（タグ数が少なければこちらの方が速い）
@@ -94,7 +96,8 @@ function processChunk(data) {
             name: nameNorm,
             brand: brandNorm,
             tags: tagsNorm.trim(),
-            desc: descNorm
+            desc: descNorm,
+            alias: aliasNorm
         };
 
         // 高速フィルタリング用の全文テキスト（AND検索用）
@@ -103,6 +106,7 @@ function processChunk(data) {
             brandNorm, 
             tagsNorm, 
             descNorm, 
+            aliasNorm,
             normalize(item.size || "")
         ].join(' ');
 
@@ -225,6 +229,7 @@ self.onmessage = function(e) {
                 if (w.brand.indexOf(word) !== -1) score += 50;
                 if (w.tags.indexOf(word) !== -1) score += 20;
                 if (w.desc.indexOf(word) !== -1) score += 5;
+                if (w.alias.indexOf(word) !== -1) score += 5;
             }
             item._tempScore = score;
             allMatches.push(item);
