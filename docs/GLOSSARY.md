@@ -60,7 +60,8 @@ npm run check:links    # 画像URLと公式ページURLのリンク切れ確認�
 | `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。`check_links.py` からも読む。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
-| `data/comments.csv` | 検索結果の店員コメント。`animal` / `cond` / `keyword`。 |
+| `data/comments.csv` | 検索結果上部の店員コメント（PC/スマホ共通）。`animal` / `cond` / `keyword`。セル内改行はダブルクォートで囲むと画面でも改行。 |
+| `data/aliases.csv` | 検索専用の読み（`keyword,reading`）。バッジやフィルターには出ない。 |
 | `data/popular_searches.csv` | 検索欄下の「よく検索されているワード」吹き出し用の語。GA4 を見て出してよい語だけ手で書く。`word` 列のみ。 |
 | `.env` | APIキーなど秘密情報。Git に上げない。 |
 | `package.json` | プロジェクトの身分証明書。`npm run ○○` の定義もここ。Git に含める。 |
@@ -140,6 +141,7 @@ CSV の列の意味:
 | **プレースホルダー** | 画像が無いときの「No Image」。外部サイトに頼らず SVG で出している。 |
 | **SPAっぽい動き** | ページ全体を再読み込みせず、検索 ↔ 結果を切り替える。URL の `?q=` も更新する。 |
 | **検索案内吹き出し** | サイト説明の直後・検索窓の前。使い方の固定文（キーワード／タグで最適な1番を探す）。PC でも出す。`index.html` の `.search-guide-teaser`。結果画面では検索 View ごと消える。 |
+| **結果画面の店員吹き出し** | 検索結果上部。`comments.csv` の接客文。PC/スマホ共通。セル内改行は画面でも改行（`pre-line`）。本文は `escapeHtml` してから出す。`.result-comment-area`。 |
 | **検索ヒント吹き出し** | スマホの検索欄下。店員アイコン＋吹き出しで「よく検索されているワードは〇〇、〇〇、〇〇です」。PC では出さない。語が無ければ隠す。`.search-hint-teaser`。 |
 
 ## 検索の仕組み
@@ -157,10 +159,11 @@ CSV の列の意味:
 
 店員コメントと検索ヒント:
 
-- 検索案内吹き出し … 検索画面上部の固定文。JS なし（`index.html`）
+- 検索案内吹き出し … 検索画面上部の固定文。JS なし（`index.html`）。PC でも出す
+- 結果画面の店員吹き出し … `comments.csv`。PC/スマホ共通。改行あり
 - `pickStoreComments()` … 選んだ cond / animal タグに応じた一言（結果画面）
 - `pickKeywordComments()` … 検索欄の言葉（「心臓」「納豆菌」など）に応じた追加の一言（結果画面）
-- `pickPopularSearchWords()` … `popular_searches.csv` から最大3語をランダムに選ぶ（検索画面・下の吹き出し）
+- `pickPopularSearchWords()` … `popular_searches.csv` から最大3語をランダムに選ぶ（検索画面・下の吹き出し。スマホのみ）
 - `formatPopularSearchHint()` … 「よく検索されているワードは〇〇、〇〇、〇〇です」の文を作る
 
 ## Git・公開・秘密情報
@@ -227,7 +230,7 @@ CSV の列の意味:
 | 見た目を変えたい | `style.css` / `index.html` |
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る（`tags` は触らない） → ビルド |
-| 画像や公式ページのリンク切れを探したい | `npm run check:links` → 切れた行だけ CSV を直す → ビルド |
+| 画像URLだけ取り直したい | `jan_list.csv` → `npm run collect:img`（名前・説明は触らない） |
 | ビルドの確認推奨・エラーを全件見たい | `npm run build` 後に `build_report.html` をブラウザで開く（ターミナルは最初の10件だけ） |
 | リンク切れ・要確認を全件見たい | `npm run check:links` 後に `check_links_report.html` をブラウザで開く |
 | 公開したい | `npm run build` → `git status` → commit / push。手順は `docs/MANUAL.md` §9 |
@@ -236,7 +239,8 @@ CSV の列の意味:
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
 | JSON を `.gitignore` した方がよいか迷う | 今はしない。Pages がリポジトリをそのまま出す。`product_data.json` が無いと検索が読めない |
 | 検索画面の使い方案内（サイト説明の下の吹き出し）を変えたい | `index.html` の `.search-guide-bubble`。ビルド不要 |
-| 検索画面の「よく検索されているワード」を変えたい | `data/popular_searches.csv` → ビルド。GA4 は見るだけ。自動出力はしない |
+| 店員コメントを変えたい | `data/comments.csv` → ビルド。結果画面は PC でも出る。改行はダブルクォートで囲む |
+| 検索画面の「よく検索されているワード」を変えたい | `data/popular_searches.csv` → ビルド。スマホのみ。GA4 は見るだけ。自動出力はしない |
 | カードのバッジやサンプル文言を変えたい | `data/products.csv` の `label` / `promo` → ビルド。絞り込みボタンにはまだ出ない |
 | 運用の手順 | `docs/MANUAL.md` |
 | 「なぜこう作ったか」 | `docs/PROJECT_SUMMARY.md`。番号は時系列。探すときは先頭の「探し方」表。今の骨格だけなら「現在の完成形」 |

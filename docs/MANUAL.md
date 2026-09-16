@@ -55,6 +55,7 @@ flowchart TD
 |---|---|---|
 | 商品を増やす | `jan_list.csv` | `npm run collect:all` → 目視 → 必要なら §9 で公開 |
 | 説明文だけを作り直す | `npm run desc:helper`（商品名を貼って生成 → `desc` に貼る。`tags` は触らない） | `npm run build` |
+| 画像URLだけ取り直す | `jan_list.csv` | `npm run collect:img`（名前・説明は上書きしない） |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
 | ビルドやリンクチェックの確認推奨・エラーを全件見る | `build_report.html` / `check_links_report.html`（実行後に自動生成） | ブラウザで開いて目視。ターミナルは最初の10件だけ表示 |
@@ -62,7 +63,7 @@ flowchart TD
 | フィルターの枠を足す | `data/categories.csv` に行を足し、`data/tags.csv` にその所属のタグを足す | `npm run build` |
 | 収集時に「グレインフリー」などで自動タグを付ける（AI未設定時のフォールバック） | `data/rules.csv` | 次回の `collect` |
 | 英語表記のブランド名や漢字の単語を、かな/カタカナ検索でもヒットさせる | `data/aliases.csv` | `npm run build` |
-| 店員コメントを足す | `data/comments.csv` | `npm run build` |
+| 店員コメントを足す／直す | `data/comments.csv` | `npm run build`。PC でも出る。改行はセルをダブルクォートで囲む |
 | 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
 | 問い合わせフォーム自体を有効化する | `.env` の `FORMSPREE_FORM_ID` | `npm run build` |
@@ -261,7 +262,7 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 ### comments.csv（店員コメント）
 
-検索結果に出す一言です。商品レビューではありません。ビルドは中身を検証せず、そのまま `data_master.js` の `comments` に載せます。
+検索結果上部の吹き出し本文です（PC・スマホ共通）。商品レビューではありません。ビルドは中身を検証せず、そのまま `data_master.js` の `comments` に載せます。セル内の改行は画面でも改行として出ます（ダブルクォートで囲む）。
 
 | 列 | 意味 | 例 |
 |---|---|---|
@@ -446,6 +447,7 @@ git push
 **見た目**
 
 - [ ] PC とスマホでカードが崩れない
+- [ ] 結果画面の店員コメントが PC でも出る（該当タグがあるとき）。改行が潰れていない
 - [ ] ヘッダー導入文が出ている
 
 **健全性**

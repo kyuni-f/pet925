@@ -115,7 +115,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 /* 検索欄の下の「店員コメント」予告バブル。結果画面の店員コメント（.store-comment系）と
    同じ見た目にして、後で結果画面に本物のコメントが出たときに繋がりを感じてもらう狙い。
-   店員コメント本体と同様、スマホでのみ表示する */
+   予告バブル自体はスマホでのみ表示する */
 .search-hint-teaser {
     display: none;
     align-items: flex-start;
@@ -262,7 +262,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 /* アクティブフィルターのチップ表示 */
 .active-chips-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; min-height: 32px; }
 
-/* 店員の経験談＋件数コメント（スマホでのみ表示。接客のような「間」を作る） */
+/* 店員の経験談＋件数コメント（PC/スマホ共通。空のときは非表示） */
 .result-comment-area {
     display: none;
     background: #faf7f0;
@@ -271,6 +271,7 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     padding: 14px 16px;
     margin-bottom: 18px;
 }
+.result-comment-area:not(:empty) { display: block; }
 .result-comment-area:empty { display: none !important; padding: 0; margin: 0; border: none; }
 
 /* 店員アイコン＋吹き出しの「会話」レイアウト */
@@ -306,6 +307,8 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
     border-radius: 18px;
     padding: 10px 14px;
     box-shadow: 0 2px 6px rgba(90, 74, 44, 0.08);
+    white-space: pre-line; /* comments.csv のセル内改行を吹き出しに反映 */
+    overflow-wrap: break-word;
 }
 /* 吹き出しの「しっぽ」はグループ内の最初のコメントにだけ付ける（連続発言はLINE風にまとめる） */
 .result-comment-area .store-comment-bubbles .store-comment:first-child {
@@ -659,10 +662,7 @@ footer a { color: var(--gold); text-decoration: none; }
         left: 10px;
     }
 
-    /* 店員コメント欄はスマホでのみ表示（接客のような「間」を作る） */
-    .result-comment-area:not(:empty) { display: block; }
-
-    /* 検索欄下の予告バブルもスマホでのみ表示（語が無いときは隠す） */
+    /* 検索欄下の予告バブルはスマホでのみ表示（語が無いときは隠す） */
     .search-hint-teaser:not(.is-empty) { display: flex; }
 
     /* お気に入りボタンのツールチップはスマホでは非表示 */

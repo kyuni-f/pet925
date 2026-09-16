@@ -581,7 +581,20 @@ function renderActiveChips() { // 結果画面の「現在選択中の条件（�
 // comment_logic.js は index.html で main.js より前に読み込まれるため、ここでは呼び出すだけでよい。
 
 /**
- * 結果画面上部に店員コメント＋件数コメントを表示する（表示自体はスマホのみCSSで有効化）。
+ * HTML 属性・本文向けにエスケープする（comments.csv 由来テキスト用）。
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/**
+ * 結果画面上部に店員コメント＋件数コメントを表示する（PC/スマホ共通。改行は CSS の pre-line で反映）。
  * @param {number} totalMatchCount 検索にヒットした総件数
  */
 function renderResultComment(totalMatchCount) {
@@ -612,7 +625,7 @@ function renderResultComment(totalMatchCount) {
         html += '<div class="store-comment-group">';
         html += `<img src="${staffIcon}" alt="店員アイコン" class="store-comment-icon" onerror="this.style.display='none'">`;
         html += '<div class="store-comment-bubbles">';
-        html += `<p class="store-comment">${comment}</p>`;
+        html += `<p class="store-comment">${escapeHtml(comment)}</p>`;
         html += '</div></div>';
     });
     html += `<p class="result-count-comment">今回は<strong>${totalMatchCount}件</strong>の商品が見つかりました。</p>`;
