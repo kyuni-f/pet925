@@ -272,8 +272,8 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 表示ロジックは `comment_logic.js` です。
 
-- `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。
-- `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。
+- `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。検索欄がタグ名（涙やけ、穀物不使用、グレインフリーなど）を含むときも、その cond コメントを出す。
+- `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。すでに cond へ紐づいた語（涙やけなど）は重ねない。
 
 ### popular_searches.csv（検索画面のよく検索されているワード）
 

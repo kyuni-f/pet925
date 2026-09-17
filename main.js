@@ -612,9 +612,9 @@ function renderResultComment(totalMatchCount) {
         return;
     }
 
-    const storeComments = pickStoreComments();
-    // 検索ボックスの自由入力語に一致する経験談があれば、フィルター由来のコメントは変えずに追加で1件だけ載せる
     const searchVal = document.getElementById('search-input').value.trim();
+    const storeComments = pickStoreComments(undefined, searchVal);
+    // 検索ボックスの自由入力語に一致する経験談があれば、フィルター／タグ名由来のコメントは変えずに追加で1件だけ載せる
     const keywordComments = searchVal ? pickKeywordComments(searchVal).filter(c => !storeComments.includes(c)) : [];
     const allComments = storeComments.concat(keywordComments);
 
