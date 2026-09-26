@@ -4,6 +4,7 @@
 if (typeof categoryMaster === 'undefined') window.categoryMaster = {};
 if (typeof tagMaster === 'undefined') window.tagMaster = {};
 if (typeof tagKeywords === 'undefined') window.tagKeywords = {}; // tagKeywordsはrules.csvから生成
+if (typeof keyword_chips === 'undefined') window.keyword_chips = [];
 
 // --- アフィリエイト設定（ご自身のIDに書き換えてください） ---
 // もしもアフィリエイトでAmazon, 楽天, Yahoo!ショッピングを一括管理
@@ -303,6 +304,64 @@ function toggleDescription(button) {
         fullDesc.style.display = 'inline';
         button.textContent = '閉じる';
     }
+}
+
+function escapeCardText(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function condChipLabel(tagKey) {
+    const raw = tagLookupMap[tagKey] || tagKey;
+    const parts = String(raw).match(/(.+)\s*\((.+)\)/);
+    if (!parts) return escapeCardText(raw);
+    return `<span class="tag-jp">${escapeCardText(parts[1].trim())}</span><span class="tag-en">${escapeCardText(parts[2].trim())}</span>`;
+}
+
+/**
+ * カードのキーワードは keyword_chips.csv だけ。
+ * 名前・ブランド・説明のどれかにその語があれば出す。
+ * aliases.csv と rules.csv は検索用で、カードには出さない。
+ * 同じ文に短い語と長い語が両方当たるときは、長い方だけ出す。
+ */
+function collectHitKeywords(item) {
+    const hay = normalize(`${item.name || ''} ${item.brand && item.brand !== '#' ? item.brand : ''} ${item.desc || ''}`);
+    const rows = (typeof keyword_chips !== 'undefined' && Array.isArray(keyword_chips)) ? keyword_chips : [];
+    const hits = [];
+    rows.forEach(row => {
+        const kw = row && row.keyword ? String(row.keyword).trim() : '';
+        if (!kw || hay.indexOf(normalize(kw)) === -1) return;
+        hits.push(kw);
+    });
+    return hits.filter((a, i, arr) => {
+        const na = normalize(a);
+        return !arr.some((b, j) => j !== i && normalize(b) !== na && normalize(b).indexOf(na) !== -1);
+    });
+}
+
+function renderSearchHitHtml(item) {
+    const condTags = (item.tags || []).filter(t => tagMaster.cond && tagMaster.cond[t]);
+    const tagChips = condTags.length
+        ? condTags.map(t => `<span class="tag">${condChipLabel(t)}</span>`).join('')
+        : '<span class="search-hit-empty">お悩みタグなし</span>';
+    const keywords = collectHitKeywords(item);
+    let html = `<div class="search-hit">
+        <div class="search-hit-row">
+            <span class="search-hit-kicker">タグ</span>
+            <div class="search-hit-chips">${tagChips}</div>
+        </div>`;
+    if (keywords.length) {
+        const kwChips = keywords.map(k => `<span class="tag tag-keyword">${escapeCardText(k)}</span>`).join('');
+        html += `<div class="search-hit-row">
+            <span class="search-hit-kicker">キーワード</span>
+            <div class="search-hit-chips">${kwChips}</div>
+        </div>`;
+    }
+    html += '</div>';
+    return html;
 }
 
 function trackEvent(category, action, label, extraParams = {}) { // Google Analytics (GA4) にイベントを送信
@@ -793,20 +852,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
             productName = productName.replace(displayBrandName, '').trim();
         }
 
-        let descHtml = '';
-        const fullDesc = item.desc || "";
-        const TRUNCATE_LENGTH = 150; // 説明文を切り詰める長さ
-
-        if (fullDesc.length > TRUNCATE_LENGTH) {
-            const displayDesc = fullDesc.substring(0, TRUNCATE_LENGTH) + '...';
-            descHtml = `<p class="description is-long">
-                            <span class="short-desc">${displayDesc}</span>
-                            <span class="full-desc" style="display:none;">${fullDesc}</span>
-                            <button class="read-more-btn" onclick="toggleDescription(this)">続きを読む</button>
-                        </p>`;
-        } else {
-            descHtml = `<p class="description">${fullDesc}</p>`;
-        }
+        const descHtml = renderSearchHitHtml(item);
 
         const isFav = favorites.includes(item.id);
         const favTooltip = isFav ? 'お気に入りから削除' : 'お気に入りに追加';
@@ -821,7 +867,7 @@ function handleWorkerResults(data) { // Web Workerからの検索結果を受け
         const promoHtml = (item.promo && item.promo !== '#') ? `<span class="promo-text">${item.promo}</span>` : '';
         const brandBadgeHtml = displayBrandName ? `<span class="brand-badge">${displayBrandName}</span>` : '';
 
-        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content">${brandBadgeHtml}<div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}${promoHtml}<div class="tag-list">${item.tags.filter(t => tagMaster.cond && tagMaster.cond[t]).map(t => `<span class="tag">${tagLookupMap[t] || t}</span>`).join('')}</div><div class="shop-links">` +
+        card.innerHTML = `<div class="img-container">${(item.label && item.label !== '#') ? `<div class="featured-badge">${item.label}</div>` : ''}<img src="${imageSrc}" alt="${altName}" onload="if(this.naturalWidth <= 1) { tryNextImageSource(this, \`${safeImg}\`, defaultImg); } " onerror="tryNextImageSource(this, \`${safeImg}\`, defaultImg)" loading="lazy" decoding="async" onclick="openImageModal(this.src, '${safeName}')" style="cursor: zoom-in"></div><button class="card-fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${safeId}', '${safeName}', this)" data-tooltip="${favTooltip}" aria-label="${favTooltip}">${isFav ? '❤' : '♡'}</button><div class="card-content">${brandBadgeHtml}<div class="${productName.length > nameLongThreshold ? 'product-name is-long' : 'product-name'}">${productName}</div>${descHtml}${promoHtml}<div class="shop-links">` +
             `<a href="${getSearchUrl('amz', item.brand, item.name, item.amz, item.jan)}" class="btn-shop btn-amz" target="_blank" onclick="trackEvent('Search', 'click', 'Amazon:Search')">Amazonで検索</a>` +
             `<a href="${getSearchUrl('rak', item.brand, item.name, item.rak, item.jan)}" class="btn-shop btn-rak" target="_blank" onclick="trackEvent('Search', 'click', 'Rakuten:Search')">楽天市場で検索</a>` +
             `<a href="${getSearchUrl('yah', item.brand, item.name, item.yah, item.jan)}" class="btn-shop btn-yah" target="_blank" onclick="trackEvent('Search', 'click', 'Yahoo:Search')">Yahoo!ショッピングで検索</a>` +

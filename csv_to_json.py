@@ -57,7 +57,7 @@ validation_errors = []
 validation_warnings = []
 
 BUILD_REPORT_HTML = 'build_report.html'
-# 説明文の単語ではタグを提案しない。日常確認は必須欠け・矛盾・商品名の硬い一致だけ。
+# 説明文の単語ではタグを提案しない。日常確認は必須欠け・矛盾・商品名の硬い一致。お悩みタグなしは説明の手直し名簿。
 REVIEW_WARN_MARKERS = ('必須タグ欠け', 'タグ矛盾', '商品名に')
 NAME_HIT_MIN_KW_LEN = 2
 
@@ -90,17 +90,50 @@ def _render_card_preview(item):
     return f'<div class="card-preview">{badges}<div class="desc">{desc_html}</div></div>'
 
 
+def _find_alias_keyword_hits(name, brand, desc, alias_rules):
+    """aliases.csv の keyword が名前・ブランド・説明のどこにあるか。検索の読み追加と同じ範囲。"""
+    name_n = normalize_text(name)
+    brand_n = normalize_text(brand)
+    desc_n = normalize_text(desc)
+    hits = []
+    for orig_kw, keyword_norm, _readings in alias_rules:
+        if not keyword_norm:
+            continue
+        places = []
+        if keyword_norm in name_n:
+            places.append('名前')
+        if keyword_norm in brand_n:
+            places.append('ブランド')
+        if keyword_norm in desc_n:
+            places.append('説明')
+        if places:
+            hits.append({'keyword': orig_kw, 'places': places})
+    return hits
+
+
+def _render_alias_hits(item):
+    hits = item.get('alias_hits') or []
+    if not hits:
+        return '<span class="muted">（aliases なし）</span>'
+    bits = []
+    for h in hits:
+        places = '・'.join(h.get('places') or [])
+        bits.append(f'{_html_escape(h.get("keyword") or "")}（{places}）')
+    return '<br>'.join(bits)
+
+
 def _empty_review():
-    return {"missing": [], "conflicts": [], "name_hits": []}
+    return {"missing": [], "conflicts": [], "name_hits": [], "no_cond": []}
 
 
-def write_build_report(errors, warnings, missing_required, tag_conflicts, name_hits,
+def write_build_report(errors, missing_required, tag_conflicts, name_hits, no_cond,
                        product_count, exec_time_str, duration):
     """npm run build の結果を色分けHTMLレポートとして書き出す。
     products.csv / pet925_master.ods は一切書き換えず、確認用の別ファイルとして毎回上書きする。
     説明文の単語一致ではタグを提案しない（読み物・検索用の語がバッジ確認を汚さないようにする）。
+    JAN形式・類似名などのその他確認推奨はターミナル側。HTMLには出さない。
     """
-    other_warnings = [w for w in warnings if not any(m in w for m in REVIEW_WARN_MARKERS)]
+    no_alias_count = sum(1 for s in no_cond if s.get('no_alias'))
 
     parts = []
     parts.append('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">')
@@ -115,6 +148,7 @@ th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size:
 th { background: #f0f0f0; }
 tr.error td { background: #ffe0e0; }
 tr.warning td { background: #fff8d6; }
+tr.no-alias td { background: #fff0e6; }
 .empty { color: #2a7d2a; font-weight: bold; }
 code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
 .muted { color: #bbb; }
@@ -127,7 +161,8 @@ code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
                   'このファイルは npm run build のたびに上書きされます。products.csv や pet925_master.ods は書き換えません。'
                   'コピペしてODS側の修正に使ってください。<br>'
                   'タグの正は tags 列です。説明文の単語ではタグを提案しません。'
-                  '「カード相当」はサイトの商品カードと同じ cond バッジと説明文なので、サイトを開かなくても判断できます。</p>')
+                  '「カード相当」はサイトの商品カードと同じ cond バッジと説明文なので、サイトを開かなくても判断できます。'
+                  'JAN形式・似た商品名・exclude_tags の未登録はターミナルで確認してください。</p>')
 
     # 1. データ不備（エラー。ビルドを止める原因）
     parts.append(f'<h2>データ不備 ({len(errors)}件)</h2>')
@@ -199,15 +234,29 @@ code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
     else:
         parts.append('<p class="empty">✅ 商品名からの付け忘れ提案はありません。</p>')
 
-    # 5. その他の確認推奨（exclude_tags の未登録タグ、JAN形式、類似商品名など）
-    parts.append(f'<h2>その他の確認推奨 ({len(other_warnings)}件)</h2>')
-    if other_warnings:
-        parts.append('<table><tr><th>内容</th></tr>')
-        for w in other_warnings:
-            parts.append(f'<tr class="warning"><td>{_html_escape(w)}</td></tr>')
+    # 5. お悩みタグなし（説明文の手直し用。aliases.csv の当たりも出す）
+    alias_note = f'、うち aliases なし {no_alias_count}件' if no_cond else ''
+    parts.append(f'<h2>お悩みタグなし ({len(no_cond)}件{alias_note})</h2>')
+    if no_cond:
+        parts.append('<p class="summary">cond（お悩み）タグが tags 列に無い商品です。犬/猫と年齢は付いていても、カードのバッジは出ません。'
+                      'JAN を ODS で検索して説明文を直すための表です。'
+                      '「aliases の語」は aliases.csv の keyword が名前・ブランド・説明のどこにあるかです（検索の読み追加と同じ範囲）。'
+                      'cond がある商品はタグ名や rules.csv の語で既に検索へ乗るので、この表には出しません。'
+                      'オレンジ行は aliases の語も無いので、商品名そのものを打たないと検索でも出にくいです。</p>')
+        parts.append('<table><tr><th>JAN</th><th>商品名</th><th>カード相当（バッジ＋説明文）</th>'
+                      '<th>aliases の語</th><th>現在の tags 列</th><th>行番号</th></tr>')
+        for s in sorted(no_cond, key=lambda x: (not x.get('no_alias'), x['line'])):
+            row_class = 'no-alias' if s.get('no_alias') else ''
+            parts.append(f'<tr class="{row_class}">'
+                          f'<td>{_html_escape(s["jan"])}</td>'
+                          f'<td>{_html_escape(s["name"])}</td>'
+                          f'<td>{_render_card_preview(s)}</td>'
+                          f'<td>{_render_alias_hits(s)}</td>'
+                          f'<td><code>{_html_escape(s["all_tags"])}</code></td>'
+                          f'<td>{s["line"]}</td></tr>')
         parts.append('</table>')
     else:
-        parts.append('<p class="empty">✅ その他の確認推奨はありません。</p>')
+        parts.append('<p class="empty">✅ お悩みタグの無い商品はありません。</p>')
 
     parts.append('</body></html>')
 
@@ -315,11 +364,18 @@ def process_row_task(line_num, row, tag_to_cat_index, allowed_tags, name_hit_loo
     #    ブランド表記が英語のままでも、カタカナ/ひらがなで検索できるようにするための裏フィールド。
     #    name/brand/desc のいずれかに keyword があれば、対応する reading を search_alias に足す。
     alias_check_text = normalize_text(f"{name} {brand_name} {desc}")
-    alias_hits = []
-    for keyword_norm, readings in alias_rules:
+    alias_readings = []
+    for _orig_kw, keyword_norm, readings in alias_rules:
         if keyword_norm and keyword_norm in alias_check_text:
-            alias_hits.extend(readings)
-    row['search_alias'] = ' '.join(alias_hits)
+            alias_readings.extend(readings)
+    row['search_alias'] = ' '.join(alias_readings)
+
+    # お悩みタグなし（レポート用。警告にはしない。説明文の手直し名簿）
+    if cond_tag_ids and not (tags_set & cond_tag_ids):
+        alias_kw_hits = _find_alias_keyword_hits(name, brand_name, desc, alias_rules)
+        review["no_cond"].append(_review_item(
+            line_num, row, name, desc, tags, cond_tag_ids, tag_display_names,
+            alias_hits=alias_kw_hits, no_alias=not alias_kw_hits))
 
     # 価格の数値形式チェック
     for p_col in ['amz_p', 'rak_p', 'yah_p']:
@@ -441,7 +497,7 @@ def convert(exit_on_error=True):
         reading_str = (row.get('reading') or '').strip()
         if keyword and reading_str:
             readings = [r for r in reading_str.split() if r]
-            alias_rules.append((normalize_text(keyword), readings))
+            alias_rules.append((keyword, normalize_text(keyword), readings))
 
     # 5. 動的に他の未認識マスターCSVを読み込む
     other_masters_data = {}
@@ -484,6 +540,7 @@ def convert(exit_on_error=True):
     all_missing_required = []
     all_tag_conflicts = []
     all_name_hits = []
+    all_no_cond = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(
             process_row_task, ln, row, tag_to_cat_index, allowed_tags, name_hit_lookup, alias_rules,
@@ -497,6 +554,7 @@ def convert(exit_on_error=True):
             all_missing_required.extend(res_review.get("missing") or [])
             all_tag_conflicts.extend(res_review.get("conflicts") or [])
             all_name_hits.extend(res_review.get("name_hits") or [])
+            all_no_cond.extend(res_review.get("no_cond") or [])
             if res_row:
                 processed_results.append((ln, res_row, norm_name))
 
@@ -577,6 +635,11 @@ def convert(exit_on_error=True):
             f.write(f"const tagMaster = {json.dumps(tag_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const categoryMaster = {json.dumps(category_master, ensure_ascii=False, indent=4)};\n")
             f.write(f"const tagKeywords = {json.dumps(tag_keywords, ensure_ascii=False, indent=4)};\n")
+            search_aliases = [
+                {"keyword": keyword, "reading": " ".join(readings)}
+                for keyword, _keyword_norm, readings in alias_rules
+            ]
+            f.write(f"const searchAliases = {json.dumps(search_aliases, ensure_ascii=False, indent=4)};\n")
             # 宛先メールは書き出さず、Formspree の公開フォームIDのみ渡す（main.js が送信先URLを組み立てる）
             f.write(f"const FORMSPREE_FORM_ID = {json.dumps(FORMSPREE_FORM_ID)};\n")
             # 動的に読み込んだマスターデータを追記
@@ -596,16 +659,25 @@ def convert(exit_on_error=True):
     print(f"   - 処理時間: {duration:.2f}秒")
 
     # 全件（省略なし）の詳細をHTMLレポートに書き出す。products.csv/ODSには一切触れない
-    write_build_report(validation_errors, validation_warnings, all_missing_required, all_tag_conflicts,
-                        all_name_hits, len(products), exec_time, duration)
-    print(f"   - {BUILD_REPORT_HTML} (確認推奨・エラーの全件レポート)")
+    write_build_report(validation_errors, all_missing_required, all_tag_conflicts,
+                        all_name_hits, all_no_cond, len(products), exec_time, duration)
+    print(f"   - {BUILD_REPORT_HTML} (データ不備・必須欠け・矛盾・硬い一致・お悩みタグなし)")
 
-    # 警告（確認を促すだけでデプロイは止めない）を表示
-    if validation_warnings:
-        print(f"\n{COLOR_CYAN}{COLOR_BOLD}💡 {len(validation_warnings)} 個の確認推奨項目があります:{COLOR_RESET}")
-        for warn in validation_warnings[:10]:
+    # 警告（確認を促すだけでデプロイは止めない）を表示。
+    # 必須欠け・矛盾・硬い一致は HTML に表があるのでターミナルは先頭10件。
+    # JAN形式・類似名などは HTML に出さないので、こちらで全件出す。
+    review_warnings = [w for w in validation_warnings if any(m in w for m in REVIEW_WARN_MARKERS)]
+    other_warnings = [w for w in validation_warnings if not any(m in w for m in REVIEW_WARN_MARKERS)]
+    if review_warnings:
+        print(f"\n{COLOR_CYAN}{COLOR_BOLD}💡 {len(review_warnings)} 個の確認推奨（必須欠け・矛盾・硬い一致）:{COLOR_RESET}")
+        for warn in review_warnings[:10]:
             print(f"{COLOR_CYAN}   - {warn}{COLOR_RESET}")
-        if len(validation_warnings) > 10: print(f"   ...他 {len(validation_warnings)-10} 件（全件は {BUILD_REPORT_HTML} を参照）")
+        if len(review_warnings) > 10:
+            print(f"   ...他 {len(review_warnings)-10} 件（全件は {BUILD_REPORT_HTML} を参照）")
+    if other_warnings:
+        print(f"\n{COLOR_CYAN}{COLOR_BOLD}💡 {len(other_warnings)} 個のその他の確認推奨（ターミナルのみ）:{COLOR_RESET}")
+        for warn in other_warnings:
+            print(f"{COLOR_CYAN}   - {warn}{COLOR_RESET}")
 
     if validation_errors:
         print(f"\n{COLOR_RED}{COLOR_BOLD}⚠️  {len(validation_errors)} 個のデータ不備が見つかりました:{COLOR_RESET}")

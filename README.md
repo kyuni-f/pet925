@@ -14,13 +14,13 @@
 
 ## 📂 構成ファイル (Context)
 ### 📂 Directory Structure
-- **`data/`** : `pet925_master.ods`（必須シート: products, categories, tags, rules）。ビルドが読む追加マスターとして `comments.csv`（店員コメント）、`popular_searches.csv`（検索画面のよく検索されているワード。GA4を見て手入力）、`aliases.csv`（検索専用の読み。タグには出ない）もある
+- **`data/`** : `pet925_master.ods` は `products` シートだけ。マクロで `products.csv` を書き出す。それ以外のマスター（`categories.csv` / `tags.csv` / `rules.csv` / `aliases.csv` / `comments.csv` / `popular_searches.csv` / `keyword_chips.csv`）は CSV を直接編集する
 - **`index.html`** : サイト本体（ルート配置により公開を簡素化）
-- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）。実行ごとに確認用の`build_report.html`（データ不備・必須タグ欠け・矛盾・商品名の硬い一致を色分け表示。説明文ではタグを提案しない。Git管理外）も出力する
+- **`csv_to_json.py`** : Pythonによる統合ビルド・バリデーションスクリプト（CSV→JSON変換、データ検証、画像ローカルキャッシュ参照）。実行ごとに確認用の`build_report.html`（データ不備・必須タグ欠け・矛盾・商品名の硬い一致・お悩みタグなしを色分け表示。説明文ではタグを提案しない。Git管理外）も出力する
 - **`pet_utils.py`** : `csv_to_json.py` / `auto_collect_all.py` / `check_links.py` から読む共通ユーティリティ（文字列/JANコードの正規化、`.env`読み込み、CSV読み込み、楽天/Yahoo API共通定数）。JS側の`common.js`のPython版に相当
 - **`search_worker.js`** : Web Workerによる非同期検索エンジン
 - **`common.js`** : `main.js`と`search_worker.js`の両方から読み込まれる共通ロジック（検索キーワードの正規化`normalize()`など）
-- **`comment_logic.js`** : 店員コメント（`pickStoreComments()` / `pickKeywordComments()`）と、検索画面のよく検索されているワード（`pickPopularSearchWords()`）の選定ロジック。DOM操作から分離し、Jestでのユニットテストを可能にしている
+- **`comment_logic.js`** : 店員コメント（`pickStoreComments()` / `pickKeywordComments()` / 検索語→condタグ紐付け）と、検索画面のよく検索されているワード（`pickPopularSearchWords()`）の選定ロジック。DOM操作から分離し、Jestでのユニットテストを可能にしている
 - **`jsconfig.json`** : エディタ上の型チェック設定。`checkJs`は全体では無効にし、ファイル先頭に`// @ts-check`があるファイル（`common.js`/`comment_logic.js`）だけがオプトインで検査される。`main.js`/`data_master.js`は`// @ts-check`を付けていないため検査対象外（ただしグローバル変数の補完・定義ジャンプのために`include`には含めている）
 - **`tests/`** : Jestによるユニットテスト（`npm test`で実行）
 - **`product_data.json`** : 検索エンジンが読み込む商品データベース（メタ情報）

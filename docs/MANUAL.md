@@ -18,10 +18,10 @@ flowchart TD
   add --> jan["jan_list.csv に JAN を書く"]
   jan --> collect["npm run collect:all"]
   collect --> csv["data/products.csv に追加または一部更新"]
-  csv --> review[ODS か CSV で目視]
+  csv --> review["products は ODS か CSV で目視"]
 
   fix --> descRewrite["説明だけ: npm run desc:helper"]
-  descRewrite --> edit["data/*.csv または pet925_master.ods を編集"]
+  descRewrite --> edit["products は ODS、他マスターは CSV"]
   fix --> edit
   edit --> export[CSV を data/ に置く]
   review --> export
@@ -45,7 +45,7 @@ flowchart TD
 |---|---|---|---|
 | **集める** | `auto_collect_all.py`（`npm run collect`） | JAN から商品名・画像・説明・タグを取る | サイト用 JSON は作らない（`collect:all` なら続けてビルドする） |
 | **説明だけ取り直す** | `desc_helper.py`（`npm run desc:helper`） | 商品名＋任意の公式ページ事実から `desc` を生成。タグは変更しない | CSV への自動書き込み、名前・画像・タグの更新はしない |
-| **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用。確認推奨・エラーの全件を `build_report.html` に出力（必須タグ欠け・矛盾・商品名の硬い一致。説明文ではタグを提案しない） | ネットから画像は取らない |
+| **検品して配る形にする** | `csv_to_json.py`（`npm run build`） | CSV の検証、JSON / `data_master.js` の生成、`images/{JAN}` があれば採用。確認用に `build_report.html` を出力（必須タグ欠け・矛盾・商品名の硬い一致・お悩みタグなし。JAN形式などはターミナル。説明文ではタグを提案しない） | ネットから画像は取らない |
 | **リンクの生死を見る** | `check_links.py`（`npm run check:links`） | `img` と `a8` の URL が 404 や 1px になっていないか確認。結果を `check_links_report.html` に出力 | CSV は書き換えない。ビルドにも使わない |
 | **画面で探す** | `main.js` + `search_worker.js` | 検索、フィルター、お気に入り、店員コメント | マスター CSV は読まない。ビルド済み JSON を読む |
 
@@ -58,12 +58,13 @@ flowchart TD
 | 画像URLだけ取り直す | `jan_list.csv` | `npm run collect:img`（名前・説明は上書きしない） |
 | 説明文・タグ・画像URLを直す | `data/products.csv`（または ODS の products） | `npm run build` |
 | 画像や公式ページのリンク切れを探す | `npm run check:links` | 切れた行だけ CSV を直して `npm run build` |
-| ビルドやリンクチェックの確認推奨・エラーを全件見る | `build_report.html` / `check_links_report.html`（実行後に自動生成） | ブラウザで開いて目視。ターミナルは最初の10件だけ表示 |
+| ビルドやリンクチェックの確認推奨・エラーを見る | `build_report.html` / `check_links_report.html`（実行後に自動生成） | ブラウザで開いて目視。必須欠け・矛盾・硬い一致はターミナル先頭10件、JAN形式などはターミナル全件 |
 | フィルターの名前を変える | `data/tags.csv` | `npm run build` |
 | フィルターの枠を足す | `data/categories.csv` に行を足し、`data/tags.csv` にその所属のタグを足す | `npm run build` |
 | 収集時に「グレインフリー」などで自動タグを付ける（AI未設定時のフォールバック） | `data/rules.csv` | 次回の `collect` |
 | 英語表記のブランド名や漢字の単語を、かな/カタカナ検索でもヒットさせる | `data/aliases.csv` | `npm run build` |
-| 店員コメントを足す／直す | `data/comments.csv` | `npm run build`。PC でも出る。改行はセルをダブルクォートで囲む |
+| カードのキーワードチップに出す語を足す（小型犬など） | `data/keyword_chips.csv` | `npm run build` |
+| 店員コメントを足す／直す | `data/comments.csv` | `npm run build`。PC でも出る。改行はセルをダブルクォートで囲む。型は「説明→ポイント→注意→当サイトは」。タグ名の検索でも cond 解説が出る |
 | 検索画面の「よく検索されているワード」を変える | `data/popular_searches.csv` | `npm run build` |
 | 問い合わせの届き先を変える | Formspree の管理画面（サイト側は触らない） | 不要 |
 | 問い合わせフォーム自体を有効化する | `.env` の `FORMSPREE_FORM_ID` | `npm run build` |
@@ -96,7 +97,7 @@ JANコードさえ分かれば、楽天 / Yahoo / Gemini が商品行を作り�
 
 説明文だけがいまいちなときは、`collect:all` を再実行しない（名前・タグ・画像も上書きされる）。下の「説明文だけを取り直す」で新しい `desc` を作り、CSV に貼ってから次へ進む。
 
-1. `data/*.csv` を直接編集する。または `data/pet925_master.ods` を直して CSV を書き出す（付録A）。
+1. 商品行は `data/pet925_master.ods` の `products` シートを直し、付録Aのマクロで `products.csv` を書き出す。または `products.csv` を直接編集する。タグ・枠・ルール・コメントなど商品以外は、対応する `data/*.csv` を直接編集する（ODS には入っていない）。
 2. `npm run build`（または監視中なら `npm start` が自動で再ビルド）。
 3. ブラウザで **Ctrl + F5**（IndexedDB が古いデータを持っているため）。
 4. 公開するなら §9（ビルドのあと、自分で commit / push）。
@@ -171,13 +172,13 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 ### 収集後に必ず目視する理由
 
-自動の商品名・タグ・ブランドは完璧ではありません。`pet925_master.ods` か `products.csv` で直してから公開してください。
+自動の商品名・タグ・ブランドは完璧ではありません。`pet925_master.ods` の `products` シートか `products.csv` で直してから公開してください。
 
 ---
 
 ## 4. マスター CSV の編集
 
-ビルドが読むのは `data/` 内の CSV です。`data_master.js` と `product_data*.json` は **ビルドが上書きするので手編集しない。**
+ビルドが読むのは `data/` 内の CSV です。商品表の編集用原本は `pet925_master.ods`（シートは `products` だけ）で、付録Aのマクロが `products.csv` を書き出します。`tags.csv` などそれ以外は CSV を直接編集します。`data_master.js` と `product_data*.json` は **ビルドが上書きするので手編集しない。**
 
 不明な URL や値は `#` を入れます。
 
@@ -212,7 +213,7 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 - **animal**: 犬・猫。単一選択
 - **age**: 年齢。単一選択
-- **cond**: こだわり・お悩み。複数選択可
+- **cond**: お悩み。複数選択可
 
 未登録の `key` を商品に書くと、ビルドがエラーで止まります。古いカテゴリ名 `pref` は使いません。
 
@@ -248,6 +249,16 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 例えば英語表記のブランド（`TripeDry`）はカタカナで検索されても見つかるように、漢字の成分名（`納豆菌`）はひらがな・カタカナ（`なっとうきん`/`ナットウキン`）で検索されても見つかるようにするための表です。`normalize()` はひらがな⇄カタカナの揺れは吸収しますが、漢字の読みまでは変換しないため、この表で個別に足す必要があります。
 
+### keyword_chips.csv（カードのキーワードチップ）
+
+カードの「キーワード」チップは、この表だけから出します。`aliases.csv` と `rules.csv` は検索用で、カードには出しません。フィルターボタンは増えません。検索の裏フィールドも足しません（名前・説明にその語があれば、今どおり検索できます）。
+
+| 列 | 例 |
+|---|---|
+| `keyword` | `小型犬` |
+
+`name` / `brand` / `desc` のいずれかに含まれていればチップになります。`超小型犬` と `小型犬` の両方に当たるときは、長い方だけ出します。行を足して `npm run build`。
+
 ### categories.csv（フィルターの枠）
 
 | 列 | 意味 |
@@ -268,12 +279,22 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 |---|---|---|
 | `category` | `animal` / `cond` / `keyword` | `cond` |
 | `key` | タグ ID、または検索語 | `tear` / `心臓` |
-| `comment` | 本文 | `涙やけの相談は本当に多いです...` |
+| `comment` | 本文 | （下の型を参照） |
+
+**本文の型（cond / keyword 共通）**
+
+1. 説明（何の話題か）
+2. 🔍 ポイント（見るときの目安）
+3. ⚠️ 注意点（治る保証はない・病院）
+4. 当サイト（pet925）では〜（この一覧／案内の意味）。末尾に「下の一覧は人気順ではありません」
+
+効能の断定は書かない。犬猫どちらでも読める言い方にする。
 
 表示ロジックは `comment_logic.js` です。
 
-- `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。検索欄がタグ名（涙やけ、穀物不使用、グレインフリーなど）を含むときも、その cond コメントを出す。
-- `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。すでに cond へ紐づいた語（涙やけなど）は重ねない。
+- `animal` / `cond`: 選んでいるタグから最大2件（`pickStoreComments`）。cond が無ければ animal にフォールバック。検索欄がタグ名（涙やけ、穀物不使用、グレインフリーなど）を含むときも、その cond コメントを出す（ボタン未選択でも可）。
+- `keyword`: 検索欄の文字に `key` が部分一致したら、上記に **追加で最大1件**（`pickKeywordComments`）。すでに cond へ紐づいた語（涙やけ・グレインフリーなど）は重ねない。
+- 専用 keyword（避妊・アレルギーなど）は、`rules.csv` の別名があっても体重管理・皮膚ケアのタグ解説には吸い寄せない。グレインフリーだけは gf の別名としてタグ解説へ結ぶ。
 
 ### popular_searches.csv（検索画面のよく検索されているワード）
 
@@ -287,9 +308,9 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 
 ### 確認レポート（build_report.html）
 
-`npm run build` を実行するたびに、プロジェクト直下に `build_report.html` ができます。ターミナルには最初の10件しか出ないので、全件を見たいときはこちらをブラウザで開いてください。`products.csv` や ODS は書き換えません。実行するたびに上書きされます（Git管理外）。
+`npm run build` を実行するたびに、プロジェクト直下に `build_report.html` ができます。必須欠け・矛盾・硬い一致はターミナルに最初の10件、JAN形式・似た商品名などのその他はターミナルに全件出ます。表の全件はレポートをブラウザで開いてください。`products.csv` や ODS は書き換えません。実行するたびに上書きされます（Git管理外）。
 
-日常確認は次の3種です。説明文の単語ではタグを提案しません（読み物・検索用の語が確認作業を汚さないようにするため）。各表の「カード相当」は、サイトの商品カードと同じ cond バッジと説明文です。サイトを開かなくても判断できます。
+日常確認は次です。説明文の単語ではタグを提案しません（読み物・検索用の語が確認作業を汚さないようにするため）。各表の「カード相当」は、サイトの商品カードと同じ cond バッジと説明文です。サイトを開かなくても判断できます。JAN を ODS で検索して直してください。
 
 | セクション | 内容 | 基準 |
 |---|---|---|
@@ -297,7 +318,9 @@ javascript:(function(){const el=document.querySelector('main,article,[role="main
 | 必須タグ欠け | `dog`/`cat` または年齢タグが `tags` 列に無い | animal / age。カードの cond バッジとは別 |
 | タグの矛盾 | 同時には付かないタグ（年齢が2つ以上など） | 付けるなら1つに揃える |
 | 商品名からの硬い一致 | 商品名にタグ表示名または `rules.csv` の語があるのに、その cond タグが無い | 商品名だけを見る。説明文は見ない。提案タグごとに並ぶ。JAN・商品名・提案タグはODSへコピペできる |
-| その他の確認推奨 | `exclude_tags` の未登録タグ、JANが13桁でない、似た商品名など | 上記以外の警告文をそのまま列挙 |
+| お悩みタグなし | cond が無い商品。当たっている `aliases.csv` の keyword と場所（名前／ブランド／説明）も出す。オレンジ行は aliases の語も無い | 説明文の手直し名簿。タグを自動では付けない。cond がある商品はタグ検索で既に当たるので出さない |
+
+JANが13桁でない、似た商品名、`exclude_tags` の未登録は HTML に出さず、ターミナルの「その他の確認推奨」で全件見ます。
 
 どの項目もタグを自動では付けません。付けるかどうかは必ず人（またはAI収集時のみ）が判断します。商品名ヒットの誤検知を今後出さないときだけ、任意列 `exclude_tags` にその `key` を書きます（主経路ではありません）。
 
@@ -447,7 +470,7 @@ git push
 **見た目**
 
 - [ ] PC とスマホでカードが崩れない
-- [ ] 結果画面の店員コメントが PC でも出る（該当タグがあるとき）。改行が潰れていない
+- [ ] 結果画面の店員コメントが PC でも出る（タグ選択、または検索欄がタグ名のとき）。改行が潰れていない。専用 keyword（避妊など）はタグに吸い寄せられていない
 - [ ] ヘッダー導入文が出ている
 
 **健全性**
@@ -471,7 +494,7 @@ git push
 | `価格 amz_p は半角数字のみ` | カンマや「円」を消す |
 | `切れがあります`（`npm run check:links`） | `img` なら URL の貼り直しか `images/{JAN}.jpg`。`a8` なら公式ページを目視。全件 `collect:all` すると説明文も戻る |
 | `要確認`（`npm run check:links`） | 403 はボット拒否のことが多い。トップへ飛ばされた公式URLは改定・廃盤の手がかり（確定ではない） |
-| 確認推奨・切れの全件を見たい | ターミナルは最初の10件だけ。`build_report.html` / `check_links_report.html` をブラウザで開く（§4「確認レポート」） |
+| 確認推奨・切れの全件を見たい | 必須欠け・矛盾・硬い一致と切れはレポート。JAN形式などはビルド時のターミナル全件。`build_report.html` / `check_links_report.html`（§4「確認レポート」） |
 | ボタンが `データを読み込み中` のまま / `データの読み込みに失敗` | まず `npm run build`。コンソールの `Worker data load failed` は `product_data.json` が古い・無い |
 | 直したのに画面が変わらない | Ctrl+F5。`npm start` が動いているか |
 | 問い合わせが「準備中」のまま | `.env` の `FORMSPREE_FORM_ID` が空か、英数字以外。入れてから `npm run build` |
@@ -519,30 +542,29 @@ Python ライブラリの入れ方の選択肢:
 
 ## 付録A. LibreOffice（ODS）からの CSV 書き出し
 
-`data/pet925_master.ods` で表をまとめ、シート名と同じ CSV を `data/` に出す運用です。必須シートは `products`, `tags`, `categories`, `rules` です。
+`data/pet925_master.ods` は商品表だけです。シート名は `products`。マクロは同じフォルダへ `products.csv` だけを書き出します。
 
-`comments.csv`、`popular_searches.csv`、`aliases.csv` はビルドが自動で読む追加マスターです。ODS に同名シートを足して一緒に書き出しても構いません。マクロの必須チェックには入っていないので、CSV を直接編集しても問題ありません。
+`tags.csv`、`categories.csv`、`rules.csv`、`comments.csv`、`popular_searches.csv`、`aliases.csv`、`keyword_chips.csv` は ODS に入れていません。CSV を直接編集してください。マクロはこれらを上書きしません。
 
 ### マクロの用途
 
 | マクロ | 用途 |
 |--------|------|
-| `ExportAllSheetsToCSV` | **CSV 一括出力（常用）**。必須シートの有無と必須列を確認したうえで、可視シートすべてを ODS と同じフォルダへ `.csv` で書き出す。ツールバーに載せるのはこれ |
-| `ExportCurrentSheetOnly` | **いま開いているシートだけ** を速く書き出す。全シート一括が重いときの用 |
-| `CheckMandatoryFields` | 必須列の空欄チェック。上2つから呼ばれる補助関数で、単独ボタンにはしない |
-| `SyncBrandToMaster` | `products` の tags 列を編集したとき、未登録タグを `tags` シートへ追加するか聞く（名前は Brand だが中身はタグ同期） |
+| `ExportAllSheetsToCSV` | **常用**。`products` シートの商品名（A列）とタグ（C列）を確認したうえで、ODS と同じフォルダへ `products.csv` を書き出す。ツールバーに載せるのはこれ |
+| `ExportCurrentSheetOnly` | 上と同じ処理を呼ぶ別名。古いボタンが残っていても `products.csv` だけが出る |
+| `CheckMandatoryFields` | 商品名とタグの空欄チェック。上から呼ばれる補助関数で、単独ボタンにはしない |
+
+`SyncBrandToMaster`（タグ列を編集すると `tags` シートへ行を足す旧マクロ）は使いません。シートの「内容が変更されたとき」に割り当てていたら外してください。
 
 ### マクロの登録
 
 1. [ツール] > [マクロ] > [マクロを管理] > [LibreOffice Basic]
-2. 下の `ExportAllSheetsToCSV` / `ExportCurrentSheetOnly` / `CheckMandatoryFields` / `SyncBrandToMaster` を登録する
+2. モジュールの中身を下のコードに差し替える（`ExportAllSheetsToCSV` / `ExportCurrentSheetOnly` / `CheckMandatoryFields`）
 3. [ツール] > [カスタマイズ] > [ツールバー] から `ExportAllSheetsToCSV` をボタンにする
 4. ODS は `data/` に保存する（書き出し先が同じフォルダになる）
 5. `npm start` が CSV 変更を検知して再ビルドする
 
-Google スプレッドシートの場合は [ファイル] > [ダウンロード] > [CSV] で `data/` の各ファイルへ上書きします。貼り付け後は「テキストを列に分割」を使ってください。
-
-Calc へ CSV を貼るとき:
+`products.csv` を Calc の `products` シートへ貼るとき:
 
 1. A1 を選んで貼り付け
 2. 区切りは **コンマのみ**、テキストの区切りは `"`
@@ -554,7 +576,7 @@ Sub ExportAllSheetsToCSV
     Dim sURL As String, sPath As String
     Dim args(2) As New com.sun.star.beans.PropertyValue
     Dim aParts() As String
-    
+
     oDoc = ThisComponent
 
     If oDoc.isModified Then
@@ -572,15 +594,16 @@ Sub ExportAllSheetsToCSV
     sPath = Join(aParts, "/")
 
     oSheets = oDoc.Sheets
-    
-    Dim requiredSheets As Variant, sNameCheck As String
-    requiredSheets = Array("products", "tags", "categories", "rules")
-    For Each sNameCheck In requiredSheets
-        If Not oSheets.hasByName(sNameCheck) Then
-            MsgBox "エラー: シート '" & sNameCheck & "' が見つかりません。", 16, "実行失敗"
-            Exit Sub
-        End If
-    Next sNameCheck
+    If Not oSheets.hasByName("products") Then
+        MsgBox "エラー: シート 'products' が見つかりません。", 16, "実行失敗"
+        Exit Sub
+    End If
+
+    oSheet = oSheets.getByName("products")
+    If Not CheckMandatoryFields(oSheet) Then
+        MsgBox "products シートに不備があるため、書き出しを中断しました。", 48, "エラー"
+        Exit Sub
+    End If
 
     args(0).Name = "Overwrite"
     args(0).Value = True
@@ -589,75 +612,31 @@ Sub ExportAllSheetsToCSV
     args(2).Name = "FilterOptions"
     args(2).Value = "44,34,76,1,,0,false,true,true"
 
-    Dim i As Long
-    For i = 0 To oSheets.Count - 1
-        oSheet = oSheets.getByIndex(i)
-        sName = oSheet.Name
+    oDoc.CurrentController.setActiveSheet(oSheet)
+    sURL = sPath & "products.csv"
+    oDoc.storeToURL(sURL, args)
 
-        If Not CheckMandatoryFields(oSheet, sName) Then
-            MsgBox sName & " シートに不備があるため、書き出しを中断しました。", 48, "エラー"
-            Exit Sub
-        End If
-
-        If oSheet.IsVisible Then
-            oDoc.CurrentController.setActiveSheet(oSheet)
-            sURL = sPath & sName & ".csv"
-            oDoc.storeToURL(sURL, args)
-        End If
-    Next i
-    
-    MsgBox "全てのバリデーションをクリアし、CSVの一括出力が完了しました！", 64, "完了"
+    MsgBox "products.csv を書き出しました。", 64, "完了"
 End Sub
 
 Sub ExportCurrentSheetOnly
-    Dim oDoc As Object, oSheet As Object
-    Dim sURL As String, sPath As String
-    Dim args(2) As New com.sun.star.beans.PropertyValue
-    Dim aParts() As String
-
-    oDoc = ThisComponent
-    oSheet = oDoc.CurrentController.ActiveSheet
-    
-    If Not CheckMandatoryFields(oSheet, oSheet.Name) Then Exit Sub
-
-    aParts = Split(oDoc.URL, "/")
-    aParts(UBound(aParts)) = ""
-    sPath = Join(aParts, "/")
-
-    args(0).Name = "Overwrite" : args(0).Value = True
-    args(1).Name = "FilterName" : args(1).Value = "Text - txt - csv (StarCalc)"
-    args(2).Name = "FilterOptions" : args(2).Value = "44,34,76,1,,0,false,true,true"
-
-    sURL = sPath & oSheet.Name & ".csv"
-    oDoc.storeToURL(sURL, args)
-
-    MsgBox "[" & oSheet.Name & ".csv] のみ出力しました。", 64, "完了"
+    ExportAllSheetsToCSV
 End Sub
 
-Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
+Function CheckMandatoryFields(oSheet As Object) As Boolean
     Dim i As Long, col As Integer
     Dim mandatoryCols As Variant
-    Dim sNameLower As String
-    
-    sNameLower = LCase(sName)
 
-    If sNameLower = "products" Then
-        mandatoryCols = Array(0, 2)
-    ElseIf sNameLower = "tags" Then
-        mandatoryCols = Array(0, 1, 2)
-    ElseIf sNameLower = "categories" Then
-        mandatoryCols = Array(0, 1, 2, 3)
-    Else
-        mandatoryCols = Array()
-    End If
+    ' A列=商品名, C列=タグ。ビルドが止めるのは商品名の空欄。タグ空欄はここで止める。
+    mandatoryCols = Array(0, 2)
 
     i = 1
     Do
         If oSheet.getCellByPosition(0, i).String = "" Then Exit Do
-        
+
         For Each col In mandatoryCols
             If oSheet.getCellByPosition(col, i).String = "" Then
-                MsgBox "[" & sName & "] シートの " & (i + 1) & " 行目、" & _
+                MsgBox "[products] シートの " & (i + 1) & " 行目、" & _
                        Chr(65 + col) & " 列目が空欄です。入力してください。", 16, "入力エラー"
                 CheckMandatoryFields = False
                 Exit Function
@@ -668,79 +647,4 @@ Function CheckMandatoryFields(oSheet As Object, sName As String) As Boolean
     Loop
     CheckMandatoryFields = True
 End Function
-
-Sub SyncBrandToMaster(oEvent As Object)
-    On Error GoTo ErrorHandler
-    
-    Dim oDoc As Object, oSheets As Object, oSheet As Object, oTargetSheet As Object
-    Dim startRow As Long, endRow As Long, startCol As Long, endCol As Long
-    Dim iRow As Long, i As Long, bExists As Boolean
-    Dim sValue As String, oCell As Object
-
-    Static sProcessedTags As String
-
-    oDoc = ThisComponent
-    oSheets = oDoc.Sheets
-
-    If oEvent.supportsService("com.sun.star.sheet.SheetCell") Then
-        startRow = oEvent.CellAddress.Row : endRow = startRow
-        startCol = oEvent.CellAddress.Column : endCol = startCol
-        oSheet = oSheets.getByIndex(oEvent.CellAddress.Sheet)
-    ElseIf oEvent.supportsService("com.sun.star.sheet.SheetCellRange") Or _
-           oEvent.supportsService("com.sun.star.table.CellRange") Then
-        startRow = oEvent.RangeAddress.StartRow : endRow = oEvent.RangeAddress.EndRow
-        startCol = oEvent.RangeAddress.StartColumn : endCol = oEvent.RangeAddress.EndColumn
-        oSheet = oSheets.getByIndex(oEvent.RangeAddress.Sheet)
-    Else
-        Exit Sub
-    End If
-
-    If oSheet.Name <> "products" Then Exit Sub
-
-    sProcessedTags = "|"
-
-    For iRow = startRow To endRow
-        If iRow = 0 Then GoTo NextRow
-
-        If startCol <= 2 And endCol >= 2 Then
-            sValue = Trim(oSheet.getCellByPosition(2, iRow).String)
-            If sValue <> "" And sValue <> "tags" And sValue <> "タグ" Then
-                Dim aTags() As String, sTag As String
-                aTags = Split(Replace(Replace(sValue, ",", " "), "　", " "), " ")
-                oTargetSheet = oSheets.getByName("tags")
-                For Each sTag In aTags
-                    sTag = Trim(sTag)
-                    If Len(sTag) > 1 And InStr(sProcessedTags, "|" & sTag & "|") = 0 Then
-                        bExists = False
-                        i = 1
-                        Do While i < 5000
-                            oCell = oTargetSheet.getCellByPosition(1, i)
-                            If LCase(Trim(oCell.String)) = LCase(sTag) Then
-                                bExists = True
-                                Exit Do
-                            End If
-                            If oCell.String = "" And oTargetSheet.getCellByPosition(0, i).String = "" Then Exit Do
-                            i = i + 1
-                        Loop
-                        If Not bExists Then
-                            If MsgBox("新タグ '" & sTag & "' を tags シートに追加しますか？", 4 + 32, "タグクイック追加") = 6 Then
-                                Dim sDisp As String
-                                sDisp = InputBox("サイトでの表示名:", "タグ追加", sTag)
-                                oTargetSheet.getCellByPosition(0, i).String = "cond"
-                                oTargetSheet.getCellByPosition(1, i).String = sTag
-                                oTargetSheet.getCellByPosition(2, i).String = sDisp
-                            End If
-                            sProcessedTags = sProcessedTags & sTag & "|"
-                        End If
-                    End If
-                Next sTag
-            End If
-        End If
-NextRow:
-    Next iRow
-    Exit Sub
-
-ErrorHandler:
-    Resume Next
-End Sub
 ```

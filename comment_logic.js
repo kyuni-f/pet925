@@ -40,7 +40,7 @@ const STAFF_ICON_IMAGES = [
 const MAX_STORE_COMMENTS = 2;
 
 /**
- * タグ表示名から検索照合用の語を取り出す。「涙やけ (TEAR)」→ 涙やけ / TEAR、「腎臓・尿路」→ 腎臓と尿路。
+ * タグ表示名から検索照合用の語を取り出す。「涙やけ (TEAR)」→ 涙やけ / TEAR、「腎臓ケア (KIDNEY)」→ 腎臓ケア / KIDNEY。
  * @param {string} displayName
  * @returns {string[]}
  */

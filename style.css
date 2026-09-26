@@ -472,6 +472,51 @@ body.state-results .site-intro { opacity: 0; max-height: 0; margin: 0; }
 
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; min-height: 2.5em; align-content: flex-start; }
 .tag { font-size: 0.6rem; color: #999; border: 1px solid #eee; padding: 3px 8px; text-transform: uppercase; }
+.tag .tag-jp { margin-right: 0.35em; }
+.tag .tag-en { font-size: 0.85em; letter-spacing: 0.08em; opacity: 0.7; }
+.tag.tag-keyword {
+    text-transform: none;
+    color: #8a7a5c;
+    background: #faf7f0;
+    border-color: #ece3d1;
+    letter-spacing: 0.04em;
+}
+.search-hit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0 18px;
+    padding: 8px 0 8px 12px;
+    border-left: 2px solid var(--gold);
+}
+.search-hit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.search-hit-kicker {
+    flex: 0 0 5.2em;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--gold);
+    padding-top: 4px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.search-hit-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 1.6em;
+    align-content: flex-start;
+}
+.search-hit-empty {
+    font-size: 0.7rem;
+    color: #bbb;
+    letter-spacing: 0.06em;
+    padding-top: 2px;
+}
 .promo-text { font-size: 0.75rem; color: #e67e22; font-weight: bold; margin-bottom: 10px; display: block; }
 
 .load-more-container { grid-column: 1 / -1; text-align: center; margin-top: 40px; padding-bottom: 40px; }
@@ -598,6 +643,26 @@ footer a { color: var(--gold); text-decoration: none; }
     .tag {
         font-size: 0.5rem;
         padding: 2px 6px;
+    }
+    .search-hit {
+        gap: 6px;
+        margin: 2px 0 12px;
+        padding: 4px 0 4px 8px;
+    }
+    .search-hit-row {
+        gap: 6px;
+    }
+    .search-hit-kicker {
+        flex-basis: 4.4em;
+        font-size: 0.5rem;
+        padding-top: 3px;
+        letter-spacing: 0.1em;
+    }
+    .search-hit-chips {
+        gap: 4px;
+    }
+    .search-hit-empty {
+        font-size: 0.6rem;
     }
 
     /* ショップリンクボタンを小さく */

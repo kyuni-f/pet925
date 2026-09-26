@@ -22,7 +22,7 @@
 | **バリデーション** | ビルド時の検品。未登録タグ、列不足、商品名重複などがあると公開を止める。 |
 | **キャッシュ** | ブラウザが古いファイルを覚えてしまうこと。直したのに画面が変わらないときは **Ctrl + F5**。 |
 | **キャッシュバスティング** | `style.css?v=日付` のように URL にバージョンを付けて、古いキャッシュを使わせない仕組み。`siteVersion` がそれ。 |
-| **マスターデータ** | 人間が編集する原本。`pet925_master.ods` と、そこから出した `data/*.csv`。 |
+| **マスターデータ** | 人間が編集する原本。商品は `pet925_master.ods`（`products` シートだけ）から出した `products.csv`。タグやコメントなどそれ以外は `data/*.csv` を直接編集する。 |
 | **配信データ** | サイトが実際に読むファイル。`product_data.json`、`product_data_0.json`、`data_master.js`。手で直さない（ビルドが上書きする）。**Git には含める。** GitHub Pages がリポジトリをそのまま配信するため。 |
 | **生成物** | プログラムが作るファイル。手編集しない。このサイトでは配信データがそれ。一般論では Git に入れないことも多いが、**今の公開方法では入れる。** |
 | **パイプライン** | 「集める → 検品する → JSONにする → 公開する」という流れ全体。 |
@@ -48,19 +48,19 @@ npm run check:links    # 画像URLと公式ページURLのリンク切れ確認�
 | `main.js` | 画面の頭脳。ボタン、お気に入り、描画、GA4。 |
 | `search_worker.js` | 裏方の検索エンジン。件数多くても画面を固まらせない。 |
 | `common.js` | `normalize()` だけ。`main.js` と Worker の両方から読む共通処理。 |
-| `comment_logic.js` | 店員コメントと、検索画面の「よく検索されているワード」をどれにするか決めるロジック。 |
+| `comment_logic.js` | 店員コメントと、検索画面の「よく検索されているワード」をどれにするか決めるロジック。検索欄の語から cond タグ解説へ結ぶ処理も含む。 |
 | `data_master.js` | タグ・カテゴリ・ブランド・店員コメント・よく検索されているワードと、問い合わせ用の `FORMSPREE_FORM_ID`。**ビルドが生成する。手編集しない。** |
 | `csv_to_json.py` | ビルド本体。CSV → JSON、検品。画像は取らない。 |
 | `auto_collect_all.py` | JANコードから商品名・画像・説明を API で集める。 |
 | `check_links.py` | `img` と `a8` の URL が生きているか確認する。ビルドには使わない。CSV は書き換えない。 |
-| `build_report.html` | `npm run build` のたびに上書きされる確認用レポート。データ不備・必須タグ欠け・タグの矛盾・商品名からの硬い一致を色分けして表示。説明文の単語ではタグを提案しない。`products.csv`/ODS は書き換えない。Git管理外（`.gitignore`）。ブラウザで開く。 |
+| `build_report.html` | `npm run build` のたびに上書きされる確認用レポート。データ不備・必須タグ欠け・タグの矛盾・商品名からの硬い一致・お悩みタグなし（aliases.csv の当たり付き）を色分けして表示。JAN形式などはターミナル。説明文の単語ではタグを提案しない。`products.csv`/ODS は書き換えない。Git管理外（`.gitignore`）。ブラウザで開く。 |
 | `check_links_report.html` | `npm run check:links` のたびに上書きされる確認用レポート。切れ・要確認をJAN/商品名付きの表で表示。Git管理外（`.gitignore`）。ブラウザで開く。 |
 | `desc_helper.py` | 既存商品の説明文だけを Gemini で作り直すローカルサーバー。CSV は書かない。タグは変更しない。 |
 | `desc_helper.html` | その画面。説明専用フォーム。現在のタグも表示するが変更はしない。ブックマークレットのドラッグ用リンクもある。 |
 | `docs/AI_INSTRUCTIONS.md` | Gemini 用の品質ルール。16列 CSV 用と、§9 の説明専用ルールがある。 |
 | `pet_utils.py` | Python 側の共通道具（正規化、`.env` 読み込み）。`common.js` の Python 版。`check_links.py` からも読む。 |
 | `jan_list.csv` | 「今回集めたい JAN」の入力リスト。実行後は空にならない。既存 JAN の再実行は名前・画像・説明などを上書きする。 |
-| `data/comments.csv` | 検索結果上部の店員コメント（PC/スマホ共通）。`animal` / `cond` / `keyword`。セル内改行はダブルクォートで囲むと画面でも改行。 |
+| `data/comments.csv` | 検索結果上部の店員コメント（PC/スマホ共通）。`animal` / `cond` / `keyword`。セル内改行はダブルクォートで囲むと画面でも改行。本文の型は「説明 → ポイント → 注意点 → 当サイトは」。 |
 | `data/aliases.csv` | 検索専用の読み（`keyword,reading`）。バッジやフィルターには出ない。 |
 | `data/popular_searches.csv` | 検索欄下の「よく検索されているワード」吹き出し用の語。GA4 を見て出してよい語だけ手で書く。`word` 列のみ。 |
 | `.env` | APIキーなど秘密情報。Git に上げない。 |
@@ -74,7 +74,8 @@ npm run check:links    # 画像URLと公式ページURLのリンク切れ確認�
 データの流れ:
 
 ```
-pet925_master.ods / CSV
+pet925_master.ods（products だけ） → products.csv
+その他の data/*.csv は直接編集
         ↓  npm run build
 product_data.json + data_master.js
         ↓  ブラウザが読む
@@ -87,19 +88,20 @@ product_data.json + data_master.js
 |---|---|
 | **CSV** | 表計算ソフトで開けるテキスト。1行が1商品。編集用。 |
 | **JSON** | プログラムが読みやすい形。配信用。 |
-| **ODS** | LibreOffice の表。`pet925_master.ods` が原本。 |
+| **ODS** | LibreOffice の表。`pet925_master.ods` は商品表（`products` シート）だけの原本。タグやコメントなどのマスターは入っていない。 |
 | **16列** | 商品1行の必須列。`name, brand, tags, desc, size, jan, img, amz, rak, yah, a8, label, promo, amz_p, rak_p, yah_p` |
 | **`#`** | 「空・不明」の印。URL が無いときなどに入れる。`brand` は空欄を使う（`#` でもバッジは出ない）。 |
 | **JANコード** | バーコードの数字。商品の一意な ID。お気に入りのキーにも使う。 |
 | **チャンク** | 巨大 JSON を `product_data_0.json` のように分割した塊。1ファイル最大 5000件。 |
 | **名寄せ** | 同じメーカーのシリーズを、バッジではメーカー名に揃えること。表示も検索も `products.csv` の `brand` 列そのもの。 |
 | **rules.csv のキーワード** | 「グレインフリー」と書いたら `gf` タグを付ける、など。使い道は2つ：収集時（`GEMINI_API_KEY` 無し/失敗時のフォールバック）、既にタグが付いている商品の検索補助（読みの追加）。ビルドの確認レポートでは、同じ語を**商品名だけ**に当てて付け忘れの硬い一致を出す（説明文は見ない。タグは自動では付けない。正は `products.csv` の `tags` 列） |
-| **aliases.csv（検索エイリアス）** | タグとは無関係な、検索専用の読み・別名表。`name`/`brand`/`desc` に `keyword` があれば `reading` を検索対象へ足すだけで、バッジ・商品名・フィルターには一切出てこない。英語表記のブランド（`TripeDry`→`トライプドライ`）や漢字語（`納豆菌`→`なっとうきん`）をかな・カタカナでも検索できるようにするための表。 |
+| **aliases.csv（検索エイリアス）** | タグとは無関係な、検索専用の読み・別名表。`name`/`brand`/`desc` に `keyword` があれば `reading` を検索対象へ足すだけで、バッジ・商品名・フィルターには一切出てこない。英語表記のブランド（`TripeDry`→`トライプドライ`）や漢字語（`納豆菌`→`なっとうきん`）をかな・カタカナでも検索できるようにするための表。ビルドレポートの「お悩みタグなし」は、この keyword が名前・ブランド・説明のどこにあるかも出す。 |
+| **keyword_chips.csv** | カードの「キーワード」チップの唯一の語表（`小型犬` など）。名前・ブランド・説明にあればチップになる。`aliases.csv` と `rules.csv` はカードに出さない。フィルターは増えない。 |
 | **search_alias** | `aliases.csv` の判定結果として、ビルド時に商品ごとに作られる検索専用の裏フィールド。画面には出ない。 |
 | **`label`** | 画像左上の金色バッジ。`#` なら出さない。例: `小分けパック`。検索・絞り込みには使わない。 |
 | **`promo`** | 説明文とタグのあいだのオレンジ文言。`#` なら出さない。例: `公式サンプル有り`。検索・絞り込みには使わない。 |
 | **exclude_tags** | 任意列。ビルドの「商品名からの硬い一致」提案だけを、その商品について黙らせる。説明文では提案しないので日常の主経路ではない。 |
-| **追加マスター** | `data/` の CSV のうち、products / categories / tags / rules / aliases 以外。ビルドが検証せず `data_master.js` の同名変数にする。`comments.csv` と `popular_searches.csv` がそれ。 |
+| **追加マスター** | `data/` の CSV のうち、products / categories / tags / rules / aliases 以外。ビルドが検証せず `data_master.js` の同名変数にする。`comments.csv` と `popular_searches.csv` と `keyword_chips.csv` がそれ。 |
 | **フォールバック** | 本命が失敗したときの予備。画像は 楽天v2 → 楽天Item → Yahoo の順。 |
 | **説明の取り直し** | `collect:all` の `desc` がいまいちなとき、`npm run desc:helper` で説明だけ作り、CSV に手で貼る作業。タグは変更しない。再収集は名前や画像も上書きするので使わない。 |
 
@@ -107,7 +109,7 @@ product_data.json + data_master.js
 
 - **animal** … 犬 / 猫（1つだけ選べる）。共通枠。常に開いたまま
 - **age** … 子犬、成犬、シニアなど（1つだけ）。共通枠。常に開いたまま
-- **cond** … 涙やけ、穀物不使用など（複数選べる）。種類枠。デフォルトで開く（フード）
+- **cond** … 涙やけ、腎臓ケア、尿路ケア、穀物不使用など（複数選べる）。種類枠。デフォルトで開く（フード）
 - **種類枠** … `animal` / `age` 以外。同時に1つだけ開く。あとから `care` / `out` を categories と tags に足せる。どの種類枠のタグも無い商品はフード
 
 コード上の総称は `kind`（画面には出さない）。
@@ -141,7 +143,7 @@ CSV の列の意味:
 | **プレースホルダー** | 画像が無いときの「No Image」。外部サイトに頼らず SVG で出している。 |
 | **SPAっぽい動き** | ページ全体を再読み込みせず、検索 ↔ 結果を切り替える。URL の `?q=` も更新する。 |
 | **検索案内吹き出し** | サイト説明の直後・検索窓の前。使い方の固定文（キーワード／タグで最適な1番を探す）。PC でも出す。`index.html` の `.search-guide-teaser`。結果画面では検索 View ごと消える。 |
-| **結果画面の店員吹き出し** | 検索結果上部。`comments.csv` の接客文。PC/スマホ共通。セル内改行は画面でも改行（`pre-line`）。本文は `escapeHtml` してから出す。`.result-comment-area`。 |
+| **結果画面の店員吹き出し** | 検索結果上部。`comments.csv` の接客文。PC/スマホ共通。セル内改行は画面でも改行（`pre-line`）。本文は `escapeHtml` してから出す。型は「説明→ポイント→注意→当サイトは」。`.result-comment-area`。 |
 | **検索ヒント吹き出し** | スマホの検索欄下。店員アイコン＋吹き出しで「よく検索されているワードは〇〇、〇〇、〇〇です」。PC では出さない。語が無ければ隠す。`.search-hint-teaser`。 |
 
 ## 検索の仕組み
@@ -160,9 +162,10 @@ CSV の列の意味:
 店員コメントと検索ヒント:
 
 - 検索案内吹き出し … 検索画面上部の固定文。JS なし（`index.html`）。PC でも出す
-- 結果画面の店員吹き出し … `comments.csv`。PC/スマホ共通。改行あり
-- `pickStoreComments()` … 選んだ cond / animal タグ、または検索欄がタグ名（涙やけ、グレインフリーなど）を含むときの一言（結果画面）
-- `pickKeywordComments()` … 検索欄の言葉（「心臓」「納豆菌」「避妊」など）に応じた追加の一言。すでにタグ解説へ結んだ語は重ねない
+- 結果画面の店員吹き出し … `comments.csv`。PC/スマホ共通。改行あり。型は「説明 → 🔍ポイント → ⚠️注意点 → 当サイト（pet925）では〜」
+- `pickStoreComments()` … 選んだ cond / animal タグ、または検索欄がタグ名（涙やけ、グレインフリーなど）を含むときの解説（結果画面・最大2件）
+- `findCondKeysFromSearch()` … 検索欄の文字から結ぶ cond タグ ID を返す。表示名と `tagKeywords` を見る。専用 keyword（避妊など）はタグに吸い寄せない。グレインフリーは gf の別名として結ぶ
+- `pickKeywordComments()` … 検索欄の言葉（「心臓」「納豆菌」「避妊」など）に応じた追加の一言（最大1件）。すでにタグ解説へ結んだ語は重ねない
 - `pickPopularSearchWords()` … `popular_searches.csv` から最大3語をランダムに選ぶ（検索画面・下の吹き出し。スマホのみ）
 - `formatPopularSearchHint()` … 「よく検索されているワードは〇〇、〇〇、〇〇です」の文を作る
 
@@ -231,7 +234,7 @@ CSV の列の意味:
 | 商品を増やしたい | `jan_list.csv` → `npm run collect:all`、または ODS を手編集 |
 | 説明文だけ作り直したい | `npm run desc:helper` → `desc` 列に貼る（`tags` は触らない） → ビルド |
 | 画像URLだけ取り直したい | `jan_list.csv` → `npm run collect:img`（名前・説明は触らない） |
-| ビルドの確認推奨・エラーを全件見たい | `npm run build` 後に `build_report.html` をブラウザで開く（ターミナルは最初の10件だけ） |
+| ビルドの確認推奨・エラーを全件見たい | `npm run build` 後に `build_report.html` をブラウザで開く。JAN形式などはターミナル全件。必須欠け等はターミナル先頭10件 |
 | リンク切れ・要確認を全件見たい | `npm run check:links` 後に `check_links_report.html` をブラウザで開く |
 | 公開したい | `npm run build` → `git status` → commit / push。手順は `docs/MANUAL.md` §9 |
 | SNS シェア用の画像を変えたい | リポジトリ直下の `og-image.jpg` を差し替えて commit / push |
@@ -239,7 +242,7 @@ CSV の列の意味:
 | エディタの「問題」がたくさん出る | 実行エラーとは限らない。`jsconfig.json` と、ファイル先頭の `// @ts-check`。用語は後半の「型チェック」 |
 | JSON を `.gitignore` した方がよいか迷う | 今はしない。Pages がリポジトリをそのまま出す。`product_data.json` が無いと検索が読めない |
 | 検索画面の使い方案内（サイト説明の下の吹き出し）を変えたい | `index.html` の `.search-guide-bubble`。ビルド不要 |
-| 店員コメントを変えたい | `data/comments.csv` → ビルド。結果画面は PC でも出る。改行はダブルクォートで囲む |
+| 店員コメントを変えたい | `data/comments.csv` → ビルド。結果画面は PC でも出る。改行はダブルクォートで囲む。型は「説明→ポイント→注意→当サイトは」。検索語でもタグ名なら cond 解説が出る |
 | 検索画面の「よく検索されているワード」を変えたい | `data/popular_searches.csv` → ビルド。スマホのみ。GA4 は見るだけ。自動出力はしない |
 | カードのバッジやサンプル文言を変えたい | `data/products.csv` の `label` / `promo` → ビルド。絞り込みボタンにはまだ出ない |
 | 運用の手順 | `docs/MANUAL.md` |
@@ -291,7 +294,7 @@ CSV の列の意味:
 
 - `.html` 構造 / `.css` 見た目 / `.js` 動き
 - `.py` Python / `.json` データ / `.csv` 表 / `.md` 説明文
-- `.ods` 表計算の原本
+- `.ods` 商品表（`products`）の原本。他のマスターは `.csv`
 
 ## データの種類（型）
 

@@ -9,6 +9,8 @@ const sampleComments = [
     { category: 'cond', key: 'skin', comment: '皮膚コメントA' },
     { category: 'cond', key: 'gf', comment: '穀物不使用コメント' },
     { category: 'cond', key: 'diet', comment: '体重コメント' },
+    { category: 'cond', key: 'kidney', comment: '腎臓コメント' },
+    { category: 'cond', key: 'urinary', comment: '尿路コメント' },
     { category: 'keyword', key: '心臓', comment: '心臓コメント' },
     { category: 'keyword', key: '納豆菌', comment: '納豆菌コメント' },
     { category: 'keyword', key: '涙やけ', comment: '涙やけキーワード' },
@@ -27,13 +29,15 @@ const sampleTagMaster = {
         skin: '皮膚ケア (SKIN)',
         gf: '穀物不使用 (GF)',
         diet: '体重管理 (WEIGHT)',
-        kidney: '腎臓・尿路 (KIDNEY)',
+        kidney: '腎臓ケア (KIDNEY)',
+        urinary: '尿路ケア (URINARY)',
     },
 };
 const sampleTagKeywords = {
     gf: ['グレインフリー', '穀物不使用'],
     diet: ['体重', '肥満', 'ダイエット', '減量', '避妊', '去勢'],
-    kidney: ['腎臓', '尿路'],
+    kidney: ['腎臓'],
+    urinary: ['尿路', '尿石', 'ユリナリー'],
     skin: ['皮膚', 'アレルギー'],
 };
 
@@ -112,8 +116,14 @@ describe('findCondKeysFromSearch()', () => {
         expect(findCondKeysFromSearch('gf', sampleTagMaster, sampleTagKeywords, sampleComments)).toEqual(['gf']);
     });
 
-    test('複合表示名は分割して当たる（腎臓）', () => {
+    test('腎臓は kidney に当たる', () => {
         expect(findCondKeysFromSearch('腎臓', sampleTagMaster, sampleTagKeywords, sampleComments)).toEqual(['kidney']);
+    });
+
+    test('尿路・尿石は urinary に当たり、kidney には寄せない', () => {
+        expect(findCondKeysFromSearch('尿路', sampleTagMaster, sampleTagKeywords, sampleComments)).toEqual(['urinary']);
+        expect(findCondKeysFromSearch('尿石', sampleTagMaster, sampleTagKeywords, sampleComments)).toEqual(['urinary']);
+        expect(findCondKeysFromSearch('ユリナリー', sampleTagMaster, sampleTagKeywords, sampleComments)).toEqual(['urinary']);
     });
 
     test('グレインフリーは gf の別名として結ぶ', () => {
